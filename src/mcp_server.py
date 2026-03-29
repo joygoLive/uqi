@@ -1104,7 +1104,7 @@ async def uqi_invalidate_cache(
 async def uqi_list_files() -> str:
     """DGX alg-files 디렉토리의 알고리즘 파일 목록 반환"""
     def _run():
-        alg_dir = Path(__file__).parent / "alg-files"
+        alg_dir = ALG_FILES_DIR
         if not alg_dir.exists():
             return json.dumps({"error": f"디렉토리 없음: {alg_dir}"})
         files = []

@@ -1,0 +1,25 @@
+{
+  "name": "uqi",
+  "version": "1.0.0",
+  "description": "```markdown # UQI — Universal Quantum Infrastructure",
+  "main": "commitlint.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joygoLive/uqi.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/joygoLive/uqi/issues"
+  },
+  "homepage": "https://github.com/joygoLive/uqi#readme"
+}

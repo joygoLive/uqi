@@ -25,3 +25,4 @@ venv/
 # pytest
 .pytest_cache/
 .coverage
+node_modules/

@@ -1,0 +1,2533 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UQI — Quantum Intelligence</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080c10;
+  --surface: #0d1117;
+  --surface2: #161b22;
+  --border: #21262d;
+  --accent: #00d4ff;
+  --accent2: #7c3aed;
+  --success: #3fb950;
+  --warn: #f0883e;
+  --error: #f85149;
+  --text: #e6edf3;
+  --text2: #8b949e;
+  --text3: #484f58;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Syne', sans-serif;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; overflow-x:hidden; }
+body::before {
+  content:''; position:fixed; inset:0;
+  background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
+  background-size:40px 40px; pointer-events:none; z-index:0;
+}
+body::after {
+  content:''; position:fixed; top:-200px; left:50%; transform:translateX(-50%);
+  width:600px; height:600px;
+  background:radial-gradient(circle,rgba(0,212,255,0.06) 0%,transparent 70%);
+  pointer-events:none; z-index:0;
+}
+
+/* ── Lock Screen ── */
+#lockScreen { position:fixed; inset:0; z-index:9999; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:24px; }
+#lockScreen::before { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px); background-size:40px 40px; }
+.lock-card { position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 48px; width:380px; display:flex; flex-direction:column; align-items:center; gap:24px; }
+.lock-logo { font-family:var(--font-display); font-size:28px; font-weight:800; letter-spacing:-0.5px; }
+.lock-logo span { color:var(--accent); }
+.lock-subtitle { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:2px; margin-top:-16px; }
+.lock-input { width:100%; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 16px; color:var(--text); font-family:var(--font-mono); font-size:14px; outline:none; transition:border-color 0.2s; text-align:center; letter-spacing:4px; }
+.lock-input:focus { border-color:var(--accent); }
+.lock-input.error { border-color:var(--error); animation:shake 0.4s; }
+@keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+.lock-btn { width:100%; background:var(--accent); color:var(--bg); border:none; border-radius:8px; padding:12px; font-family:var(--font-mono); font-size:13px; font-weight:600; cursor:pointer; transition:opacity 0.2s; letter-spacing:1px; }
+.lock-btn:hover { opacity:0.85; }
+.lock-err { font-size:12px; color:var(--error); min-height:18px; }
+
+/* ── Layout ── */
+.container { position:relative; z-index:1; max-width:1280px; margin:0 auto; padding:0 24px; }
+header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bottom:28px; }
+.header-inner { display:flex; align-items:center; justify-content:space-between; }
+.logo { display:flex; align-items:center; gap:12px; }
+.logo-mark { width:36px; height:36px; border:1.5px solid var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+.logo-mark::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(0,212,255,0.15),transparent); }
+.logo-mark svg { width:18px; height:18px; }
+.logo-text { font-family:var(--font-display); font-size:22px; font-weight:800; letter-spacing:-0.5px; }
+.logo-text span { color:var(--accent); }
+.header-right { display:flex; align-items:center; gap:12px; }
+.status-badge { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text2); background:var(--surface2); border:1px solid var(--border); padding:6px 12px; border-radius:20px; }
+.status-dot { width:6px; height:6px; border-radius:50%; background:var(--text3); transition:background 0.3s; }
+.status-dot.connected { background:var(--success); box-shadow:0 0 8px var(--success); }
+.status-dot.error { background:var(--error); }
+.btn-logout { background:none; border:1px solid var(--border); border-radius:6px; padding:6px 12px; color:var(--text3); font-family:var(--font-mono); font-size:11px; cursor:pointer; transition:all 0.2s; }
+.btn-logout:hover { border-color:var(--error); color:var(--error); }
+
+.config-bar { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 20px; margin-bottom:24px; display:flex; align-items:center; gap:12px; }
+.config-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; white-space:nowrap; }
+.config-input { flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:var(--font-mono); font-size:13px; outline:none; transition:border-color 0.2s; }
+.config-input:focus { border-color:var(--accent); }
+.btn-connect { background:var(--accent); color:var(--bg); border:none; border-radius:6px; padding:8px 16px; font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; transition:opacity 0.2s; white-space:nowrap; }
+.btn-connect:hover { opacity:0.85; }
+
+/* ── Main Nav Tabs ── */
+.main-nav { display:flex; gap:3px; margin-bottom:28px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; }
+.nav-btn { flex:1; background:none; border:none; padding:10px 16px; color:var(--text2); font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; border-radius:7px; transition:all 0.2s; letter-spacing:0.5px; white-space:nowrap; }
+.nav-btn:hover { color:var(--text); background:var(--surface2); }
+.nav-btn.active { background:var(--surface2); color:var(--accent); border:1px solid rgba(0,212,255,0.2); }
+.main-panel { display:none; }
+.main-panel.active { display:block; }
+
+/* ── QPUs Dashboard ── */
+.qpus-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+.qpus-title { font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--text); }
+.btn-refresh-qpus { background:rgba(0,212,255,0.08); border:1px solid var(--accent); border-radius:6px; padding:7px 14px; color:var(--accent); font-family:var(--font-mono); font-size:11px; font-weight:600; cursor:pointer; transition:all 0.2s; }
+.btn-refresh-qpus:hover { background:rgba(0,212,255,0.18); }
+
+/* QPU Cards Grid */
+.qpu-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:28px; }
+.qpu-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s; position:relative; overflow:hidden; }
+.qpu-card::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--border); transition:background 0.2s; }
+.qpu-card.online::before { background:var(--success); }
+.qpu-card.offline::before { background:var(--text3); }
+.qpu-card.photonic::before { background:var(--accent2); }
+.qpu-card:hover { border-color:rgba(0,212,255,0.3); transform:translateY(-1px); }
+.qpu-card.selected { border-color:var(--accent); background:rgba(0,212,255,0.04); }
+.qpu-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.qpu-card-name { font-size:13px; font-weight:600; color:var(--text); }
+.qpu-status-badge { display:flex; align-items:center; gap:5px; font-size:10px; }
+.qpu-dot { width:6px; height:6px; border-radius:50%; }
+.qpu-dot.online { background:var(--success); box-shadow:0 0 6px var(--success); }
+.qpu-dot.offline { background:var(--text3); }
+.qpu-dot.photonic { background:var(--accent2); box-shadow:0 0 6px var(--accent2); }
+.qpu-metrics { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.qpu-metric { background:var(--surface2); border-radius:6px; padding:7px 9px; }
+.qpu-metric-label { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:2px; }
+.qpu-metric-value { font-size:13px; font-weight:600; }
+.qpu-metric-value.good { color:var(--success); }
+.qpu-metric-value.warn { color:var(--warn); }
+.qpu-metric-value.bad { color:var(--error); }
+.qpu-metric-value.neutral { color:var(--text); }
+.qpu-metric-value.dim { color:var(--text3); }
+.qpu-pending { margin-top:8px; font-size:10px; color:var(--text3); display:flex; align-items:center; gap:6px; }
+.qpu-pending strong { color:var(--warn); }
+
+/* Compare Chart */
+.compare-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:28px; }
+.compare-title { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:16px; font-weight:600; }
+.compare-tabs { display:flex; gap:4px; margin-bottom:16px; }
+.compare-tab { background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; font-weight:600; }
+.compare-tab.active { background:var(--surface2); color:var(--accent); border-color:rgba(0,212,255,0.3); }
+.bar-chart { display:flex; flex-direction:column; gap:8px; }
+.bar-row { display:flex; align-items:center; gap:10px; }
+.bar-label { width:120px; font-size:11px; color:var(--text2); flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bar-track { flex:1; background:var(--surface2); border-radius:3px; height:20px; position:relative; overflow:hidden; }
+.bar-fill { height:100%; border-radius:3px; transition:width 0.6s ease; display:flex; align-items:center; padding-left:8px; font-size:10px; font-weight:600; white-space:nowrap; }
+.bar-fill.good { background:rgba(63,185,80,0.25); color:var(--success); }
+.bar-fill.warn { background:rgba(240,136,62,0.25); color:var(--warn); }
+.bar-fill.bad { background:rgba(248,81,73,0.25); color:var(--error); }
+.bar-fill.accent { background:rgba(0,212,255,0.15); color:var(--accent); }
+
+/* QPU Detail Drawer */
+.qpu-detail { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+.qpu-detail-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+.qpu-detail-name { font-family:var(--font-display); font-size:16px; font-weight:700; }
+.btn-close-detail { background:none; border:1px solid var(--border); border-radius:5px; padding:5px 10px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; }
+.btn-close-detail:hover { border-color:var(--text2); color:var(--text2); }
+.btn-refresh-cal { background:none; border:1px solid var(--accent); border-radius:5px; padding:5px 12px; color:var(--accent); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; font-weight:600; }
+.btn-refresh-cal:hover { background:rgba(0,212,255,0.1); }
+.cal-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; }
+.cal-item { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px 14px; }
+.cal-label { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
+.cal-value { font-size:18px; font-weight:600; }
+.cal-value.good { color:var(--success); }
+.cal-value.warn { color:var(--warn); }
+.cal-value.bad { color:var(--error); }
+.cal-unit { font-size:11px; color:var(--text3); margin-left:3px; }
+.gates-list { display:flex; flex-wrap:wrap; gap:6px; margin-top:14px; }
+.gate-tag { background:rgba(0,212,255,0.08); border:1px solid rgba(0,212,255,0.2); border-radius:4px; padding:3px 8px; font-size:11px; color:var(--accent); font-weight:600; }
+
+/* ── Pipeline Panel ── */
+.pipeline-layout { display:grid; grid-template-columns:280px 1fr; gap:20px; align-items:start; }
+.pipeline-sidebar { position:sticky; top:20px; }
+.file-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:16px; }
+.file-card-title { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:14px; font-weight:600; }
+.file-source-toggle { display:flex; gap:0; margin-bottom:12px; border:1px solid var(--border); border-radius:7px; overflow:hidden; }
+.file-source-btn { flex:1; background:none; border:none; padding:7px 10px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; font-weight:600; }
+.file-source-btn.active { background:var(--surface2); color:var(--accent); }
+.file-drop-zone { border:1px dashed var(--border); border-radius:8px; padding:16px; text-align:center; color:var(--text3); font-size:11px; cursor:pointer; transition:all 0.2s; }
+.file-drop-zone:hover,.file-drop-zone.drag-over { border-color:var(--accent); color:var(--accent); background:rgba(0,212,255,0.04); }
+.file-drop-zone input[type=file] { display:none; }
+.file-name-display { font-size:11px; padding:6px 10px; border-radius:5px; display:none; margin-top:8px; }
+.file-name-display.ok { background:rgba(63,185,80,0.1); border:1px solid rgba(63,185,80,0.3); color:var(--success); }
+.file-name-display.err { background:rgba(248,81,73,0.1); border:1px solid rgba(248,81,73,0.3); color:var(--error); }
+.dgx-file-select { display:flex; flex-direction:column; gap:8px; }
+.dgx-row { display:flex; gap:6px; }
+.dgx-row .form-select { flex:1; }
+.btn-view-file { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text2); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+.btn-view-file:hover { border-color:var(--accent); color:var(--accent); }
+.btn-refresh-list { background:none; border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; }
+.btn-refresh-list:hover { border-color:var(--accent); color:var(--accent); }
+.form-select { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:var(--font-mono); font-size:12px; outline:none; transition:border-color 0.2s; appearance:none; cursor:pointer; width:100%; }
+.form-select:focus { border-color:var(--accent); }
+.form-input { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:var(--font-mono); font-size:12px; outline:none; transition:border-color 0.2s; width:100%; }
+.form-input:focus { border-color:var(--accent); }
+.form-label { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:5px; display:block; }
+.form-group { display:flex; flex-direction:column; margin-bottom:12px; }
+.form-checkbox-group { display:flex; align-items:center; gap:8px; padding:8px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; }
+.form-checkbox-group input[type=checkbox] { accent-color:var(--accent); width:13px; height:13px; cursor:pointer; }
+.form-checkbox-group label { font-size:12px; color:var(--text2); cursor:pointer; }
+
+/* Pipeline Steps */
+.pipeline-steps { display:flex; flex-direction:column; gap:10px; }
+.step-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.step-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; transition:background 0.2s; user-select:none; }
+.step-header:hover { background:rgba(255,255,255,0.02); }
+.step-header-left { display:flex; align-items:center; gap:10px; }
+.step-icon { font-size:14px; }
+.step-name { font-size:12px; font-weight:600; color:var(--text2); }
+.step-badge { font-size:10px; padding:2px 8px; border-radius:10px; }
+.step-badge.done { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
+.step-badge.error { background:rgba(248,81,73,0.15); color:var(--error); border:1px solid rgba(248,81,73,0.3); }
+.step-chevron { font-size:10px; color:var(--text3); transition:transform 0.2s; }
+.step-chevron.open { transform:rotate(180deg); }
+.step-body { display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.15); }
+.step-body.open { display:block; }
+.step-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+.step-options.single { grid-template-columns:1fr; }
+.btn-run { width:100%; background:linear-gradient(135deg,rgba(0,212,255,0.12),rgba(124,58,237,0.12)); border:1px solid rgba(0,212,255,0.25); border-radius:7px; padding:10px; color:var(--accent); font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; letter-spacing:0.5px; position:relative; overflow:hidden; }
+.btn-run:hover { background:linear-gradient(135deg,rgba(0,212,255,0.22),rgba(124,58,237,0.22)); border-color:rgba(0,212,255,0.5); }
+.btn-run:disabled { opacity:0.4; cursor:not-allowed; }
+.btn-run.loading::after { content:''; position:absolute; bottom:0; left:0; height:2px; background:var(--accent); animation:progress 2s ease-in-out infinite; }
+.btn-confirm { width:100%; background:linear-gradient(135deg,rgba(248,81,73,0.12),rgba(240,136,62,0.12)); border:1px solid rgba(248,81,73,0.35); border-radius:7px; padding:10px; color:var(--error); font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s; margin-top:8px; }
+.btn-confirm:hover { background:linear-gradient(135deg,rgba(248,81,73,0.22),rgba(240,136,62,0.22)); }
+@keyframes progress { 0%{left:0;width:0} 50%{left:0;width:100%} 100%{left:100%;width:0} }
+
+/* Step Results */
+.step-result { margin-top:14px; }
+.result-meta { font-size:10px; color:var(--text3); margin-bottom:8px; }
+.metric-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin-bottom:12px; }
+.metric-item { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:10px 12px; }
+.metric-label { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:3px; }
+.metric-value { font-size:15px; font-weight:600; }
+.metric-value.good { color:var(--success); }
+.metric-value.warn { color:var(--warn); }
+.metric-value.bad { color:var(--error); }
+.metric-value.neutral { color:var(--text); }
+.section-divider { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin:12px 0 8px; padding-bottom:5px; border-bottom:1px solid var(--border); }
+.stats-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.stat-chip { background:var(--surface2); border:1px solid var(--border); border-radius:16px; padding:3px 10px; font-size:10px; color:var(--text2); }
+.stat-chip strong { color:var(--accent); }
+.empty-state { padding:24px; text-align:center; color:var(--text3); font-size:12px; }
+.error-state { padding:12px 14px; background:rgba(248,81,73,0.08); border:1px solid rgba(248,81,73,0.2); border-radius:7px; color:var(--error); font-size:11px; line-height:1.6; }
+.success-state { padding:12px 14px; background:rgba(63,185,80,0.08); border:1px solid rgba(63,185,80,0.2); border-radius:7px; color:var(--success); font-size:11px; line-height:1.6; }
+.warn-banner { padding:12px 14px; background:rgba(240,136,62,0.08); border:1px solid rgba(240,136,62,0.25); border-radius:7px; color:var(--warn); font-size:11px; line-height:1.6; margin-bottom:12px; }
+.spinner { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,212,255,0.2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+/* JSON Viewer */
+.json-viewer { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:14px; font-size:11px; line-height:1.7; overflow-x:auto; white-space:pre; max-height:400px; overflow-y:auto; }
+.json-key { color:#79c0ff; }
+.json-string { color:#a5d6ff; }
+.json-number { color:#f0883e; }
+.json-bool { color:#ff7b72; }
+.json-null { color:var(--text3); }
+
+/* ── Knowledge Panel ── */
+.knowledge-layout { display:grid; grid-template-columns:260px 1fr; gap:20px; }
+.knowledge-sidebar { }
+.knowledge-form { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px; }
+.knowledge-form-title { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:16px; font-weight:600; }
+.knowledge-result { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+.knowledge-result-header { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface2); }
+.knowledge-result-title { font-size:10px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text2); font-weight:600; }
+.knowledge-result-meta { font-size:10px; color:var(--text3); }
+.knowledge-result-body { padding:16px; }
+.rag-items { display:flex; flex-direction:column; gap:10px; }
+.rag-item { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:12px 14px; transition:border-color 0.2s; }
+.rag-item:hover { border-color:rgba(0,212,255,0.25); }
+.rag-item-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.rag-item-type { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--accent2); font-weight:600; }
+.rag-item-time { font-size:9px; color:var(--text3); }
+.rag-item-content { font-size:11px; color:var(--text2); line-height:1.6; }
+
+/* Code Modal */
+#codeModal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(8,12,16,0.9); align-items:center; justify-content:center; }
+#codeModal.open { display:flex; }
+.code-modal-inner { background:var(--surface); border:1px solid var(--border); border-radius:12px; width:90%; max-width:900px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden; }
+.code-modal-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; background:var(--surface2); }
+.code-modal-title { font-size:12px; color:var(--accent); font-weight:600; }
+.code-modal-badge { font-size:9px; color:var(--text3); background:var(--surface); border:1px solid var(--border); padding:2px 7px; border-radius:4px; text-transform:uppercase; letter-spacing:1px; }
+.btn-close-modal { background:none; border:none; color:var(--text3); font-size:16px; cursor:pointer; padding:0 4px; line-height:1; transition:color 0.2s; }
+.btn-close-modal:hover { color:var(--text); }
+.code-modal-body { overflow-y:auto; padding:18px; flex:1; }
+.code-viewer { background:var(--surface2); border:1px solid var(--border); border-radius:7px; padding:14px; font-size:11px; line-height:1.7; overflow-x:auto; white-space:pre; color:var(--text2); }
+
+::-webkit-scrollbar { width:5px; height:5px; }
+::-webkit-scrollbar-track { background:var(--surface); }
+::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); text-align:center; font-size:10px; color:var(--text3); }
+</style>
+</head>
+<body>
+
+<!-- Lock Screen -->
+<div id="lockScreen">
+  <div class="lock-card">
+    <div class="lock-logo">UQ<span>I</span></div>
+    <div class="lock-subtitle">Team Access Required</div>
+    <input class="lock-input" id="pwInput" type="password" placeholder="••••••••" maxlength="32" onkeydown="if(event.key==='Enter')unlock()">
+    <button class="lock-btn" onclick="unlock()">UNLOCK</button>
+    <div class="lock-err" id="lockErr"></div>
+  </div>
+</div>
+
+<!-- Code Viewer Modal -->
+<div id="codeModal">
+  <div class="code-modal-inner">
+    <div class="code-modal-header">
+      <span class="code-modal-title" id="codeModalTitle">—</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="code-modal-badge">READ ONLY</span>
+        <button class="btn-close-modal" onclick="closeCodeModal()">✕</button>
+      </div>
+    </div>
+    <div class="code-modal-body"><pre class="code-viewer" id="codeModalContent"></pre></div>
+  </div>
+</div>
+
+<!-- Main App -->
+<div class="container" id="mainApp" style="display:none">
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- 와이어 2개 -->
+            <line x1="1" y1="5.5" x2="19" y2="5.5" stroke="#00d4ff" stroke-width="1.0" opacity="0.5"/>
+            <line x1="1" y1="14.5" x2="19" y2="14.5" stroke="#00d4ff" stroke-width="1.0" opacity="0.5"/>
+            <!-- H 게이트 (위 와이어) -->
+            <rect x="2.25" y="2.25" width="7.5" height="6.5" rx="1.2" fill="#0d1117" stroke="#00d4ff" stroke-width="1.3"/>
+            <line x1="4.3" y1="3.85" x2="4.3" y2="7.25" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="7.2" y1="3.85" x2="7.2" y2="7.25" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="4.3" y1="5.55" x2="7.2" y2="5.55" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <!-- CNOT 컨트롤 점 -->
+            <circle cx="14.5" cy="5.5" r="1.5" fill="#00d4ff"/>
+            <line x1="14.5" y1="7" x2="14.5" y2="11.2" stroke="#00d4ff" stroke-width="1.1"/>
+            <!-- 타겟 원 + 십자 -->
+            <circle cx="14.5" cy="14.5" r="3.0" stroke="#00d4ff" stroke-width="1.3"/>
+            <line x1="14.5" y1="11.5" x2="14.5" y2="17.5" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="11.5" y1="14.5" x2="17.5" y2="14.5" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="logo-text">UQ<span>I</span></div>
+      </div>
+      <div class="header-right">
+        <div class="status-badge">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">disconnected</span>
+        </div>
+        <button class="btn-logout" onclick="logout()">LOCK</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="config-bar">
+    <span class="config-label">Server</span>
+    <input class="config-input" id="serverUrl" value="https://superelegant-terrence-grittiest.ngrok-free.dev" placeholder="https://xxxx.ngrok-free.app">
+    <button class="btn-connect" onclick="testConnection()">Connect</button>
+  </div>
+
+  <div class="main-nav">
+    <button class="nav-btn active" onclick="switchMain('qpus',this)">⚛ QPUs</button>
+    <button class="nav-btn" onclick="switchMain('pipeline',this)">⚙ Pipeline</button>
+    <button class="nav-btn" onclick="switchMain('knowledge',this)">🔍 Knowledge</button>
+  </div>
+
+  <!-- ══════════════ QPUs PANEL ══════════════ -->
+  <div class="main-panel active" id="panel-qpus">
+    <div class="qpus-header">
+      <div>
+        <div class="qpus-title">Quantum Processing Units</div>
+        <div id="qpu-cache-ts" style="font-size:10px;color:var(--text3);margin-top:4px">—</div>
+      </div>
+      <button class="btn-refresh-qpus" onclick="loadQPUDashboard(true)">↻ Refresh</button>
+    </div>
+
+    <div id="qpu-grid-container">
+      <div class="empty-state"><span class="spinner"></span>Loading QPU status...</div>
+    </div>
+
+    <div class="compare-section">
+      <div class="compare-title">QPU Comparison</div>
+      <div class="compare-tabs">
+        <button class="compare-tab active" onclick="showCompare('2q_error',this)">2Q Error</button>
+        <button class="compare-tab" onclick="showCompare('t2',this)">T2 Coherence</button>
+        <button class="compare-tab" onclick="showCompare('qubits',this)">Qubits</button>
+        <button class="compare-tab" onclick="showCompare('1q_error',this)">1Q Error</button>
+      </div>
+      <div id="compare-chart" class="bar-chart">
+        <div class="empty-state">Load QPU data to compare</div>
+      </div>
+    </div>
+
+    <div id="qpu-detail-container"></div>
+  </div>
+
+  <!-- ══════════════ PIPELINE PANEL ══════════════ -->
+  <div class="main-panel" id="panel-pipeline">
+    <div class="pipeline-layout">
+      <!-- Sidebar: File + QPU -->
+      <div class="pipeline-sidebar">
+        <div class="file-card">
+          <div class="file-card-title">Algorithm File</div>
+          <div class="file-source-toggle">
+            <button class="file-source-btn active" onclick="setFileSource('upload',this)">⬆ Upload</button>
+            <button class="file-source-btn" onclick="setFileSource('dgx',this)">📂 DGX</button>
+          </div>
+          <div id="upload-area">
+            <div class="file-drop-zone" id="global-drop"
+              ondragenter="onDragEnter(event)" ondragover="onDragOver(event)"
+              ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
+              onclick="document.getElementById('global-file-input').click()">
+              <input type="file" accept=".py" id="global-file-input" onchange="onFileChange(event)" style="display:none">
+              Drop .py here or click to browse
+            </div>
+            <div class="file-name-display" id="global-fname"></div>
+          </div>
+          <div id="dgx-area" style="display:none">
+            <div class="dgx-file-select">
+              <div class="form-group">
+                <select class="form-select" id="dgx-select"></select>
+              </div>
+              <div class="dgx-row">
+                <button class="btn-view-file" onclick="viewDGXFile()">👁 View</button>
+                <button class="btn-refresh-list" onclick="refreshDGXList()">↻ Refresh</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="file-card">
+          <div class="file-card-title">Target QPU</div>
+          <div class="form-group">
+            <select class="form-select" id="global-qpu">
+              <option value="ibm_fez">IBM Fez</option>
+              <option value="iqm_garnet">IQM Garnet</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline Steps -->
+      <div class="pipeline-steps">
+
+        <!-- Analyze -->
+        <div class="step-card" id="step-analyze">
+          <div class="step-header" onclick="toggleStep('analyze')">
+            <div class="step-header-left">
+              <span class="step-icon">🔬</span>
+              <span class="step-name">Circuit Analysis</span>
+              <span class="step-badge" id="badge-analyze" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-analyze">▼</span>
+          </div>
+          <div class="step-body" id="body-analyze">
+            <button class="btn-run" id="btn-analyze" onclick="runAnalyze()">RUN ANALYSIS</button>
+            <div class="step-result" id="result-analyze"><div class="empty-state">Run analysis to see results</div></div>
+          </div>
+        </div>
+
+        <!-- Optimize -->
+        <div class="step-card" id="step-optimize">
+          <div class="step-header" onclick="toggleStep('optimize')">
+            <div class="step-header-left">
+              <span class="step-icon">⚙️</span>
+              <span class="step-name">Optimization</span>
+              <span class="step-badge" id="badge-optimize" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-optimize">▼</span>
+          </div>
+          <div class="step-body" id="body-optimize">
+            <div class="step-options">
+              <div class="form-group">
+                <label class="form-label">Combination</label>
+                <select class="form-select" id="opt-combo">
+                  <option value="auto">auto</option>
+                  <option value="qiskit+sabre">qiskit+sabre</option>
+                  <option value="tket+sabre">tket+sabre</option>
+                  <option value="quizx+sabre">quizx+sabre</option>
+                  <option value="appx+sabre">appx+sabre</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Options</label>
+                <div class="form-checkbox-group">
+                  <input type="checkbox" id="opt-verify">
+                  <label for="opt-verify">Verify equivalence</label>
+                </div>
+              </div>
+            </div>
+            <button class="btn-run" id="btn-optimize" onclick="runOptimize()">RUN OPTIMIZATION</button>
+            <div class="step-result" id="result-optimize"><div class="empty-state">Run optimization to see results</div></div>
+          </div>
+        </div>
+
+        <!-- Noise Sim -->
+        <div class="step-card" id="step-noise">
+          <div class="step-header" onclick="toggleStep('noise')">
+            <div class="step-header-left">
+              <span class="step-icon">📡</span>
+              <span class="step-name">Noise Simulation</span>
+              <span class="step-badge" id="badge-noise" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-noise">▼</span>
+          </div>
+          <div class="step-body" id="body-noise">
+            <div class="step-options">
+              <div class="form-group">
+                <label class="form-label">SDK</label>
+                <select class="form-select" id="noise-sdk">
+                  <option value="qiskit">Qiskit</option>
+                  <option value="pennylane">PennyLane</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Shots</label>
+                <input class="form-input" id="noise-shots" type="number" value="1024" min="64" max="8192">
+              </div>
+            </div>
+            <button class="btn-run" id="btn-noise" onclick="runNoise()">RUN NOISE SIMULATION</button>
+            <div class="step-result" id="result-noise"><div class="empty-state">Run simulation to see results</div></div>
+          </div>
+        </div>
+
+        <!-- QEC Analyze -->
+        <div class="step-card" id="step-qec-analyze">
+          <div class="step-header" onclick="toggleStep('qec-analyze')">
+            <div class="step-header-left">
+              <span class="step-icon">🛡</span>
+              <span class="step-name">QEC Analysis</span>
+              <span class="step-badge" id="badge-qec-analyze" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-qec-analyze">▼</span>
+          </div>
+          <div class="step-body" id="body-qec-analyze">
+            <div class="step-options single">
+              <div class="form-group">
+                <label class="form-label">Shots</label>
+                <input class="form-input" id="qeca-shots" type="number" value="1024" min="64" max="8192">
+              </div>
+            </div>
+            <button class="btn-run" id="btn-qeca" onclick="runQECAnalyze()">RUN QEC ANALYSIS</button>
+            <div class="step-result" id="result-qec-analyze"><div class="empty-state">Run QEC analysis to see results</div></div>
+          </div>
+        </div>
+
+        <!-- QEC Apply -->
+        <div class="step-card" id="step-qec-apply">
+          <div class="step-header" onclick="toggleStep('qec-apply')">
+            <div class="step-header-left">
+              <span class="step-icon">🔧</span>
+              <span class="step-name">QEC Apply</span>
+              <span class="step-badge" id="badge-qec-apply" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-qec-apply">▼</span>
+          </div>
+          <div class="step-body" id="body-qec-apply">
+            <div class="step-options">
+              <div class="form-group">
+                <label class="form-label">QEC Code</label>
+                <select class="form-select" id="qecap-code">
+                  <option value="bit_flip">Bit Flip</option>
+                  <option value="phase_flip">Phase Flip</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Shots</label>
+                <input class="form-input" id="qecap-shots" type="number" value="256" min="64" max="4096">
+              </div>
+            </div>
+            <button class="btn-run" id="btn-qecap" onclick="runQECApply()">RUN QEC APPLY</button>
+            <div class="step-result" id="result-qec-apply"><div class="empty-state">Run QEC apply to see results</div></div>
+          </div>
+        </div>
+
+        <!-- GPU Benchmark -->
+        <div class="step-card" id="step-gpu">
+          <div class="step-header" onclick="toggleStep('gpu')">
+            <div class="step-header-left">
+              <span class="step-icon">🚀</span>
+              <span class="step-name">GPU Benchmark</span>
+              <span class="step-badge" id="badge-gpu" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-gpu">▼</span>
+          </div>
+          <div class="step-body" id="body-gpu">
+            <button class="btn-run" id="btn-gpu" onclick="runGPU()">RUN BENCHMARK</button>
+            <div class="step-result" id="result-gpu"><div class="empty-state">Run benchmark to see results</div></div>
+          </div>
+        </div>
+
+        <!-- QPU Submit -->
+        <div class="step-card" id="step-qpu">
+          <div class="step-header" onclick="toggleStep('qpu')">
+            <div class="step-header-left">
+              <span class="step-icon">🌐</span>
+              <span class="step-name">QPU Submit</span>
+              <span class="step-badge" id="badge-qpu" style="display:none"></span>
+            </div>
+            <span class="step-chevron" id="chevron-qpu">▼</span>
+          </div>
+          <div class="step-body" id="body-qpu">
+            <div class="warn-banner">⚠ Real QPU submission incurs cost. Review analysis before confirming.</div>
+            <div class="step-options">
+              <div class="form-group">
+                <label class="form-label">Target QPU</label>
+                <select class="form-select" id="qpu-qpu">
+                  <option value="auto">Auto (Recommended)</option>
+                  <option value="ibm_fez">IBM Fez</option>
+                  <option value="iqm_garnet">IQM Garnet</option>
+                  <option value="sim:ascella">sim:ascella</option>
+                  <option value="qpu:belenos">qpu:belenos</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Shots</label>
+                <input class="form-input" id="qpu-shots" type="number" value="1024" min="64" max="8192">
+              </div>
+            </div>
+            <button class="btn-run" id="btn-qpu-analyze" onclick="runQPUAnalyze()">ANALYZE (NO SUBMIT)</button>
+            <button class="btn-confirm" id="btn-qpu-confirm" onclick="runQPUSubmit()" style="display:none">⚡ CONFIRM & SUBMIT TO QPU</button>
+            <div class="step-result" id="result-qpu"><div class="empty-state">Run analysis first, then confirm to submit</div></div>
+          </div>
+        </div>
+
+      </div><!-- /pipeline-steps -->
+    </div><!-- /pipeline-layout -->
+  </div>
+
+  <!-- ══════════════ KNOWLEDGE PANEL ══════════════ -->
+  <div class="main-panel" id="panel-knowledge">
+    <div class="knowledge-layout">
+      <div class="knowledge-sidebar">
+        <div class="knowledge-form">
+          <div class="knowledge-form-title">Search Knowledge Base</div>
+          <div class="form-group">
+            <label class="form-label">Query Type</label>
+            <select class="form-select" id="rag-type" onchange="onRagTypeChange()">
+              <option value="stats">Stats Overview</option>
+              <option value="recent">Recent Entries</option>
+              <option value="best_combination">Best Optimization</option>
+              <option value="pipeline_issues">Pipeline Issues</option>
+              <option value="transpile_patterns">Transpile Patterns</option>
+              <option value="qec_results">QEC Results</option>
+              <option value="gpu_benchmark">GPU Benchmarks</option>
+              <option value="security_block">Security Blocks</option>
+            </select>
+          </div>
+          <div id="rag-semantic-input" style="display:none">
+            <div class="form-group">
+              <label class="form-label">Semantic Query</label>
+              <textarea id="rag-query" class="form-input"
+                style="resize:vertical;min-height:72px;line-height:1.5"
+                placeholder="예: iqm_garnet에서 fidelity 높은 실험&#10;PennyLane 회로 최적화 성공 사례&#10;GPU 벤치마크에서 speedup 높은 결과"></textarea>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">QPU Filter</label>
+            <select class="form-select" id="rag-qpu">
+              <option value="">All QPUs</option>
+              <option value="ibm_fez">IBM Fez</option>
+              <option value="iqm_garnet">IQM Garnet</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">SDK Filter</label>
+            <select class="form-select" id="rag-sdk">
+              <option value="">All SDKs</option>
+              <option value="PennyLane">PennyLane</option>
+              <option value="Qrisp">Qrisp</option>
+              <option value="Qiskit">Qiskit</option>
+              <option value="CUDAQ">CUDAQ</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Limit</label>
+            <input class="form-input" id="rag-limit" type="number" value="10" min="1" max="50">
+          </div>
+          <div id="rag-extra" style="display:none">
+            <div class="form-group">
+              <label class="form-label">Num Qubits</label>
+              <input class="form-input" id="rag-qubits" type="number" value="0" min="0">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Total Gates</label>
+              <input class="form-input" id="rag-gates" type="number" value="0" min="0">
+            </div>
+          </div>
+          <button class="btn-run" id="btn-rag" onclick="runRAG()">RUN SEARCH</button>
+        </div>
+        <div class="knowledge-form" style="margin-top:12px">
+          <div class="knowledge-form-title">⚛ Semantic Search</div>
+          <div class="form-group">
+            <textarea id="semantic-input" class="form-input"
+              style="resize:vertical;min-height:80px;line-height:1.5"
+              placeholder="자연어로 검색...&#10;예: ibm_fez에서 게이트 감소율 높은 최적화&#10;PennyLane fidelity 0.9 이상 실험"
+              onkeydown="onSemanticKeydown(event)"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Limit</label>
+            <select class="form-select" id="semantic-limit">
+              <option value="5">5개</option>
+              <option value="10" selected>10개</option>
+              <option value="20">20개</option>
+            </select>
+          </div>
+          <button class="btn-run" id="btn-semantic" onclick="runSemantic()">SEMANTIC SEARCH</button>
+          <div style="font-size:10px;color:var(--text3);margin-top:8px">
+            Enter로 검색 · Shift+Enter 줄바꿈<br>Chroma 벡터 유사도 검색
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="knowledge-result">
+          <div class="knowledge-result-header">
+            <span class="knowledge-result-title">Structured Search Results</span>
+            <span id="rag-type-desc" style="font-size:10px;color:var(--accent);opacity:0.8;margin-left:8px"></span>
+            <span class="knowledge-result-meta" id="rag-meta">—</span>
+          </div>
+          <div class="knowledge-result-body" id="rag-result-body">
+            <div class="empty-state">Run a search to see results</div>
+          </div>
+        </div>
+        <div class="knowledge-result" id="semantic-results" style="display:none">
+          <div class="knowledge-result-header">
+            <span class="knowledge-result-title">⚛ Semantic Results</span>
+            <span class="knowledge-result-meta" id="semantic-meta">—</span>
+          </div>
+          <div class="knowledge-result-body" id="semantic-result-body"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer>UQI · Universal Quantum Intelligence · Internal Tool</footer>
+</div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────
+const TEAM_PW_HASH = 'f3e055913a0b1eb0f07317896f9a1bc466b9a50db85a7f882f3ffde9ffb23aca';
+
+async function sha256(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function unlock() {
+  const pw = document.getElementById('pwInput').value;
+  const hash = await sha256(pw);
+  if (hash === TEAM_PW_HASH) {
+    sessionStorage.setItem('uqi_auth','1');
+    document.getElementById('lockScreen').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    initApp();
+  } else {
+    const inp = document.getElementById('pwInput');
+    inp.classList.add('error');
+    document.getElementById('lockErr').textContent='Incorrect password';
+    setTimeout(()=>{inp.classList.remove('error');inp.value='';},1000);
+  }
+}
+function logout() { sessionStorage.removeItem('uqi_auth'); location.reload(); }
+window.addEventListener('load',()=>{
+  if (sessionStorage.getItem('uqi_auth')==='1') {
+    document.getElementById('lockScreen').style.display='none';
+    document.getElementById('mainApp').style.display='block';
+    initApp();
+  }
+  document.getElementById('pwInput').focus();
+});
+
+// ─────────────────────────────────────────────────────────
+// MCP SSE Transport
+// ─────────────────────────────────────────────────────────
+const NGROK_HEADER = {'ngrok-skip-browser-warning':'true'};
+let msgUrl=null, reqId=0, pendingResolvers={}, _activeES=null;
+
+function setStatus(text,ok,err) {
+  document.getElementById('statusText').textContent=text;
+  document.getElementById('statusDot').className='status-dot'+(ok?' connected':err?' error':'');
+}
+async function connectSSE(url) {
+  if(_activeES){_activeES.close();_activeES=null;msgUrl=null;}
+  // 이전 세션의 미완료 요청 전부 정리
+  for (const id of Object.keys(pendingResolvers)) {
+    pendingResolvers[id]({error: 'session_reset', result: {content: [{text: JSON.stringify({error: '세션이 재연결되어 이전 요청이 취소되었습니다.'})}]}});
+    delete pendingResolvers[id];
+  }
+  return new Promise((resolve,reject)=>{
+    const es=new EventSource(`${url}/sse`,{withCredentials:false});
+    _activeES=es; let resolved=false;
+    const timeout=setTimeout(()=>{es.close();_activeES=null;reject(new Error('timeout'));},10000);
+    es.addEventListener('endpoint',e=>{
+      clearTimeout(timeout);
+      msgUrl=e.data.startsWith('http')?e.data:`${url}${e.data}`;
+      if(!resolved){resolved=true;resolve();}
+    });
+    es.addEventListener('message',ev=>{
+      try{const d=JSON.parse(ev.data);const r=pendingResolvers[d.id];if(r){delete pendingResolvers[d.id];r(d);}}catch{}
+    });
+    es.onerror=()=>{
+      if(!resolved){clearTimeout(timeout);_activeES=null;reject(new Error('SSE error'));return;}
+      setStatus('reconnecting...',false,false);
+      // 자동 재연결 (3초 후)
+      setTimeout(async ()=>{
+        if(_activeES===es){  // 아직 같은 세션이면
+          _activeES=null; msgUrl=null;
+          try {
+            const url=document.getElementById('serverUrl').value.trim().replace(/\/$/,'');
+            await connectSSE(url);
+            await initializeMCP();
+            setStatus('connected',true,false);
+          } catch(e) {
+            setStatus('disconnected — '+e.message,false,true);
+          }
+        }
+      }, 3000);
+    };
+  });
+}
+async function sendMessage(payload) {
+  await fetch(msgUrl,{method:'POST',headers:{'Content-Type':'application/json',...NGROK_HEADER},body:JSON.stringify(payload)});
+}
+async function mcpRequest(method,params) {
+  if(!msgUrl) throw new Error('Not connected');
+  const id=++reqId;
+  const p=new Promise((resolve,reject)=>{
+    pendingResolvers[id]=resolve;
+    setTimeout(()=>{delete pendingResolvers[id];reject(new Error('Request timeout'));},600000);
+  });
+  await sendMessage({jsonrpc:'2.0',id,method,params});
+  return p;
+}
+async function initializeMCP() {
+  const res=await mcpRequest('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'uqi-webapp',version:'2.0'}});
+  await sendMessage({jsonrpc:'2.0',method:'notifications/initialized',params:{}});
+  return res;
+}
+async function callTool(name,args) { return mcpRequest('tools/call',{name,arguments:args}); }
+function getResultText(res) {
+  return res.result?.content?.[0]?.text||res.result?.structuredContent?.result||JSON.stringify(res.result);
+}
+async function testConnection() {
+  const url=document.getElementById('serverUrl').value.trim().replace(/\/$/,'');
+  setStatus('connecting...',false,false);
+  try {
+    await connectSSE(url);
+    await initializeMCP();
+    setStatus('connected',true,false);
+    loadQPUDashboard(false);
+    loadQPUSelectors();
+    loadDGXFiles();
+  } catch(e) { setStatus('failed — '+e.message,false,true); }
+}
+
+// ─────────────────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────────────────
+function initApp() {
+  setTimeout(()=>testConnection(),300);
+  document.addEventListener('dragover',e=>e.preventDefault());
+  document.addEventListener('drop',e=>e.preventDefault());
+}
+function switchMain(name,el) {
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('panel-'+name).classList.add('active');
+  if (name === 'knowledge') onRagTypeChange();
+}
+
+// ─────────────────────────────────────────────────────────
+// QPU Dashboard
+// ─────────────────────────────────────────────────────────
+let _qpuData = {};
+let _compareMetric = '2q_error';
+
+const _QPU_CACHE_KEY = 'uqi_qpu_cache_v4';
+const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
+
+function _loadQPUCache() {
+  try {
+    const raw = localStorage.getItem(_QPU_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function _saveQPUCache(qpus, data) {
+  try {
+    localStorage.setItem(_QPU_CACHE_KEY, JSON.stringify({
+      ts: Date.now(), qpus, data
+    }));
+  } catch {}
+}
+
+function _qpuCacheAge(cache) {
+  if (!cache?.ts) return Infinity;
+  return Date.now() - cache.ts;
+}
+
+function _renderCacheTimestamp(cache) {
+  const el = document.getElementById('qpu-cache-ts');
+  if (!el || !cache?.ts) return;
+  const age = _qpuCacheAge(cache);
+  const ageH = (age / 3600000).toFixed(1);
+  const time = new Date(cache.ts).toLocaleString();
+  const isStale = age > _QPU_CACHE_TTL;
+  el.innerHTML = `캐시: ${time} (${ageH}h 전)${isStale ? ' <span style="color:var(--warn)">· 갱신 권장</span>' : ''}`;
+}
+
+async function loadQPUDashboard(forceRefresh) {
+  const container = document.getElementById('qpu-grid-container');
+  const cache = _loadQPUCache();
+
+  // 캐시 있으면 즉시 렌더링
+  if (cache && !forceRefresh) {
+    _qpuData = cache.data;
+    renderQPUGrid(cache.qpus);
+    renderCompareChart(_compareMetric);
+    _renderCacheTimestamp(cache);
+
+    // 12시간 이상 지났으면 백그라운드 갱신
+    if (_qpuCacheAge(cache) > _QPU_CACHE_TTL) {
+      document.getElementById('qpu-cache-ts') &&
+        (document.getElementById('qpu-cache-ts').innerHTML += ' <span style="color:var(--accent);font-size:10px"><span class="spinner"></span>백그라운드 갱신 중...</span>');
+      _fetchQPUData('background');
+    }
+    return;
+  }
+
+  // 캐시 없거나 forceRefresh
+  container.innerHTML = '<div class="empty-state"><span class="spinner"></span>Loading QPU status...</div>';
+  const tsEl = document.getElementById('qpu-cache-ts');
+  if (tsEl && forceRefresh) tsEl.innerHTML = '<span class="spinner"></span>갱신 중...';
+  await _fetchQPUData(forceRefresh ? 'refresh' : 'init');
+}
+
+async function _fetchQPUData(isBackground) {
+  const container = document.getElementById('qpu-grid-container');
+  const doRefresh = isBackground === 'refresh';
+  try {
+    // Step1: QPU 목록 먼저 가져오기
+    const listRes = await callTool('uqi_list_qpus', {});
+    const listData = JSON.parse(getResultText(listRes));
+    const qpus = listData.qpus || [];
+
+    // Step2: 스켈레톤 먼저 렌더링 (로딩 중 표시)
+    _qpuData = {};
+    for (const qpu of qpus) {
+      _qpuData[qpu] = { qpu_name: qpu, _loading: true };
+    }
+    renderQPUGrid(qpus);
+
+    // Step3: 각 QPU 병렬로 캘리브레이션 조회 → 도착하는 순서대로 카드 업데이트
+    const fetchOne = async (qpu) => {
+      if (qpu.startsWith('sim:') || qpu.startsWith('qpu:')) {
+        _qpuData[qpu] = { qpu_name: qpu, type: 'photonic' };
+        renderQPUGrid(qpus);
+        return;
+      }
+      try {
+        const cr = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: doRefresh });
+        const cd = JSON.parse(getResultText(cr));
+        _qpuData[qpu] = cd.error ? { qpu_name: qpu, error: cd.error } : { ...cd };
+      } catch(e) {
+        _qpuData[qpu] = { qpu_name: qpu, error: e.message };
+      }
+      renderQPUGrid(qpus);
+      renderCompareChart(_compareMetric);
+    };
+
+    // 전부 병렬 실행
+    await Promise.all(qpus.map(fetchOne));
+
+    _saveQPUCache(qpus, _qpuData);
+    _renderCacheTimestamp(_loadQPUCache());
+  } catch(e) {
+    if (!isBackground)
+      container.innerHTML = `<div class="error-state">⚠ QPU 목록 로드 실패: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderQPUGrid(qpus) {
+  const container = document.getElementById('qpu-grid-container');
+  if (!qpus.length) { container.innerHTML='<div class="empty-state">No QPUs available</div>'; return; }
+
+  let html = '<div class="qpu-grid">';
+  for (const qpu of qpus) {
+    if (qpu.startsWith('sim:')) continue;
+    const d = _qpuData[qpu] || {};
+    const isPhotonic = qpu.startsWith('sim:') || qpu.startsWith('qpu:');
+    const isOnline = isPhotonic || (!d.error && d.num_qubits != null && d.num_qubits > 0);
+    const cls = isPhotonic ? 'photonic' : (isOnline ? 'online' : 'offline');
+    const dotCls = isOnline || isPhotonic ? 'online' : 'offline';
+    const statusLabel = isOnline || isPhotonic ? 'Online' : 'Offline';
+    const _QPU_TYPE_MAP = {
+      'ibm':      { label: 'Superconducting', color: 'var(--accent)' },
+      'iqm':      { label: 'Superconducting', color: 'var(--accent)' },
+      'rigetti':  { label: 'Superconducting', color: 'var(--accent)' },
+      'ionq':     { label: 'Ion Trap',        color: 'var(--warn)' },
+      'quera':    { label: 'Neutral Atom',    color: '#f97316' },
+      'photonic': { label: 'Photonic',        color: 'var(--accent2)' },
+    };
+    const _typeKey = isPhotonic ? 'photonic'
+      : qpu.startsWith('ibm') ? 'ibm'
+      : qpu.startsWith('iqm') ? 'iqm'
+      : qpu.startsWith('ionq') ? 'ionq'
+      : qpu.startsWith('rigetti') ? 'rigetti'
+      : qpu.startsWith('quera') ? 'quera'
+      : 'ibm';
+    const _typeInfo = _QPU_TYPE_MAP[_typeKey];
+
+    let metricsHtml = '';
+    if (isPhotonic) {
+      const _PHOTONIC_SPECS = {
+        'qpu:ascella': { modes: 12, photon_loss: '~15%', source_fidelity: '~97%', detection_eff: '~85%' },
+        'qpu:belenos': { modes: 6,  photon_loss: '—',    source_fidelity: '~98%', detection_eff: '~90%' },
+        'sim:ascella': { modes: 12, photon_loss: '0%',   source_fidelity: '100%', detection_eff: '100%' },
+        'sim:belenos': { modes: 6,  photon_loss: '0%',   source_fidelity: '100%', detection_eff: '100%' },
+      };
+      const ps = _PHOTONIC_SPECS[qpu] || {};
+      metricsHtml = `
+        <div class="qpu-metrics">
+          <div class="qpu-metric"><div class="qpu-metric-label">Modes</div><div class="qpu-metric-value neutral">${ps.modes ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Source Fidelity</div><div class="qpu-metric-value ${ps.source_fidelity?.includes('97')||ps.source_fidelity?.includes('98')||ps.source_fidelity?.includes('100')?'good':'warn'}" style="font-size:12px">${ps.source_fidelity ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Detection Eff</div><div class="qpu-metric-value ${ps.detection_eff?.includes('100')?'good':ps.detection_eff?.includes('8')?'warn':'neutral'}" style="font-size:12px">${ps.detection_eff ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Photon Loss</div><div class="qpu-metric-value ${ps.photon_loss==='0%'?'good':'warn'}" style="font-size:12px">${ps.photon_loss ?? '—'}</div></div>
+        </div>`;
+      } else if (_typeKey === 'quera') {
+      const t1 = d.avg_t1_ms ? (d.avg_t1_ms * 1000).toFixed(0) : null;
+      metricsHtml = `
+        <div class="qpu-metrics">
+          <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Coherence</div><div class="qpu-metric-value ${t1 ? 'good' : 'dim'}">${t1 ? t1+'μs' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Rabi Max</div><div class="qpu-metric-value neutral">${d.rabi_freq_max_mhz ? d.rabi_freq_max_mhz.toFixed(1)+'MHz' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
+        </div>`;
+    } else if (_typeKey === 'ionq') {
+      const t1 = d.avg_t1_ms ? (d.avg_t1_ms * 1000).toFixed(0) : null;
+      const q2e = d.avg_2q_error;
+      metricsHtml = `
+        <div class="qpu-metrics">
+          <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">T1</div><div class="qpu-metric-value good">${t1 ? t1+'μs' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">2Q Error</div><div class="qpu-metric-value ${q2e != null ? (q2e < 0.01 ? 'good' : 'warn') : 'dim'}">${q2e != null ? (q2e*100).toFixed(2)+'%' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
+        </div>`;
+    } else if (d._loading) {
+      metricsHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">${[1,2,3,4].map(()=>`
+        <div class="qpu-metric"><div style="height:8px;background:var(--border);border-radius:3px;margin-bottom:6px;width:60%"></div>
+        <div style="height:14px;background:var(--surface2);border-radius:3px;width:80%;animation:pulse 1.2s ease-in-out infinite"></div></div>`).join('')}</div>`;
+    } else if (d.error) {
+      metricsHtml = `<div style="font-size:10px;color:var(--text3);margin-top:6px">No calibration data</div>`;
+    } else {
+      const q2e = d.avg_2q_error;
+      const t2  = d.avg_t2_ms ? (d.avg_t2_ms*1000).toFixed(0) : null;
+      const q2eCls = q2e == null ? 'dim' : q2e < 0.01 ? 'good' : q2e < 0.03 ? 'warn' : 'bad';
+      const t2Cls  = t2  == null ? 'dim' : t2 > 100 ? 'good' : t2 > 30 ? 'warn' : 'bad';
+      metricsHtml = `
+        <div class="qpu-metrics">
+          <div class="qpu-metric">
+            <div class="qpu-metric-label">2Q Error</div>
+            <div class="qpu-metric-value ${q2eCls}">${q2e != null ? (q2e*100).toFixed(2)+'%' : '—'}</div>
+          </div>
+          <div class="qpu-metric">
+            <div class="qpu-metric-label">T2</div>
+            <div class="qpu-metric-value ${t2Cls}">${t2 != null ? t2+'μs' : '—'}</div>
+          </div>
+          <div class="qpu-metric">
+            <div class="qpu-metric-label">Qubits</div>
+            <div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div>
+          </div>
+          <div class="qpu-metric">
+            <div class="qpu-metric-label">1Q Error</div>
+            <div class="qpu-metric-value ${d.avg_1q_error != null && d.avg_1q_error < 0.005 ? 'good' : 'neutral'}">${d.avg_1q_error != null ? (d.avg_1q_error*100).toFixed(3)+'%' : '—'}</div>
+          </div>
+        </div>`;
+    }
+
+    html += `
+      <div class="qpu-card ${cls}" onclick="showQPUDetail('${qpu}', this)">
+        <div class="qpu-card-header">
+          <div class="qpu-card-name">${qpu}</div>
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;min-width:0">
+            <span style="font-size:9px;color:${_typeInfo.color};background:var(--surface2);border:1px solid ${_typeInfo.color};border-radius:3px;padding:1px 5px;opacity:0.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px">${_typeInfo.label}</span>
+            <div class="qpu-status-badge" style="white-space:nowrap;flex-shrink:0">
+              <div class="qpu-dot ${dotCls}"></div>
+              <span style="color:var(--text3);font-size:10px">${statusLabel}</span>
+            </div>
+          </div>
+        </div>
+        ${metricsHtml}
+      </div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function showCompare(metric, el) {
+  _compareMetric = metric;
+  document.querySelectorAll('.compare-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  renderCompareChart(metric);
+}
+
+function renderCompareChart(metric) {
+  const chart = document.getElementById('compare-chart');
+  const qpus = Object.keys(_qpuData).filter(q => {
+    const d = _qpuData[q];
+    return !q.startsWith('sim:') && !q.startsWith('qpu:') && !d.error && !d._loading && d.qpu_name;
+  });
+
+  if (!qpus.length) { chart.innerHTML='<div class="empty-state">No data</div>'; return; }
+
+  const getValue = (qpu) => {
+    const d = _qpuData[qpu];
+    if (!d) return null;
+    if (metric === '2q_error') return d.avg_2q_error;
+    if (metric === 't2') return d.avg_t2_ms ? d.avg_t2_ms * 1000 : null;
+    if (metric === 'qubits') return d.num_qubits;
+    if (metric === '1q_error') return d.avg_1q_error;
+    return null;
+  };
+
+  const getLabel = (qpu) => {
+    const v = getValue(qpu);
+    if (v == null) return '—';
+    if (metric === '2q_error' || metric === '1q_error') return (v*100).toFixed(3)+'%';
+    if (metric === 't2') return v.toFixed(0)+'μs';
+    if (metric === 'qubits') return String(v);
+  };
+
+  const vals = qpus.map(q=>getValue(q)).filter(v=>v!=null);
+  const maxVal = Math.max(...vals);
+  const minVal = Math.min(...vals);
+
+  // For error rates: lower is better (green=low, red=high)
+  // For T2/qubits: higher is better (green=high, red=low)
+  const isLowerBetter = metric === '2q_error' || metric === '1q_error';
+
+  const sorted = [...qpus].sort((a,b) => {
+    const va = getValue(a) ?? (isLowerBetter ? Infinity : -Infinity);
+    const vb = getValue(b) ?? (isLowerBetter ? Infinity : -Infinity);
+    return isLowerBetter ? va - vb : vb - va;
+  });
+
+  let html = '';
+  for (const qpu of sorted) {
+    const v = getValue(qpu);
+    if (v == null) continue;
+    const pct = maxVal > 0 ? Math.max(4, (v / maxVal) * 100) : 4;
+    // color: best gets 'good', worst gets 'bad'
+    const rank = isLowerBetter ? (v - minVal) / (maxVal - minVal || 1) : 1 - (v - minVal) / (maxVal - minVal || 1);
+    const fillCls = rank < 0.33 ? 'good' : rank < 0.67 ? 'warn' : 'bad';
+    html += `
+      <div class="bar-row">
+        <div class="bar-label" title="${qpu}">${qpu}</div>
+        <div class="bar-track">
+          <div class="bar-fill ${fillCls}" style="width:${pct.toFixed(1)}%">${getLabel(qpu)}</div>
+        </div>
+      </div>`;
+  }
+  chart.innerHTML = html;
+}
+
+let _selectedQPU = null;
+async function showQPUDetail(qpu, el) {
+  if (_selectedQPU === qpu) {
+    _selectedQPU = null;
+    document.querySelectorAll('.qpu-card').forEach(c=>c.classList.remove('selected'));
+    document.getElementById('qpu-detail-container').innerHTML='';
+    return;
+  }
+  _selectedQPU = qpu;
+  document.querySelectorAll('.qpu-card').forEach(c=>c.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+
+  const container = document.getElementById('qpu-detail-container');
+  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Loading calibration...</div></div>`;
+
+  const isPhotonic = qpu.startsWith('sim:') || qpu.startsWith('qpu:');
+  try {
+    if (isPhotonic) {
+      const _PHOTONIC_SPECS = {
+        'qpu:ascella': { modes: 12, source_fidelity: '~97%', detection_eff: '~85%', photon_loss: '~15%', cx_fidelity: '~95%', mode: 'Real QPU' },
+        'qpu:belenos': { modes: 6,  source_fidelity: '~98%', detection_eff: '~90%', photon_loss: '—',    cx_fidelity: '~96%', mode: 'Real QPU' },
+        'sim:ascella': { modes: 12, source_fidelity: '100%', detection_eff: '100%', photon_loss: '0%',   cx_fidelity: '100%', mode: 'Simulator' },
+        'sim:belenos': { modes: 6,  source_fidelity: '100%', detection_eff: '100%', photon_loss: '0%',   cx_fidelity: '100%', mode: 'Simulator' },
+      };
+      const ps = _PHOTONIC_SPECS[qpu] || {};
+      container.innerHTML = `
+        <div class="qpu-detail">
+          <div class="qpu-detail-header">
+            <div class="qpu-detail-name">${qpu}</div>
+            <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
+          </div>
+          <div class="cal-grid">
+            <div class="cal-item"><div class="cal-label">Modes</div><div class="cal-value neutral">${ps.modes ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">Mode</div><div class="cal-value neutral" style="font-size:13px">${ps.mode ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">Source Fidelity</div><div class="cal-value good" style="font-size:14px">${ps.source_fidelity ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">Detection Eff</div><div class="cal-value warn" style="font-size:14px">${ps.detection_eff ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">Photon Loss</div><div class="cal-value ${ps.photon_loss === '0%' ? 'good' : 'warn'}" style="font-size:14px">${ps.photon_loss ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">CX Fidelity</div><div class="cal-value good" style="font-size:14px">${ps.cx_fidelity ?? '—'}</div></div>
+          </div>
+          <div style="margin-top:12px;font-size:10px;color:var(--text3)">* Quandela 공개 스펙 기준 (근사값)</div>
+        </div>`;
+      return;
+    }
+    const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: false });
+    const d = JSON.parse(getResultText(r));
+    if (d.error) {
+      container.innerHTML = `<div class="qpu-detail"><div class="error-state">⚠ ${escHtml(d.error)}</div></div>`;
+      return;
+    }
+    renderQPUDetail(container, qpu, d);
+  } catch(e) {
+    container.innerHTML = `<div class="qpu-detail"><div class="error-state">⚠ ${escHtml(e.message)}</div></div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Topology Viewer
+// ─────────────────────────────────────────────────────────
+function _renderTopology(containerId, couplingMap, numQubits, qpuName, d) {
+  d = d || {};
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  // 노드 파싱 (IBM: 숫자, IQM: "QB1" 형태)
+  const isNamed = couplingMap.length > 0 && typeof couplingMap[0][0] === 'string';
+  let nodeNames = [];
+  if (isNamed) {
+    const nameSet = new Set();
+    for (const [a, b] of couplingMap) { nameSet.add(a); nameSet.add(b); }
+    nodeNames = [...nameSet].sort((a, b) => {
+      const na = parseInt(a.replace(/\D/g, '')), nb = parseInt(b.replace(/\D/g, ''));
+      return na - nb;
+    });
+  } else {
+    nodeNames = Array.from({length: numQubits}, (_, i) => i);
+  }
+  const nodeCount = nodeNames.length;
+  const nodeIndex = Object.fromEntries(nodeNames.map((n, i) => [String(n), i]));
+
+  // 중복 엣지 제거 (양방향 → 단방향)
+  const edgeSet = new Set();
+  const edges = [];
+  for (const [a, b] of couplingMap) {
+    const key = [nodeIndex[String(a)], nodeIndex[String(b)]].sort().join('-');
+    if (!edgeSet.has(key)) { edgeSet.add(key); edges.push([nodeIndex[String(a)], nodeIndex[String(b)]]); }
+  }
+
+  // 현재 뷰 상태
+  let _topoView = 'graph';
+
+  function renderView() {
+    const tabs = el.querySelector('.topo-tabs');
+    tabs && tabs.querySelectorAll('.topo-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.view === _topoView);
+    });
+    const body = el.querySelector('.topo-body');
+    if (!body) return;
+    if (_topoView === 'graph') renderGraph(body);
+    else if (_topoView === 'table') renderTable(body);
+  }
+
+  // ── Graph View ──
+  function renderGraph(body) {
+    const W = body.clientWidth || 700;
+    const adj = Array.from({length: nodeCount}, () => []);
+    for (const [a, b] of edges) { adj[a].push(b); adj[b].push(a); }
+    const degrees = adj.map(n => n.length);
+
+    const useHeavyHex = nodeCount > 30;
+    const useIQMDiag  = isNamed && nodeCount <= 25;
+
+    // ── IQM Garnet 하드코딩 좌표 ──
+    // resonance 사이트 기준: 다이아몬드 외형, 45도 격자
+    // [diagonal_col, diagonal_row] → 픽셀은 45도 회전 적용
+    const IQM_COORDS = {
+      'QB1': [0,0],  'QB2': [1,1],  'QB3': [0,2],  'QB4': [1,3],
+      'QB5': [2,2],  'QB6': [3,3],  'QB7': [4,2],  'QB8': [1,5],
+      'QB9': [2,4],  'QB10':[3,5],  'QB11':[4,4],  'QB12':[5,5],
+      'QB13':[2,6],  'QB14':[3,7],  'QB15':[4,6],  'QB16':[5,7],
+      'QB17':[6,6],  'QB18':[3,9],  'QB19':[4,8],  'QB20':[5,9],
+    };
+
+    // ── IBM Heavy-Hex 좌표 역산 ──
+    // Heavy-hex 패턴: 짝수 행은 긴 체인, 홀수 행은 브리지 노드
+    // degree-2 노드 = 체인 끝단, degree-3 = T자 접합, degree-2(브리지) = 세로 연결
+    function computeHeavyHexCoords() {
+      // 인접 노드 중 같은 행(수평)인지 판별
+      // degree <= 2인 노드 중 체인 방향으로 연결된 것이 수평
+      // degree 3인 노드는 T자 → 그 중 2개는 수평, 1개는 수직
+      const coord = new Array(nodeCount).fill(null);
+      const visited = new Set();
+
+      // 체인 탐색: 연속된 수평 노드들을 한 행으로
+      // 시작점: degree-2 노드 중 하나
+      let startNode = degrees.findIndex(d => d === 1);
+      if (startNode === -1) startNode = degrees.findIndex(d => d === 2);
+      if (startNode === -1) startNode = 0;
+
+      coord[startNode] = {row: 0, col: 0};
+      visited.add(startNode);
+
+      // BFS로 heavy-hex 좌표 배정
+      // - 수평 연결: 같은 row, col±1
+      // - 수직 연결(브리지): row±1, col 유지 (half step)
+      const queue = [startNode];
+      let minRow = 0, maxRow = 0, minCol = 0, maxCol = 0;
+
+      // 이웃을 수평/수직으로 분류하는 함수
+      // degree-3 노드에서 이미 배치된 2개 이웃이 같은 row → 나머지 1개는 수직
+      function assignNeighbors(cur) {
+        const {row, col} = coord[cur];
+        const unvisited = adj[cur].filter(n => !visited.has(n));
+        if (!unvisited.length) return;
+
+        const placed = adj[cur].filter(n => coord[n] !== null);
+
+        // 이미 배치된 이웃들의 방향 파악
+        const placedDirs = placed.map(n => ({
+          dr: coord[n].row - row,
+          dc: coord[n].col - col,
+          node: n
+        }));
+
+        // 수평 방향으로 배치된 이웃 수
+        const horizPlaced = placedDirs.filter(d => d.dr === 0).length;
+        const vertPlaced  = placedDirs.filter(d => d.dr !== 0).length;
+
+        for (const nb of unvisited) {
+          // 이미 배치된 이웃들을 보고 방향 결정
+          const myPlaced = adj[nb].filter(n => coord[n] !== null && n !== cur);
+
+          let nr, nc;
+
+          if (degrees[cur] <= 2 || horizPlaced < 2) {
+            // 수평 우선
+            if (col + 1 <= maxCol + 1 && !occupiedAt(row, col + 1)) {
+              nr = row; nc = col + 1;
+            } else if (col - 1 >= minCol - 1 && !occupiedAt(row, col - 1)) {
+              nr = row; nc = col - 1;
+            } else if (!occupiedAt(row + 0.5, col)) {
+              nr = row + 0.5; nc = col;
+            } else {
+              nr = row - 0.5; nc = col;
+            }
+          } else {
+            // 수직 (브리지)
+            if (!occupiedAt(row + 0.5, col)) {
+              nr = row + 0.5; nc = col;
+            } else if (!occupiedAt(row - 0.5, col)) {
+              nr = row - 0.5; nc = col;
+            } else {
+              nr = row; nc = col + 1;
+            }
+          }
+
+          coord[nb] = {row: nr, col: nc};
+          visited.add(nb);
+          minRow = Math.min(minRow, nr); maxRow = Math.max(maxRow, nr);
+          minCol = Math.min(minCol, nc); maxCol = Math.max(maxCol, nc);
+          queue.push(nb);
+        }
+      }
+
+      function occupiedAt(r, c) {
+        return coord.some(p => p && Math.abs(p.row - r) < 0.01 && Math.abs(p.col - c) < 0.01);
+      }
+
+      while (queue.length > 0) {
+        const cur = queue.shift();
+        if (!coord[cur]) continue;
+        assignNeighbors(cur);
+      }
+
+      return {coord, minRow, maxRow, minCol, maxCol};
+    }
+
+    // ─────────────────────────────────────
+    // IQM 대각선 격자 렌더링
+    // ─────────────────────────────────────
+    if (useIQMDiag && nodeNames.every(n => IQM_COORDS[String(n)])) {
+      const H = 420;
+      const canvas = document.createElement('canvas');
+      canvas.width = W * 2; canvas.height = H * 2; // retina
+      canvas.style.cssText = `width:100%;height:${H}px;border-radius:6px;background:#0d1117;display:block;`;
+      body.innerHTML = ''; body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(2, 2); // retina
+
+      // 45도 회전 좌표 계산
+      const rawPos = {};
+      for (const n of nodeNames) {
+        const [dc, dr] = IQM_COORDS[String(n)];
+        // 45도 회전: x = (dc - dr), y = (dc + dr)
+        rawPos[String(n)] = { x: dc - dr, y: dc + dr };
+      }
+
+      let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+      for (const p of Object.values(rawPos)) {
+        minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+        minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y);
+      }
+
+      const pad = 36, nodeR = 18, diagR = 11;
+      const sx = (W - pad*2) / (maxX - minX || 1);
+      const sy = (H - pad*2) / (maxY - minY || 1);
+      const sc = Math.min(sx, sy) * 0.88;
+      const ox = (W - (maxX-minX)*sc) / 2 - minX*sc;
+      const oy = (H - (maxY-minY)*sc) / 2 - minY*sc;
+
+      const pos = [];
+      for (let i = 0; i < nodeCount; i++) {
+        const r = rawPos[String(nodeNames[i])];
+        pos[i] = { x: r.x*sc + ox, y: r.y*sc + oy };
+      }
+
+      // 에러율 색상 (IQM resonance 스타일: 초록→청록→파랑)
+      function iqmColor(t) {
+        // t=0: good(초록), t=1: bad(보라)
+        if (t == null) t = 0.3;
+        t = Math.max(0, Math.min(1, t));
+        // 초록(#3db96a) → 청록(#1a9e8c) → 파랑(#1a4fa0) → 보라(#5c1aad)
+        const stops = [
+          [61,185,106], [26,158,140], [26,79,160], [92,26,173]
+        ];
+        const seg = t * (stops.length - 1);
+        const i0 = Math.floor(seg), i1 = Math.min(i0+1, stops.length-1);
+        const f = seg - i0;
+        const r = Math.round(stops[i0][0] + f*(stops[i1][0]-stops[i0][0]));
+        const g = Math.round(stops[i0][1] + f*(stops[i1][1]-stops[i0][1]));
+        const b2= Math.round(stops[i0][2] + f*(stops[i1][2]-stops[i0][2]));
+        return `rgb(${r},${g},${b2})`;
+      }
+
+      const q1e = d.avg_1q_error || 0.001;
+      const q2e = d.avg_2q_error || 0.007;
+      // 에러율 정규화 (garnet 기준)
+      const q1eT = Math.min(1, q1e / 0.005);
+      const q2eT = Math.min(1, q2e / 0.03);
+
+      // 1. 연결선 (얇게)
+      ctx.strokeStyle = 'rgba(150,170,190,0.4)';
+      ctx.lineWidth = 1;
+      for (const [a, b] of edges) {
+        ctx.beginPath(); ctx.moveTo(pos[a].x, pos[a].y); ctx.lineTo(pos[b].x, pos[b].y); ctx.stroke();
+      }
+
+      // 2. 다이아몬드 (엣지 중앙)
+      for (const [a, b] of edges) {
+        const mx = (pos[a].x + pos[b].x) / 2;
+        const my = (pos[a].y + pos[b].y) / 2;
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(Math.PI/4);
+        const dc = iqmColor(q2eT);
+        ctx.fillStyle = dc;
+        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.rect(-diagR, -diagR, diagR*2, diagR*2);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+
+      // 3. 노드 (원)
+      for (let i = 0; i < nodeCount; i++) {
+        // 그림자
+        ctx.shadowColor = 'rgba(0,0,0,0.15)';
+        ctx.shadowBlur = 4;
+        ctx.beginPath();
+        ctx.arc(pos[i].x, pos[i].y, nodeR, 0, 2*Math.PI);
+        ctx.fillStyle = iqmColor(q1eT);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // 레이블
+        ctx.fillStyle = 'rgba(255,255,255,0.95)';
+        ctx.font = `bold 8px -apple-system,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(nodeNames[i]), pos[i].x, pos[i].y);
+      }
+
+    // ─────────────────────────────────────
+    // IBM Heavy-Hex 렌더링
+    // ─────────────────────────────────────
+    } else if (useHeavyHex) {
+      // coupling_map에서 heavy-hex 구조 역산
+      // Heavy-hex: 긴 수평 체인 + 짧은 수직 브리지
+      // degree 분포: 대부분 2(체인끝/브리지끝), 일부 3(T자접합)
+
+      // 수평 체인 먼저 찾기
+      // 체인: 양쪽 모두 degree<=3인 노드가 연속으로 연결된 경로
+      // 브리지: degree<=2이고 체인에 없는 노드
+
+      // Step1: 연결 구조로 행 배정
+      // degree-3 노드들이 수직 연결점 → 이들을 기준으로 행 결정
+      const coord = new Array(nodeCount).fill(null);
+      const inChain = new Array(nodeCount).fill(false);
+
+      // 체인 탐색: degree-3 노드 사이의 수평 경로
+      const deg3nodes = degrees.map((d,i) => d===3 ? i : -1).filter(i => i>=0);
+
+      // BFS로 체인 찾기
+      // row: 짝수=체인행, 홀수=브리지행
+      // col: 체인 내 위치
+
+      let currentRow = 0;
+      const visited2 = new Set();
+
+      // 시작: degree가 가장 작은 노드 (체인 끝단)
+      const startNode = degrees.reduce((mi, d, i) => d < degrees[mi] ? i : mi, 0);
+
+      function traceChain(startN, row, startCol) {
+        let cur = startN, col = startCol, prev = -1;
+        while (cur !== -1 && !visited2.has(cur)) {
+          visited2.add(cur);
+          coord[cur] = {row, col};
+          inChain[cur] = true;
+          // 다음 수평 노드 찾기 (이전 노드 제외, degree-3이면 체인 계속)
+          const next = adj[cur].find(n =>
+            n !== prev && !visited2.has(n) &&
+            (degrees[n] <= 3) && !coord[n]
+          );
+          prev = cur;
+          if (next !== undefined && coord[next] === null) {
+            col += 2;
+            cur = next;
+          } else {
+            cur = -1;
+          }
+        }
+        return col;
+      }
+
+      // 체인 0행부터 BFS로 전체 배정
+      const rowQueue2 = [{node: startNode, row: 0, col: 0}];
+      const globalVisited = new Set();
+      let minRow2=0, maxRow2=0, minCol2=0, maxCol2=0;
+
+      while (rowQueue2.length > 0) {
+        const {node, row, col} = rowQueue2.shift();
+        if (globalVisited.has(node)) continue;
+        if (coord[node] !== null) continue;
+
+        // 이 노드에서 수평 체인 추적
+        globalVisited.add(node);
+        coord[node] = {row, col};
+
+        let c = col;
+        // 왼쪽으로 체인 추적
+        // 오른쪽으로 체인 추적
+        const chainNodes = [node];
+        let rightNode = adj[node].find(n => !coord[n] && degrees[n] <= 3);
+        let rightCol = col + 2;
+        while (rightNode !== undefined && !coord[rightNode]) {
+          coord[rightNode] = {row, col: rightCol};
+          globalVisited.add(rightNode);
+          chainNodes.push(rightNode);
+          maxCol2 = Math.max(maxCol2, rightCol);
+          const nextRight = adj[rightNode].find(n => !coord[n] && degrees[n] <= 3 && n !== chainNodes[chainNodes.length-2]);
+          rightNode = nextRight;
+          rightCol += 2;
+        }
+
+        maxRow2 = Math.max(maxRow2, row);
+        minRow2 = Math.min(minRow2, row);
+        maxCol2 = Math.max(maxCol2, col);
+
+        // 이 체인의 노드들에서 수직 이웃 찾기 (다음 행)
+        for (const cn of chainNodes) {
+          for (const nb of adj[cn]) {
+            if (!coord[nb]) {
+              // 브리지 노드 (degree-2)
+              const bridgeCol = coord[cn].col;
+              coord[nb] = {row: row + 1, col: bridgeCol};
+              globalVisited.add(nb);
+              maxRow2 = Math.max(maxRow2, row+1);
+
+              // 브리지에서 다음 체인 찾기
+              for (const nb2 of adj[nb]) {
+                if (!coord[nb2]) {
+                  rowQueue2.push({node: nb2, row: row+2, col: bridgeCol});
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 미배치 노드 fallback
+      let fc = maxCol2 + 2;
+      for (let i=0; i<nodeCount; i++) {
+        if (!coord[i]) { coord[i]={row:0,col:fc}; fc+=2; maxCol2=fc; }
+      }
+
+      const rows = maxRow2 - minRow2 + 1;
+      const cols = Math.ceil((maxCol2 - minCol2) / 2) + 1;
+      const cellW = Math.min(18, (W - 20) / cols);
+      const cellH = Math.min(26, Math.max(18, (cellW * 1.4)));
+      const H = Math.max(160, rows * cellH + 30);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = W * 2; canvas.height = H * 2;
+      canvas.style.cssText = `width:100%;height:${H}px;border-radius:6px;background:#0d1117;display:block;`;
+      body.innerHTML = ''; body.appendChild(canvas);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(2, 2);
+
+      const offX = (W - (maxCol2 - minCol2) / 2 * cellW) / 2;
+      const offY = (H - (maxRow2 - minRow2) * cellH) / 2;
+
+      const pos = coord.map(g => ({
+        x: offX + ((g.col - minCol2) / 2) * cellW,
+        y: offY + (g.row - minRow2) * cellH,
+      }));
+
+      // bbox fit
+      let bx0=Infinity,bx1=-Infinity,by0=Infinity,by1=-Infinity;
+      for (const p of pos){bx0=Math.min(bx0,p.x);bx1=Math.max(bx1,p.x);by0=Math.min(by0,p.y);by1=Math.max(by1,p.y);}
+      const pad2=16, sxx=(W-pad2*2)/(bx1-bx0||1), syy=(H-pad2*2)/(by1-by0||1), sc2=Math.min(sxx,syy,2.0);
+      const ox2=(W-(bx1-bx0)*sc2)/2-bx0*sc2, oy2=(H-(by1-by0)*sc2)/2-by0*sc2;
+      for (const p of pos){p.x=p.x*sc2+ox2; p.y=p.y*sc2+oy2;}
+
+      // IBM 에러율 색상 (네이비→보라)
+      function ibmColor(t) {
+        if (t == null) t = 0.2;
+        t = Math.max(0, Math.min(1, t));
+        // 네이비(#1a3a6e) → 파랑(#2563c0) → 보라(#7c3aed)
+        const stops = [[26,58,110],[37,99,192],[124,58,237]];
+        const seg = t * (stops.length-1);
+        const i0 = Math.floor(seg), i1 = Math.min(i0+1,stops.length-1);
+        const f = seg-i0;
+        const r=Math.round(stops[i0][0]+f*(stops[i1][0]-stops[i0][0]));
+        const g=Math.round(stops[i0][1]+f*(stops[i1][1]-stops[i0][1]));
+        const b2=Math.round(stops[i0][2]+f*(stops[i1][2]-stops[i0][2]));
+        return `rgb(${r},${g},${b2})`;
+      }
+
+      const q2eT = Math.min(1, (d.avg_2q_error||0.02) / 0.05);
+      const nodeR = Math.max(3, Math.min(6, cellW * 0.38));
+
+      // 엣지
+      ctx.strokeStyle = 'rgba(80,140,220,0.5)';
+      ctx.lineWidth = 0.8;
+      for (const [a,b] of edges) {
+        ctx.beginPath(); ctx.moveTo(pos[a].x,pos[a].y); ctx.lineTo(pos[b].x,pos[b].y); ctx.stroke();
+      }
+
+      // 노드
+      for (let i=0; i<nodeCount; i++) {
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.shadowBlur = 2;
+        ctx.beginPath(); ctx.arc(pos[i].x, pos[i].y, nodeR, 0, 2*Math.PI);
+        ctx.fillStyle = ibmColor(q2eT);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(100,160,255,0.6)';
+        ctx.lineWidth = 0.8;
+        ctx.stroke();
+      }
+
+    } else {
+      // ── Force-directed (소규모 일반) ──
+      const H=300;
+      const canvas=document.createElement('canvas');
+      canvas.width=W*2; canvas.height=H*2;
+      canvas.style.cssText=`width:100%;height:${H}px;border-radius:6px;background:#0d1117;display:block;`;
+      body.innerHTML=''; body.appendChild(canvas);
+      const ctx=canvas.getContext('2d');
+      ctx.scale(2,2);
+
+      const pos=nodeNames.map((_,i)=>{
+        const angle=(2*Math.PI*i/nodeCount)-Math.PI/2;
+        const r=Math.min(W,H)*0.36;
+        return{x:W/2+r*Math.cos(angle),y:H/2+r*Math.sin(angle),vx:0,vy:0};
+      });
+
+      const IDEAL=Math.min(W,H)*0.20, REPEL=4000, DAMP=0.78;
+      for(let iter=0;iter<250;iter++){
+        const decay=Math.max(0.1,1-iter/180);
+        for(let i=0;i<nodeCount;i++) for(let j=i+1;j<nodeCount;j++){
+          const dx=pos[i].x-pos[j].x,dy=pos[i].y-pos[j].y,d2=Math.sqrt(dx*dx+dy*dy)||0.01;
+          const f=REPEL/(d2*d2)*decay;
+          pos[i].vx+=f*dx/d2;pos[i].vy+=f*dy/d2;pos[j].vx-=f*dx/d2;pos[j].vy-=f*dy/d2;
+        }
+        for(const[a,b]of edges){
+          const dx=pos[b].x-pos[a].x,dy=pos[b].y-pos[a].y,d2=Math.sqrt(dx*dx+dy*dy)||0.01;
+          const f=(d2-IDEAL)*0.12;
+          pos[a].vx+=f*dx/d2;pos[a].vy+=f*dy/d2;pos[b].vx-=f*dx/d2;pos[b].vy-=f*dy/d2;
+        }
+        for(let i=0;i<nodeCount;i++){
+          pos[i].vx+=(W/2-pos[i].x)*0.012;pos[i].vy+=(H/2-pos[i].y)*0.012;
+          pos[i].vx*=DAMP;pos[i].vy*=DAMP;
+          pos[i].x+=pos[i].vx;pos[i].y+=pos[i].vy;
+          pos[i].x=Math.max(22,Math.min(W-22,pos[i].x));
+          pos[i].y=Math.max(22,Math.min(H-22,pos[i].y));
+        }
+      }
+
+      let bx0=Infinity,bx1=-Infinity,by0=Infinity,by1=-Infinity;
+      for(const p of pos){bx0=Math.min(bx0,p.x);bx1=Math.max(bx1,p.x);by0=Math.min(by0,p.y);by1=Math.max(by1,p.y);}
+      const pad=32,sxx=(W-pad*2)/(bx1-bx0||1),syy=(H-pad*2)/(by1-by0||1),sc=Math.min(sxx,syy);
+      const ox=(W-(bx1-bx0)*sc)/2-bx0*sc,oy=(H-(by1-by0)*sc)/2-by0*sc;
+      for(const p of pos){p.x=p.x*sc+ox;p.y=p.y*sc+oy;}
+
+      ctx.strokeStyle='rgba(0,212,255,0.3)';ctx.lineWidth=1.2;
+      for(const[a,b]of edges){ctx.beginPath();ctx.moveTo(pos[a].x,pos[a].y);ctx.lineTo(pos[b].x,pos[b].y);ctx.stroke();}
+      const nodeR2=nodeCount>20?9:12, fontSize2=nodeCount>20?7:9;
+      for(let i=0;i<nodeCount;i++){
+        ctx.beginPath();ctx.arc(pos[i].x,pos[i].y,nodeR2,0,2*Math.PI);
+        ctx.fillStyle='#0d1117';ctx.fill();
+        ctx.strokeStyle='rgba(0,212,255,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+        ctx.fillStyle='rgba(230,237,243,0.95)';
+        ctx.font=`bold ${fontSize2}px 'JetBrains Mono',monospace`;
+        ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(isNamed?String(nodeNames[i]).replace(/\D/g,''):String(nodeNames[i]),pos[i].x,pos[i].y);
+      }
+    }
+  }
+
+  // ── Table View ──
+  function renderTable(body) {
+    const rows = edges.map(([a, b]) =>
+      `<tr style="border-bottom:1px solid #21262d">
+        <td style="padding:5px 10px;color:#00d4ff;font-weight:600">${nodeNames[a]}</td>
+        <td style="padding:5px 10px;color:#484f58">↔</td>
+        <td style="padding:5px 10px;color:#00d4ff;font-weight:600">${nodeNames[b]}</td>
+      </tr>`
+    ).join('');
+    body.innerHTML = `
+      <div style="max-height:220px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'JetBrains Mono',monospace">
+          <thead>
+            <tr style="background:#161b22;border-bottom:1px solid #21262d">
+              <th style="padding:6px 10px;text-align:left;color:#484f58;font-size:9px;letter-spacing:1px;text-transform:uppercase">Qubit A</th>
+              <th style="padding:6px 10px"></th>
+              <th style="padding:6px 10px;text-align:left;color:#484f58;font-size:9px;letter-spacing:1px;text-transform:uppercase">Qubit B</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  // ── Build UI ──
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:10px;color:#484f58">${nodeCount}큐비트 · ${edges.length}개 연결</div>
+      <div class="topo-tabs" style="display:flex;gap:3px">
+        <button class="topo-tab" data-view="graph" style="background:#161b22;border:1px solid rgba(0,212,255,0.3);border-radius:4px;padding:3px 10px;color:#00d4ff;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;font-weight:600" onclick="_topoViewSwitch(this,'graph','${containerId}')">Graph</button>
+        <button class="topo-tab" data-view="table" style="background:none;border:1px solid #21262d;border-radius:4px;padding:3px 10px;color:#8b949e;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;font-weight:600" onclick="_topoViewSwitch(this,'table','${containerId}')">Table</button>
+      </div>
+    </div>
+    <div class="topo-body" style="min-height:220px"></div>`;
+
+  window._topoViewSwitch = function(btn, view, cid) {
+    if (cid !== containerId) return;
+    _topoView = view;
+    el.querySelectorAll('.topo-tab').forEach(t => {
+      const isActive = t.dataset.view === view;
+      t.style.background = isActive ? '#161b22' : 'none';
+      t.style.color = isActive ? '#00d4ff' : '#8b949e';
+      t.style.borderColor = isActive ? 'rgba(0,212,255,0.3)' : '#21262d';
+    });
+    renderView();
+  };
+
+  renderView();
+}
+
+function renderQPUDetail(container, qpu, d) {
+  const _vk = qpu.startsWith('quera') ? 'quera'
+    : qpu.startsWith('ionq') ? 'ionq'
+    : qpu.startsWith('rigetti') ? 'rigetti'
+    : qpu.startsWith('iqm') ? 'iqm' : 'ibm';
+
+  const t1  = d.avg_t1_ms ? (d.avg_t1_ms*1000).toFixed(1) : '—';
+  const t2  = d.avg_t2_ms ? (d.avg_t2_ms*1000).toFixed(1) : '—';
+  const q1e = errorRate(d.avg_1q_error);
+  const q2e = errorRate(d.avg_2q_error);
+  const roe = errorRate(d.avg_ro_error);
+
+  let calGridHtml = '';
+  if (_vk === 'quera') {
+    calGridHtml = `
+      <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
+      <div class="cal-item"><div class="cal-label">Coherence</div><div class="cal-value good">${t1}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">Rabi Max</div><div class="cal-value neutral">${d.rabi_freq_max_mhz?.toFixed(1)??'—'}<span class="cal-unit">MHz</span></div></div>
+      <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:13px">All-to-All</div></div>
+      <div class="cal-item"><div class="cal-label">Type</div><div class="cal-value neutral" style="font-size:13px">Neutral Atom</div></div>
+      <div class="cal-item"><div class="cal-label">Mode</div><div class="cal-value neutral" style="font-size:13px">Analog</div></div>`;
+  } else if (_vk === 'ionq') {
+    calGridHtml = `
+      <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
+      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value good">${t1}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${d.avg_2q_ns?.toFixed(0)??'—'}<span class="cal-unit">ns</span></div></div>
+      <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:13px">All-to-All</div></div>`;
+  } else {
+    calGridHtml = `
+      <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
+      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value neutral">${t1}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">T2</div><div class="cal-value neutral">${t2}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">RO Error</div><div class="cal-value ${roe.cls}">${roe.text}</div></div>
+      <div class="cal-item"><div class="cal-label">1Q Gate</div><div class="cal-value neutral">${d.avg_1q_ns?.toFixed(1)??'—'}<span class="cal-unit">ns</span></div></div>
+      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${d.avg_2q_ns?.toFixed(1)??'—'}<span class="cal-unit">ns</span></div></div>`;
+  }
+
+  container.innerHTML = `
+    <div class="qpu-detail">
+      <div class="qpu-detail-header">
+        <div class="qpu-detail-name">${qpu}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-refresh-cal" onclick="refreshQPUDetail('${qpu}')">↻ Refresh</button>
+          <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
+        </div>
+      </div>
+      <div class="cal-grid">${calGridHtml}</div>
+      ${d.basis_gates ? `<div class="gates-list">${d.basis_gates.map(g=>`<span class="gate-tag">${g}</span>`).join('')}</div>` : ''}
+      <div style="margin-top:10px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? new Date(d.last_updated).toLocaleString() : '—'}</div>
+    </div>`;
+}
+
+async function refreshQPUDetail(qpu) {
+  const container = document.getElementById('qpu-detail-container');
+  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Refreshing...</div></div>`;
+  const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: true });
+  const d = JSON.parse(getResultText(r));
+  const _vendor = qpu.startsWith('iqm') ? 'iqm'
+    : qpu.startsWith('ionq') ? 'ionq'
+    : qpu.startsWith('rigetti') ? 'rigetti'
+    : qpu.startsWith('quera') ? 'quera' : 'ibm';
+  _qpuData[qpu] = { ...d, type: _vendor };
+  renderQPUDetail(container, qpu, d);
+  renderCompareChart(_compareMetric);
+}
+
+function closeQPUDetail() {
+  _selectedQPU = null;
+  document.querySelectorAll('.qpu-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('qpu-detail-container').innerHTML='';
+}
+
+// ─────────────────────────────────────────────────────────
+// QPU Selector population
+// ─────────────────────────────────────────────────────────
+async function loadQPUSelectors() {
+  try {
+    const res = await callTool('uqi_list_qpus', {});
+    const data = JSON.parse(getResultText(res));
+    const qpus = data.qpus || [];
+    const selectors = ['global-qpu', 'rag-qpu'];
+    selectors.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const cur = el.value;
+      el.innerHTML = qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+      if ([...el.options].some(o=>o.value===cur)) el.value=cur;
+    });
+    // QPU Submit selector
+    const qpuSel = document.getElementById('qpu-qpu');
+    if (qpuSel) {
+      const cur = qpuSel.value;
+      qpuSel.innerHTML = '<option value="auto">Auto (Recommended)</option>' + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+      if ([...qpuSel.options].some(o=>o.value===cur)) qpuSel.value=cur;
+    }
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────────────────
+// File Handling
+// ─────────────────────────────────────────────────────────
+let _uploadedPath = null;
+let _dgxFiles = [];
+
+function setFileSource(mode, btn) {
+  document.querySelectorAll('.file-source-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('upload-area').style.display = mode==='upload' ? '' : 'none';
+  document.getElementById('dgx-area').style.display   = mode==='dgx'    ? '' : 'none';
+}
+
+function onDragEnter(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('global-drop').classList.add('drag-over'); }
+function onDragOver(e)  { e.preventDefault(); e.stopPropagation(); document.getElementById('global-drop').classList.add('drag-over'); }
+function onDragLeave(e) {
+  const z = document.getElementById('global-drop');
+  if (!z.contains(e.relatedTarget)) z.classList.remove('drag-over');
+}
+function onDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  document.getElementById('global-drop').classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+}
+function onFileChange(e) { const f=e.target.files[0]; if(f) handleFile(f); }
+
+function handleFile(file) {
+  if (!file.name.endsWith('.py')) { alert('Python (.py) 파일만 허용됩니다'); return; }
+  const fname = document.getElementById('global-fname');
+  fname.textContent='⟳ Uploading...'; fname.className='file-name-display ok'; fname.style.display='block';
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const res = await callTool('uqi_upload_algorithm', { filename: file.name, content: ev.target.result });
+      const d = JSON.parse(getResultText(res));
+      if (d.ok) {
+        _uploadedPath = d.path;
+        fname.textContent = `✓ ${file.name}`;
+        fname.className = 'file-name-display ok';
+      } else {
+        fname.textContent = `✗ ${d.error||'Upload failed'}`;
+        fname.className = 'file-name-display err';
+      }
+    } catch(e) { fname.textContent=`✗ ${e.message}`; fname.className='file-name-display err'; }
+  };
+  reader.readAsText(file);
+}
+
+async function loadDGXFiles() {
+  try {
+    const res = await callTool('uqi_list_files', {});
+    const d = JSON.parse(getResultText(res));
+    if (d.files) {
+      _dgxFiles = d.files;
+      const sel = document.getElementById('dgx-select');
+      sel.innerHTML = _dgxFiles.map(f=>`<option value="${f.path}">${f.name} (${f.size_kb}KB)</option>`).join('');
+    }
+  } catch(e) {}
+}
+
+async function refreshDGXList() {
+  await loadDGXFiles();
+}
+
+async function viewDGXFile() {
+  const sel = document.getElementById('dgx-select');
+  if (!sel?.value) return;
+  const res = await callTool('uqi_read_file', { algorithm_file: sel.value });
+  const d = JSON.parse(getResultText(res));
+  if (d.error) { alert(d.error); return; }
+  document.getElementById('codeModalTitle').textContent = d.name;
+  document.getElementById('codeModalContent').textContent = d.content;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function getSelectedFile() {
+  const uploadArea = document.getElementById('upload-area');
+  const isUpload = uploadArea && uploadArea.style.display !== 'none';
+  if (isUpload) return _uploadedPath;
+  const sel = document.getElementById('dgx-select');
+  return sel ? sel.value : null;
+}
+
+function closeCodeModal() { document.getElementById('codeModal').classList.remove('open'); }
+document.getElementById('codeModal').addEventListener('click',e=>{ if(e.target===e.currentTarget) closeCodeModal(); });
+
+// ─────────────────────────────────────────────────────────
+// Pipeline Steps
+// ─────────────────────────────────────────────────────────
+const _openSteps = new Set(['analyze']);
+function toggleStep(name) {
+  const body = document.getElementById('body-'+name);
+  const chev = document.getElementById('chevron-'+name);
+  if (_openSteps.has(name)) {
+    _openSteps.delete(name);
+    body.classList.remove('open');
+    chev.classList.remove('open');
+  } else {
+    _openSteps.add(name);
+    body.classList.add('open');
+    chev.classList.add('open');
+  }
+}
+// Open analyze by default
+document.getElementById('body-analyze').classList.add('open');
+document.getElementById('chevron-analyze').classList.add('open');
+
+function setBtnLoading(id, text) {
+  const b=document.getElementById(id);
+  b.disabled=true; b.classList.add('loading');
+  b.innerHTML=`<span class="spinner"></span>${text}`;
+}
+function setBtnDone(id, text) {
+  const b=document.getElementById(id);
+  b.disabled=false; b.classList.remove('loading'); b.innerHTML=text;
+}
+function setBadge(step, status) {
+  const b = document.getElementById('badge-'+step);
+  if (!b) return;
+  if (!status) { b.style.display='none'; return; }
+  b.style.display='inline';
+  b.className='step-badge '+status;
+  b.textContent = status==='done' ? '✓ Done' : '✗ Error';
+}
+function setStepResult(step, html) {
+  document.getElementById('result-'+step).innerHTML = html;
+}
+
+function _addCacheBadge(step, file, qpu, cached) {
+  if (!cached) return;
+  const resultId = step === 'qpu_submit' ? 'result-qpu' : 'result-'+step;
+  const result = document.getElementById(resultId);
+  if (!result) return;
+  const badge = document.createElement('div');
+  badge.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:rgba(240,136,62,0.08);border:1px solid rgba(240,136,62,0.25);border-radius:6px;font-size:10px;color:var(--warn)';
+  badge.innerHTML = `⚡ Cached result loaded from previous run.
+    <button onclick="_invalidateCache('${step}','${file}','${qpu}')"
+      style="margin-left:auto;background:rgba(240,136,62,0.15);border:1px solid rgba(240,136,62,0.4);border-radius:4px;padding:2px 8px;color:var(--warn);font-family:var(--font-mono);font-size:10px;cursor:pointer;font-weight:600">
+      ↺ Invalidate Cache
+    </button>`;
+  result.prepend(badge);
+}
+
+async function _invalidateCache(step, file, qpu) {
+  if (!file) { alert('파일을 먼저 선택하세요'); return; }
+  try {
+    const res = await callTool('uqi_invalidate_cache', { algorithm_file: file, qpu_name: qpu, stage: step });
+    const d = JSON.parse(getResultText(res));
+    if (d.ok) {
+      alert(`캐시 무효화 완료 (${d.deleted}건 삭제)\n재실행하면 새로운 결과를 가져옵니다.`);
+      // 배지 제거
+      const _rid = step === 'qpu_submit' ? 'result-qpu' : 'result-'+step;
+      document.querySelectorAll('#'+_rid+' div[style*="rgba(240,136,62"]').forEach(e=>e.remove());
+    } else {
+      alert('실패: ' + (d.error||'unknown'));
+    }
+  } catch(e) { alert('오류: '+e.message); }
+}
+function getQPU() { return document.getElementById('global-qpu').value; }
+function elapsed(t0) { return ((Date.now()-t0)/1000).toFixed(2)+'s'; }
+
+// ── Analyze ──
+async function runAnalyze() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-analyze','Analyzing...');
+  setStepResult('analyze','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_analyze', { algorithm_file: f, qpu_name: getQPU() });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('analyze','error'); return; }
+    setStepResult('analyze', renderAnalyze(data, elapsed(t0)));
+    _addCacheBadge('analyze', f, getQPU(), data._cached);
+    setBadge('analyze','done');
+  } catch(e) { setStepResult('analyze',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('analyze','error'); }
+  finally { setBtnDone('btn-analyze','RUN ANALYSIS'); }
+}
+
+function renderAnalyze(data, el) {
+  const circuits = data.circuits || {};
+  let html = `<div class="result-meta">${el} · ${Object.keys(circuits).length} circuit(s) · ${data.framework||'—'}</div>`;
+  for (const [name, c] of Object.entries(circuits)) {
+    if (c.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(c.error)}</div>`; continue; }
+    const p = c.profile||{};
+    html += `
+      <div class="section-divider">${name}</div>
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Qubits</div><div class="metric-value neutral">${p.num_qubits??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Gates</div><div class="metric-value neutral">${p.total_gates??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Depth</div><div class="metric-value neutral">${p.depth??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">2Q Ratio</div><div class="metric-value ${p.two_q_ratio>0.5?'warn':'neutral'}">${p.two_q_ratio!=null?(p.two_q_ratio*100).toFixed(1)+'%':'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">T2 Ratio</div><div class="metric-value ${c.t2_ratio>0.5?'bad':c.t2_ratio>0.2?'warn':'good'}">${c.t2_ratio??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Param?</div><div class="metric-value neutral">${p.is_parameterized?'Yes':'No'}</div></div>
+      </div>
+      ${p.ops?`<div class="gates-list">${Object.entries(p.ops).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`:''}`;
+  }
+  return html;
+}
+
+// ── Optimize ──
+async function runOptimize() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-optimize','Optimizing...');
+  setStepResult('optimize','<div class="empty-state"><span class="spinner"></span>Optimizing...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_optimize', {
+      algorithm_file: f, qpu_name: getQPU(),
+      combination: document.getElementById('opt-combo').value,
+      verify: document.getElementById('opt-verify').checked,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('optimize','error'); return; }
+    setStepResult('optimize', renderOptimize(data, elapsed(t0)));
+    _addCacheBadge('optimize', f, getQPU(), data._cached);
+    setBadge('optimize','done');
+  } catch(e) { setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('optimize','error'); }
+  finally { setBtnDone('btn-optimize','RUN OPTIMIZATION'); }
+}
+
+function renderOptimize(data, el) {
+  const results = data.results||{};
+  let html = `<div class="result-meta">${el} · QPU: ${data.qpu_name||'—'}</div>`;
+  for (const [name,r] of Object.entries(results)) {
+    if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
+    const gRed = r.gate_reduction!=null?(r.gate_reduction*100).toFixed(1)+'%':'—';
+    const dRed = r.depth_reduction!=null?(r.depth_reduction*100).toFixed(1)+'%':'—';
+    html += `
+      <div class="section-divider">${name}</div>
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Combination</div><div class="metric-value neutral" style="font-size:11px">${r.combination||'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Gate Reduction</div><div class="metric-value ${r.gate_reduction>0?'good':'neutral'}">${gRed}</div></div>
+        <div class="metric-item"><div class="metric-label">Depth Reduction</div><div class="metric-value ${r.depth_reduction>0?'good':'neutral'}">${dRed}</div></div>
+        <div class="metric-item"><div class="metric-label">Opt Gates</div><div class="metric-value neutral">${r.opt1_gates??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Opt Depth</div><div class="metric-value neutral">${r.opt1_depth??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Time</div><div class="metric-value neutral">${r.opt_time_sec!=null?r.opt_time_sec.toFixed(2)+'s':'—'}</div></div>
+      </div>`;
+  }
+  return html;
+}
+
+// ── Noise ──
+async function runNoise() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-noise','Simulating...');
+  setStepResult('noise','<div class="empty-state"><span class="spinner"></span>Simulating...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_noise_simulate', {
+      algorithm_file: f, qpu_name: getQPU(),
+      sdk: document.getElementById('noise-sdk').value,
+      shots: parseInt(document.getElementById('noise-shots').value)||1024,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('noise',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('noise','error'); return; }
+    setStepResult('noise', renderNoise(data, elapsed(t0)));
+    _addCacheBadge('noise', f, getQPU(), data._cached);
+    setBadge('noise','done');
+  } catch(e) { setStepResult('noise',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('noise','error'); }
+  finally { setBtnDone('btn-noise','RUN NOISE SIMULATION'); }
+}
+
+function renderNoise(data, el) {
+  const results = data.results||{};
+  let html = `<div class="result-meta">${el} · QPU: ${data.qpu_name||'—'} · ${data.shots} shots</div>`;
+  for (const [name,r] of Object.entries(results)) {
+    if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
+    html += `
+      <div class="section-divider">${name}</div>
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Fidelity</div><div class="metric-value ${r.fidelity>0.9?'good':r.fidelity>0.7?'warn':'bad'}">${r.fidelity!=null?r.fidelity.toFixed(4):'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">TVD</div><div class="metric-value ${r.tvd<0.05?'good':r.tvd<0.2?'warn':'bad'}">${r.tvd!=null?r.tvd.toFixed(4):'—'}</div></div>
+      </div>
+      <div class="section-divider" style="margin-top:6px">Noise Counts (top 8)</div>
+      <div class="gates-list">${Object.entries(r.noise_counts||{}).slice(0,8).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`;
+  }
+  return html;
+}
+
+// ── QEC Analyze ──
+async function runQECAnalyze() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-qeca','Analyzing...');
+  setStepResult('qec-analyze','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_qec_analyze', {
+      algorithm_file: f, qpu_name: getQPU(),
+      shots: parseInt(document.getElementById('qeca-shots').value)||1024,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('qec-analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','error'); return; }
+    setStepResult('qec-analyze', renderQECAnalyze(data, elapsed(t0)));
+    _addCacheBadge('qec-analyze', f, getQPU(), data._cached);
+    setBadge('qec-analyze','done');
+  } catch(e) { setStepResult('qec-analyze',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('qec-analyze','error'); }
+  finally { setBtnDone('btn-qeca','RUN QEC ANALYSIS'); }
+}
+
+function renderQECAnalyze(data, el) {
+  const results = data.results||{};
+  let html = `<div class="result-meta">${el} · QPU: ${data.qpu_name||'—'}</div>`;
+  for (const [name,r] of Object.entries(results)) {
+    if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
+    const nec = r.necessity||'unknown';
+    const necCls = nec==='required'?'bad':nec==='recommended'?'warn':'good';
+    html += `
+      <div class="section-divider">${name}</div>
+      <div class="metric-grid" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+        <div class="metric-item"><div class="metric-label">Necessity</div><div class="metric-value ${necCls}">${nec.toUpperCase()}</div></div>
+        <div class="metric-item"><div class="metric-label">Fidelity</div><div class="metric-value ${r.fidelity>0.9?'good':r.fidelity>0.7?'warn':'bad'}">${r.fidelity!=null?r.fidelity.toFixed(4):'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">TVD</div><div class="metric-value ${r.tvd<0.05?'good':r.tvd<0.2?'warn':'bad'}">${r.tvd!=null?r.tvd.toFixed(4):'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">T2 Ratio</div><div class="metric-value ${r.t2_ratio>0.5?'bad':r.t2_ratio>0.2?'warn':'good'}">${r.t2_ratio!=null?r.t2_ratio.toFixed(4):'—'}</div></div>
+      </div>
+      ${r.reasons?.length?`<div class="gates-list">${r.reasons.map(s=>`<span class="gate-tag">${escHtml(s)}</span>`).join('')}</div>`:''}
+      ${r.recommended_codes?.length?`<div class="section-divider">Recommended</div><div class="gates-list">${r.recommended_codes.map(s=>`<span class="gate-tag">${escHtml(s)}</span>`).join('')}</div>`:''}`;
+  }
+  return html;
+}
+
+// ── QEC Apply ──
+async function runQECApply() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-qecap','Applying...');
+  setStepResult('qec-apply','<div class="empty-state"><span class="spinner"></span>Applying QEC...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_qec_apply', {
+      algorithm_file: f, qpu_name: getQPU(),
+      apply_code: document.getElementById('qecap-code').value,
+      shots: parseInt(document.getElementById('qecap-shots').value)||256,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('qec-apply',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-apply','error'); return; }
+    setStepResult('qec-apply', renderQECApply(data, elapsed(t0)));
+    _addCacheBadge('qec-apply', f, getQPU(), data._cached);
+    setBadge('qec-apply','done');
+  } catch(e) { setStepResult('qec-apply',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('qec-apply','error'); }
+  finally { setBtnDone('btn-qecap','RUN QEC APPLY'); }
+}
+
+function renderQECApply(data, el) {
+  const results = data.results||{};
+  let html = `<div class="result-meta">${el}</div>`;
+  for (const [name,r] of Object.entries(results)) {
+    if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
+    html += `
+      <div class="section-divider">${name}</div>
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Code</div><div class="metric-value neutral">${r.code||'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Improvement</div><div class="metric-value ${r.improvement>0?'good':r.improvement<0?'bad':'neutral'}">${r.improvement!=null?r.improvement.toFixed(4):'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Overhead</div><div class="metric-value ${r.overhead<2?'good':r.overhead<4?'warn':'bad'}">${r.overhead!=null?r.overhead.toFixed(2)+'x':'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Effective</div><div class="metric-value ${r.effective?'good':'bad'}">${r.effective?'YES':'NO'}</div></div>
+      </div>`;
+  }
+  return html;
+}
+
+// ── GPU Benchmark ──
+async function runGPU() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  setBtnLoading('btn-gpu','Benchmarking...');
+  setStepResult('gpu','<div class="empty-state"><span class="spinner"></span>Benchmarking...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_gpu_benchmark', { algorithm_file: f });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('gpu',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('gpu','error'); return; }
+    setStepResult('gpu', renderGPU(data, elapsed(t0)));
+    _addCacheBadge('gpu', f, '', data._cached);
+    setBadge('gpu','done');
+  } catch(e) { setStepResult('gpu',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('gpu','error'); }
+  finally { setBtnDone('btn-gpu','RUN BENCHMARK'); }
+}
+
+function renderGPU(data, el) {
+  return `
+    <div class="result-meta">${el}</div>
+    <div class="stats-row">
+      <div class="stat-chip">GPU Available: <strong>${data.gpu_available?'Yes':'No'}</strong></div>
+      ${data.verdict?`<div class="stat-chip">Verdict: <strong>${escHtml(data.verdict)}</strong></div>`:''}
+    </div>
+    <div class="metric-grid">
+      <div class="metric-item"><div class="metric-label">CPU Time</div><div class="metric-value neutral">${data.cpu_time_sec!=null?data.cpu_time_sec+'s':'—'}</div></div>
+      <div class="metric-item"><div class="metric-label">CPU Status</div><div class="metric-value ${data.cpu_status==='completed'?'good':'bad'}">${data.cpu_status||'—'}</div></div>
+      <div class="metric-item"><div class="metric-label">GPU Time</div><div class="metric-value neutral">${data.gpu_time_sec!=null?data.gpu_time_sec+'s':'—'}</div></div>
+      <div class="metric-item"><div class="metric-label">GPU Status</div><div class="metric-value ${data.gpu_status==='completed'?'good':data.gpu_status?'bad':'neutral'}">${data.gpu_status||'N/A'}</div></div>
+      ${data.speedup!=null?`<div class="metric-item"><div class="metric-label">Speedup</div><div class="metric-value ${data.speedup>=1?'good':'warn'}">${data.speedup}x</div></div>`:''}
+    </div>`;
+}
+
+// ── QPU Submit ──
+let _qpuLastFile = null;
+async function runQPUAnalyze() {
+  const f = getSelectedFile();
+  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  _qpuLastFile = f;
+  setBtnLoading('btn-qpu-analyze','Analyzing...');
+  document.getElementById('btn-qpu-confirm').style.display='none';
+  setStepResult('qpu','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_qpu_submit', {
+      algorithm_file: f,
+      qpu_name: document.getElementById('qpu-qpu').value,
+      shots: parseInt(document.getElementById('qpu-shots').value)||1024,
+      confirmed: false,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qpu','error'); return; }
+    setStepResult('qpu', renderQPUAnalysis(data, elapsed(t0)));
+    if (data.status==='awaiting_confirmation') document.getElementById('btn-qpu-confirm').style.display='block';
+    _addCacheBadge('qpu_submit', f, document.getElementById('qpu-qpu').value, data._cached);
+    setBadge('qpu','done');
+  } catch(e) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('qpu','error'); }
+  finally { setBtnDone('btn-qpu-analyze','ANALYZE (NO SUBMIT)'); }
+}
+
+async function runQPUSubmit() {
+  if (!_qpuLastFile) return;
+  if (!confirm('실제 QPU에 제출합니다. 비용이 발생할 수 있습니다. 계속하시겠습니까?')) return;
+  setBtnLoading('btn-qpu-confirm','Submitting...');
+  setStepResult('qpu','<div class="empty-state"><span class="spinner"></span>Submitting to QPU...</div>');
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_qpu_submit', {
+      algorithm_file: _qpuLastFile,
+      qpu_name: document.getElementById('qpu-qpu').value,
+      shots: parseInt(document.getElementById('qpu-shots').value)||1024,
+      confirmed: true,
+    });
+    const data = JSON.parse(getResultText(res));
+    if (data.error) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); return; }
+    setStepResult('qpu',`<div class="result-meta">${elapsed(t0)}</div><div class="json-viewer">${syntaxHighlight(JSON.stringify(data,null,2))}</div>`);
+    document.getElementById('btn-qpu-confirm').style.display='none';
+  } catch(e) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); }
+  finally { setBtnDone('btn-qpu-confirm','⚡ CONFIRM & SUBMIT TO QPU'); }
+}
+
+function renderQPUAnalysis(data, el) {
+  let html = `<div class="result-meta">${el}</div>
+    <div class="stats-row">
+      <div class="stat-chip">Selected: <strong>${data.selected_qpu||'—'}</strong></div>
+      <div class="stat-chip">Recommended: <strong>${data.recommended_qpu||'—'}</strong></div>
+    </div>`;
+  if (data.message) html+=`<div class="warn-banner" style="white-space:pre-wrap;font-size:11px">${escHtml(data.message)}</div>`;
+  if (data.qpu_comparison) {
+    html += `<div class="section-divider">QPU Comparison</div>`;
+    // Mini bar chart for fidelity
+    const entries = Object.entries(data.qpu_comparison).filter(([,v])=>v.avg_fidelity!=null);
+    if (entries.length) {
+      const maxFid = Math.max(...entries.map(([,v])=>v.avg_fidelity));
+      html += '<div class="bar-chart" style="margin-bottom:10px">';
+      for (const [qpu,v] of entries.sort((a,b)=>(b[1].avg_fidelity||0)-(a[1].avg_fidelity||0))) {
+        const pct = Math.max(4,(v.avg_fidelity/maxFid)*100);
+        const cls = v.avg_fidelity > 0.7 ? 'good' : v.avg_fidelity > 0.4 ? 'warn' : 'bad';
+        const rec = v.recommended ? ' ★' : '';
+        html += `<div class="bar-row">
+          <div class="bar-label" title="${qpu}">${qpu}${rec}</div>
+          <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct.toFixed(1)}%">${v.avg_fidelity.toFixed(3)}</div></div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+  }
+  return html;
+}
+
+// ─────────────────────────────────────────────────────────
+// Knowledge
+// ─────────────────────────────────────────────────────────
+const _RAG_TYPE_DESC = {
+  'stats':             '전체 지식베이스 레코드 수 및 타입별 통계',
+  'recent':            '최근 저장된 이력 (최신순)',
+  'best_combination':  '큐비트/게이트 수 기준 최적 조합 추천',
+  'pipeline_issues':   'SDK/QPU별 파이프라인 오류 이력 및 해결책',
+  'transpile_patterns':'트랜스파일 성공/실패 패턴 및 우회 방법',
+  'qec_results':       'QEC 실험 결과 (인코딩 전후 Fidelity 비교)',
+  'gpu_benchmark':     'CPU vs GPU 시뮬레이션 벤치마크 결과',
+  'security_block':    '보안 정책 위반 차단 이력 (정적 분석)',
+};
+
+function onRagTypeChange() {
+  const t = document.getElementById('rag-type').value;
+  document.getElementById('rag-extra').style.display =
+    t === 'best_combination' ? 'block' : 'none';
+  document.getElementById('rag-semantic-input').style.display = 'none';
+  const desc = document.getElementById('rag-type-desc');
+  if (desc) desc.textContent = _RAG_TYPE_DESC[t] ? '— ' + _RAG_TYPE_DESC[t] : '';
+}
+
+async function runRAG() {
+  setBtnLoading('btn-rag','Searching...');
+  const body = document.getElementById('rag-result-body');
+  body.innerHTML='<div class="empty-state"><span class="spinner"></span>Searching...</div>';
+  const t0 = Date.now();
+  try {
+    const args = {
+      query_type: document.getElementById('rag-type').value,
+      limit: parseInt(document.getElementById('rag-limit').value)||10,
+    };
+    const qpu = document.getElementById('rag-qpu').value;
+    const sdk = document.getElementById('rag-sdk').value;
+    if (qpu) args.qpu_name=qpu;
+    if (sdk) args.sdk=sdk;
+    if (args.query_type==='best_combination') {
+      args.num_qubits  = parseInt(document.getElementById('rag-qubits').value)||0;
+      args.total_gates = parseInt(document.getElementById('rag-gates').value)||0;
+    }
+    const res = await callTool('uqi_rag_search', args);
+    document.getElementById('rag-meta').textContent = elapsed(t0);
+    const text = getResultText(res);
+    renderRAG(body, text, args.query_type);
+  } catch(e) { body.innerHTML=`<div class="error-state">⚠ ${escHtml(e.message)}</div>`; }
+  finally { setBtnDone('btn-rag','RUN SEARCH'); }
+}
+
+function onSemanticKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runSemantic(); }
+}
+
+async function runSemantic() {
+  const q = document.getElementById('semantic-input').value.trim();
+  if (!q) return;
+  const limit = parseInt(document.getElementById('semantic-limit').value) || 10;
+  const resultSection = document.getElementById('semantic-results');
+  const resultBody    = document.getElementById('semantic-result-body');
+  const meta          = document.getElementById('semantic-meta');
+
+  setBtnLoading('btn-semantic', '검색중');
+  resultSection.style.display = 'block';
+  resultBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>Searching...</div>';
+
+  const t0 = Date.now();
+  try {
+    const res = await callTool('uqi_rag_search', {
+      query_type: 'semantic',
+      query: q,
+      limit,
+    });
+    const data = JSON.parse(getResultText(res));
+    meta.textContent = `${((Date.now()-t0)/1000).toFixed(2)}s · ${Array.isArray(data)?data.length:0}건`;
+
+    if (!Array.isArray(data) || data.length === 0) {
+      resultBody.innerHTML = '<div class="empty-state">관련 결과 없음</div>';
+      return;
+    }
+
+    window._ragSemanticCache = data.map(r => JSON.stringify(r, null, 2));
+    resultBody.innerHTML = data.map((r, idx) => {
+      const simPct = r.similarity != null ? (r.similarity * 100).toFixed(1) : '—';
+      const simCls = r.similarity > 0.6 ? 'good' : r.similarity > 0.4 ? 'warn' : 'neutral';
+      const dataSnippet = _semanticSnippet(r.type, r.data);
+      return `
+        <div class="rag-item" style="cursor:pointer" onclick="_showRagDetail(_ragSemanticCache[${idx}])">
+          <div class="rag-item-header">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span class="rag-item-type">${r.type||'—'}</span>
+              <span style="font-size:10px;color:var(--text3)">${r.timestamp?r.timestamp.slice(0,19):''}</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;font-weight:600;color:var(--${simCls==='good'?'success':simCls==='warn'?'warn':'text2'})">${simPct}%</span>
+              <span style="font-size:9px;color:var(--text3)">유사도</span>
+            </div>
+          </div>
+          <div class="rag-item-content">${dataSnippet}</div>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    resultBody.innerHTML = `<div class="error-state">⚠ ${escHtml(e.message)}</div>`;
+  } finally {
+    setBtnDone('btn-semantic', '검색');
+  }
+}
+
+function _semanticSnippet(type, data) {
+  if (!data) return '—';
+  const parts = [];
+  if (data.qpu_name)      parts.push(`QPU: <strong>${escHtml(data.qpu_name)}</strong>`);
+  if (data.circuit_name)  parts.push(`회로: <strong>${escHtml(data.circuit_name)}</strong>`);
+  if (data.sdk)           parts.push(`SDK: ${escHtml(data.sdk)}`);
+  if (data.framework)     parts.push(`Framework: ${escHtml(data.framework)}`);
+  if (data.combination)   parts.push(`조합: ${escHtml(data.combination)}`);
+  if (data.gate_reduction != null) parts.push(`게이트 감소: <strong>${(data.gate_reduction*100).toFixed(1)}%</strong>`);
+  if (data.fidelity != null)       parts.push(`Fidelity: <strong>${data.fidelity}</strong>`);
+  if (data.fidelity_after != null) parts.push(`Fidelity 후: <strong>${data.fidelity_after}</strong>`);
+  if (data.speedup != null)        parts.push(`Speedup: <strong>${data.speedup}x</strong>`);
+  if (data.ok != null)             parts.push(`결과: <strong>${data.ok ? '✓ 성공' : '✗ 실패'}</strong>`);
+  if (data.issue)         parts.push(`이슈: ${escHtml(String(data.issue).slice(0,60))}`);
+  if (data.verdict)       parts.push(`판정: ${escHtml(data.verdict)}`);
+  return parts.length ? parts.join(' · ') : escHtml(JSON.stringify(data).slice(0, 100));
+}
+
+function _showRagDetail(jsonStr) {
+  document.getElementById('codeModalTitle').textContent = 'RAG Record Detail';
+  document.getElementById('codeModalContent').textContent = jsonStr;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function renderRAG(body, text, queryType) {
+  let data;
+  try { data=JSON.parse(text); } catch{ body.innerHTML=`<div class="json-viewer">${escHtml(text)}</div>`; return; }
+  if (queryType==='recent' && Array.isArray(data)) {
+    body.innerHTML=`<div class="stats-row"><div class="stat-chip">Results: <strong>${data.length}</strong></div></div>
+      <div class="rag-items">${data.map((item,idx)=>`
+        <div class="rag-item" style="cursor:pointer" onclick="_showRagDetail(_ragDetailCache[${idx}])">
+          <div class="rag-item-header">
+            <span class="rag-item-type">${item.type||'—'}</span>
+            <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:auto">클릭하여 상세보기</span>
+          </div>
+          <div class="rag-item-content">${escHtml(item.summary||JSON.stringify(item).slice(0,120))}</div>
+        </div>`).join('')}</div>`;
+    window._ragDetailCache = data.map(item => JSON.stringify(item.data || item, null, 2));
+    return;
+  }
+  if (Array.isArray(data)) {
+    const _qt = document.getElementById('rag-type')?.value || '';
+    body.innerHTML=`<div class="stats-row"><div class="stat-chip">Results: <strong>${data.length}</strong></div></div>
+      <div class="rag-items">${data.map((item,idx)=>`
+        <div class="rag-item" style="cursor:pointer" onclick="_showRagDetail(_ragDetailCache2[${idx}])">
+          <div class="rag-item-header">
+            <span class="rag-item-type">${item.type || _qt || '—'}</span>
+            <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:auto">클릭하여 상세보기</span>
+          </div>
+          <div class="rag-item-content">${escHtml((item.stage||item.sdk||item.circuit_name||item.qpu_name) ? 
+            [item.stage&&'stage:'+item.stage, item.sdk&&'sdk:'+item.sdk, item.qpu_name&&'qpu:'+item.qpu_name, item.issue&&String(item.issue).slice(0,80)].filter(Boolean).join(' · ') :
+            JSON.stringify(item).slice(0,120))}</div>
+        </div>`).join('')}
+      </div>`;
+    window._ragDetailCache2 = data.map(item => JSON.stringify(item, null, 2));
+  } else {
+    body.innerHTML=`<div class="json-viewer">${syntaxHighlight(JSON.stringify(data,null,2))}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────
+function errorRate(v) {
+  if (v==null) return {text:'—',cls:''};
+  const p=(v*100).toFixed(3)+'%';
+  return v<0.01?{text:p,cls:'good'}:v<0.05?{text:p,cls:'warn'}:{text:p,cls:'bad'};
+}
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function syntaxHighlight(json) {
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m=>{
+    let c='json-number';
+    if(/^"/.test(m)) c=/:$/.test(m)?'json-key':'json-string';
+    else if(/true|false/.test(m)) c='json-bool';
+    else if(/null/.test(m)) c='json-null';
+    return `<span class="${c}">${escHtml(m)}</span>`;
+  });
+}
+</script>
+</body>
+</html>

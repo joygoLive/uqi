@@ -7,7 +7,7 @@ import pytest
 from pathlib import Path
 from playwright.sync_api import Page, expect
 
-WEBAPP_PATH = (Path(__file__).parent.parent / "uqi_webapp.html").resolve()
+WEBAPP_PATH = (Path(__file__).parent.parent / "webapp" / "uqi_webapp.html").resolve()
 WEBAPP_URL  = f"file://{WEBAPP_PATH}"
 
 

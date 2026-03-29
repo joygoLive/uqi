@@ -14,7 +14,6 @@ from pathlib import Path
 TESTS_DIR = Path(__file__).parent
 LOGS_DIR  = TESTS_DIR.parent / "logs"
 LOGS_DIR.mkdir(exist_ok=True)
-
 PYTHON = sys.executable
 
 # (test_file, cov_module)  — webapp은 cov 없음

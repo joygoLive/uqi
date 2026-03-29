@@ -1653,7 +1653,7 @@ if __name__ == "__main__":
         mcp_app = mcp.http_app(transport="sse")
 
         async def homepage(request: Request):
-            html_path = Path(__file__).parent / "uqi_webapp.html"
+            html_path = Path(__file__).parent.parent / "webapp" / "uqi_webapp.html"
             if html_path.exists():
                 content = html_path.read_text(encoding="utf-8")
             else:

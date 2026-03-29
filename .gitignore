@@ -1,0 +1,27 @@
+# 데이터
+data/
+
+# 로그
+logs/
+
+# 환경변수
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# venv
+.venv_transpile/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# pytest
+.pytest_cache/
+.coverage

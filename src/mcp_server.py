@@ -118,7 +118,7 @@ import traceback
 _request_context: ContextVar[dict] = ContextVar('request_context', default={})
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 IBM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
 IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
@@ -1016,7 +1016,7 @@ async def uqi_list_qpus() -> str:
 # 툴 6.5: 알고리즘 파일 업로드
 # ─────────────────────────────────────────────────────────
 
-ALG_FILES_DIR = Path(__file__).parent / "alg-files"
+ALG_FILES_DIR = Path(__file__).parent.parent / "alg-files"
 
 @mcp.tool()
 async def uqi_upload_algorithm(

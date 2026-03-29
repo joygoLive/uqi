@@ -12,9 +12,10 @@ from typing import Optional
 from datetime import datetime
 
 
-RAG_FILE    = "uqi_rag.db"
-CACHE_FILE  = "uqi_cache.db"
-CHROMA_DIR  = "uqi_chroma"
+_DATA_DIR   = Path(__file__).parent.parent / "data"
+RAG_FILE    = str(_DATA_DIR / "uqi_rag.db")
+CACHE_FILE  = str(_DATA_DIR / "uqi_cache.db")
+CHROMA_DIR  = str(_DATA_DIR / "uqi_chroma")
 
 # 캐시 타입은 임베딩 제외 (값이 크고 검색 의미 없음)
 _SKIP_EMBED_TYPES = {"cache", "qpu_availability"}

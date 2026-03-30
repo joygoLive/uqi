@@ -26,3 +26,6 @@ venv/
 .pytest_cache/
 .coverage
 node_modules/
+
+# claude desktop / mcp workspaces
+.claude/

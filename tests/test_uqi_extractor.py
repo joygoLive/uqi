@@ -557,3 +557,21 @@ class TestInitialState:
 
     def test_TC076_tape_expand_depth_constant(self):
         assert UQIExtractor.TAPE_EXPAND_DEPTH == 15
+
+    def test_TC077_frameworks_empty_list(self):
+        """초기 frameworks 목록은 빈 리스트"""
+        assert UQIExtractor("dummy.py").frameworks == []
+
+    def test_TC078_perceval_stores_in_circuits_after_subprocess(self):
+        """Perceval subprocess 이관 후 결과가 circuits에 저장됨 (perceval_circuits 아님)"""
+        ext = UQIExtractor("dummy.py")
+        ext.frameworks = ["Perceval"]
+        # _run_subprocess가 QASM 반환하는 것처럼 mocking
+        fake_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[2];\ncreg c[2];\nh q[0];\nmeasure q[0] -> c[0];\n"
+        fake_data = {"perceval_circuit_0": {"qasm": fake_qasm, "ok": True, "num_modes": 2}}
+        with patch.object(ext, "_run_subprocess", return_value=fake_data):
+            ext._extract_perceval_circuits()
+        assert "perceval_circuit_0" in ext.circuits
+        assert ext.circuits["perceval_circuit_0"] == fake_qasm
+        # perceval_circuits는 더 이상 사용 안 함 (비어 있어야 함)
+        assert ext.perceval_circuits == {}

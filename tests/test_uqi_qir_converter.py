@@ -109,10 +109,21 @@ class TestConvertAll:
             conv.convert_all()
             m.assert_called_once_with("circ_a", qc)
 
-    def test_TC025_perceval_routes_to_convert_perceval(self):
+    def test_TC025_perceval_qasm_handoff(self):
+        """Perceval도 subprocess 이관 후 QASM 문자열로 extractor.circuits에 저장됨"""
+        conv, _ = _make_converter(
+            framework="Perceval",
+            circuits={"circ_a": SIMPLE_QASM}
+        )
+        conv.convert_all()
+        assert conv.qasm_results.get("circ_a") == SIMPLE_QASM
+
+    def test_TC025b_perceval_legacy_fallback(self):
+        """perceval_circuits가 있고 circuits가 비어있으면 _convert_perceval 레거시 경로 사용"""
         circuit_info = (MagicMock(), [1, 0])
         conv, _ = _make_converter(
             framework="Perceval",
+            circuits={},
             perceval_circuits={"circ_a": circuit_info}
         )
         with patch.object(conv, "_convert_perceval") as m:

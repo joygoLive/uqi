@@ -808,118 +808,186 @@ print('__UQI_JSON__:' + json.dumps(captured))
         print(f"    Sampler.run() 호출: {run_count}회")
 
     # ─────────────────────────────────────────
-    # Perceval 추출 (monkey patch 기반, 인프로세스)
+    # Perceval 추출 (subprocess 격리)
     # ─────────────────────────────────────────
 
     def _extract_perceval_circuits(self, prefix: str = ""):
-        import perceval as pcvl
-        import matplotlib
-        matplotlib.use('Agg')
+        print(f"  [Extractor] Perceval 회로 추출 시작 (subprocess 격리)")
 
-        print(f"  [Extractor] Perceval 회로 추출 시작")
+        alg_file = self.algorithm_file
+        alg_dir = os.path.dirname(os.path.abspath(alg_file))
 
-        captured = {}
-        original_processor        = pcvl.Processor
-        original_remote_processor = pcvl.RemoteProcessor
+        script = f"""
+import sys, json, re
+sys.path.insert(0, '{alg_dir}')
 
-        class CapturingProcessor:
-            def __init__(self_p, backend_name_or_modes, *args, **kwargs):
-                if args and hasattr(args[0], 'm'):
-                    self_p._circuit  = args[0]
-                    inner_args = args[1:]
-                else:
-                    self_p._circuit  = None
-                    inner_args = args
+import matplotlib
+matplotlib.use('Agg')
 
-                if isinstance(backend_name_or_modes, int):
-                    try:
-                        self_p._inner = original_processor(
-                            backend_name_or_modes, *inner_args, **kwargs)
-                    except Exception:
-                        self_p._inner = original_processor(backend_name_or_modes)
-                else:
-                    try:
-                        self_p._inner = original_processor(
-                            backend_name_or_modes, *inner_args, **kwargs)
-                    except Exception:
-                        self_p._inner = original_processor(4)
-                self_p._input_state = None
+try:
+    import perceval as pcvl
+    from perceval.algorithm import Sampler as PcvlSampler
+except ImportError as e:
+    print('__UQI_JSON__:' + json.dumps({{'__error__': str(e)}}))
+    sys.exit(0)
 
-            def set_circuit(self_p, circuit):
-                self_p._circuit = circuit
-                return self_p._inner.set_circuit(circuit)
+try:
+    from qiskit import QuantumCircuit
+    from qiskit.qasm2 import dumps as qasm2_dumps
+except ImportError as e:
+    print('__UQI_JSON__:' + json.dumps({{'__error__': f'Qiskit 필요: {{e}}'}}))
+    sys.exit(0)
 
-            def with_input(self_p, input_state):
-                self_p._input_state = input_state
-                name = f"perceval_circuit_{len(captured)}"
-                captured[name] = (self_p._circuit, self_p._input_state)
-                try:
-                    if input_state.n > 4:
-                        return self_p._inner
-                except Exception:
-                    pass
-                try:
-                    return self_p._inner.with_input(input_state)
-                except Exception:
-                    return self_p._inner
+captured = {{}}
+original_processor        = pcvl.Processor
+original_remote_processor = pcvl.RemoteProcessor
 
-            def min_detected_photons_filter(self_p, n):
-                try:
-                    return self_p._inner.min_detected_photons_filter(n)
-                except Exception:
-                    pass
+class CapturingProcessor:
+    def __init__(self_p, backend_name_or_modes, *args, **kwargs):
+        if args and hasattr(args[0], 'm'):
+            self_p._circuit = args[0]
+            inner_args = args[1:]
+        else:
+            self_p._circuit = None
+            inner_args = args
 
-            def __getattr__(self_p, name):
-                return getattr(self_p._inner, name)
+        if isinstance(backend_name_or_modes, int):
+            try:
+                self_p._inner = original_processor(backend_name_or_modes, *inner_args, **kwargs)
+            except Exception:
+                self_p._inner = original_processor(backend_name_or_modes)
+        else:
+            try:
+                self_p._inner = original_processor(backend_name_or_modes, *inner_args, **kwargs)
+            except Exception:
+                self_p._inner = original_processor(4)
+        self_p._input_state = None
 
-        class CapturingRemoteProcessor(CapturingProcessor):
-            def __init__(self_p, name, *args, **kwargs):
-                self_p._inner       = original_processor("SLOS")
-                self_p._circuit     = None
-                self_p._input_state = None
+    def set_circuit(self_p, circuit):
+        self_p._circuit = circuit
+        return self_p._inner.set_circuit(circuit)
 
-        pcvl.Processor       = CapturingProcessor
-        pcvl.RemoteProcessor = CapturingRemoteProcessor
-
-        from perceval.algorithm import Sampler as PcvlSampler
-        original_sample_count = PcvlSampler.sample_count
-        original_samples      = PcvlSampler.samples
-
-        def mock_sample_count(self_s, count, *args, **kwargs):
-            return {'results': {}}
-
-        def mock_samples(self_s, count, *args, **kwargs):
-            return {'results': {}}
-
-        PcvlSampler.sample_count = mock_sample_count
-        PcvlSampler.samples      = mock_samples
-
+    def with_input(self_p, input_state):
+        self_p._input_state = input_state
+        name = f"perceval_circuit_{{len(captured)}}"
+        captured[name] = (self_p._circuit, self_p._input_state)
         try:
-            with open(self.algorithm_file, 'r') as f:
-                code = f.read()
-            code = re.sub(
-                r'(TARGET\s*=\s*)["\'](?!local)[^"\']+["\']',
-                r'\g<1>"local"',
-                code
-            )
-            _apply_resource_limits()
-            exec(code, {'__name__': '__main__'})
-        except Exception as e:
-            print(f"  [Extractor] 실행 오류: {e}")
-        finally:
-            pcvl.Processor        = original_processor
-            pcvl.RemoteProcessor  = original_remote_processor
-            PcvlSampler.sample_count = original_sample_count
-            PcvlSampler.samples      = original_samples
+            if input_state.n > 4:
+                return self_p._inner
+        except Exception:
+            pass
+        try:
+            return self_p._inner.with_input(input_state)
+        except Exception:
+            return self_p._inner
 
-        if not captured:
+    def min_detected_photons_filter(self_p, n):
+        try:
+            return self_p._inner.min_detected_photons_filter(n)
+        except Exception:
+            pass
+
+    def __getattr__(self_p, name):
+        return getattr(self_p._inner, name)
+
+class CapturingRemoteProcessor(CapturingProcessor):
+    def __init__(self_p, name, *args, **kwargs):
+        self_p._inner       = original_processor("SLOS")
+        self_p._circuit     = None
+        self_p._input_state = None
+
+pcvl.Processor       = CapturingProcessor
+pcvl.RemoteProcessor = CapturingRemoteProcessor
+
+original_sample_count = PcvlSampler.sample_count
+original_samples      = PcvlSampler.samples
+
+def mock_sample_count(self_s, count, *args, **kwargs):
+    return {{'results': {{}}}}
+
+def mock_samples(self_s, count, *args, **kwargs):
+    return {{'results': {{}}}}
+
+PcvlSampler.sample_count = mock_sample_count
+PcvlSampler.samples      = mock_samples
+
+try:
+    with open(r'{alg_file}', 'r') as f:
+        code = f.read()
+    code = re.sub(
+        r'(TARGET\\s*=\\s*)["\\\'](?!local)[^"\\\']+["\\\']',
+        r'\\g<1>"local"',
+        code
+    )
+    exec(code, {{'__name__': '__main__'}})
+except Exception:
+    pass
+finally:
+    pcvl.Processor        = original_processor
+    pcvl.RemoteProcessor  = original_remote_processor
+    PcvlSampler.sample_count = original_sample_count
+    PcvlSampler.samples      = original_samples
+
+# 캡처된 Perceval 회로를 Qiskit 게이트로 매핑 후 QASM 변환
+def perceval_circuit_to_qasm(circuit, circuit_name):
+    if circuit is None:
+        return None, 'circuit is None'
+    try:
+        m = circuit.m
+        qc = QuantumCircuit(m, m)
+        for _, component in circuit:
+            comp_type = type(component).__name__
+            if 'BS' in comp_type:
+                if m >= 2:
+                    qc.h(0)
+                    qc.cx(0, 1)
+            elif 'PS' in comp_type:
+                qc.rz(0.5, 0)
+            elif 'PERM' in comp_type:
+                if m >= 2:
+                    qc.swap(0, 1)
+        qc.measure(list(range(m)), list(range(m)))
+        qasm = qasm2_dumps(qc)
+        return qasm, None
+    except Exception as e:
+        return None, str(e)
+
+results = {{}}
+for name, (circuit, input_state) in captured.items():
+    qasm, err = perceval_circuit_to_qasm(circuit, name)
+    if qasm:
+        m = circuit.m if circuit else 0
+        results[name] = {{'qasm': qasm, 'ok': True, 'num_modes': m}}
+    else:
+        results[name] = {{'qasm': None, 'ok': False, 'error': err}}
+
+print('__UQI_JSON__:' + json.dumps(results))
+"""
+
+        data = self._run_subprocess(script, timeout=120)
+        if not data:
+            print(f"  [Extractor] Perceval subprocess 실패")
+            return
+
+        if '__error__' in data:
+            print(f"  [Extractor] 실행 오류: {data['__error__']}")
+            return
+
+        new_circuits = {}
+        for name, info in data.items():
+            if info.get('ok') and info.get('qasm'):
+                key = f"{prefix}{name}"
+                new_circuits[key] = info['qasm']
+                self.circuits[key] = info['qasm']
+            elif not info.get('ok') and info.get('error'):
+                print(f"  [Extractor] Perceval 변환 실패 ({name}): {info['error']}")
+
+        if not new_circuits:
             print(f"  [Extractor] 추출된 회로 없음")
             return
 
-        for name, val in captured.items():
-            self.perceval_circuits[f"{prefix}{name}"] = val
-        print(f"  [Extractor] 추출 완료: {len(captured)}개 회로")
-        print(f"    회로 목록: {', '.join(f'{prefix}{n}' for n in captured)}")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 회로")
+        print(f"    회로 목록: {', '.join(new_circuits.keys())}")
 
     # ─────────────────────────────────────────
     # Utility

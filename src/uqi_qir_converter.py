@@ -22,27 +22,17 @@ class UQIQIRConverter:
         # 감지된 모든 framework 목록 (신규 multi-framework 지원)
         frameworks = getattr(self.extractor, 'frameworks', None) or [self.extractor.framework]
 
-        # Perceval 처리 (perceval_circuits 별도 관리)
-        if 'Perceval' in frameworks and self.extractor.perceval_circuits:
-            for name, circuit_info in self.extractor.perceval_circuits.items():
-                print(f"  [Converter] 변환 시작 (Perceval): {name}")
-                self._convert_perceval(name, circuit_info)
-            ok = [n for n in self.extractor.perceval_circuits if self.qir_results.get(n)]
-            print(f"  [Converter] 완료: {len(ok)}/{len(self.extractor.perceval_circuits)} QIR 변환 성공 (Perceval)")
-
-        # 모든 non-Perceval framework → extractor.circuits에 QASM 문자열로 저장됨
-        # (PennyLane, Qrisp, CUDAQ, Qiskit 모두 동일 경로)
-        non_perceval = [fw for fw in frameworks if fw != 'Perceval']
-        if non_perceval and self.extractor.circuits:
+        # 모든 framework → extractor.circuits에 QASM 문자열로 저장됨
+        # (PennyLane, Qrisp, CUDAQ, Qiskit, Perceval 모두 동일 경로)
+        if self.extractor.circuits:
             for name, qasm in self.extractor.circuits.items():
                 if not isinstance(qasm, str):
-                    # 구버전 Qiskit 호환: QuantumCircuit 객체가 들어온 경우 QASM 변환 후 처리
-                    fw_tag = name.split('__')[0] if '__' in name else non_perceval[0]
+                    # 구버전 Qiskit 호환: QuantumCircuit 객체가 들어온 경우
                     print(f"  [Converter] 변환 시작 (Qiskit 레거시): {name}")
                     self._convert_qiskit(name, qasm)
                     continue
                 self.qasm_results[name] = qasm
-                fw_tag = name.split('__')[0] if '__' in name else non_perceval[0]
+                fw_tag = name.split('__')[0] if '__' in name else (frameworks[0] if frameworks else '?')
                 print(f"  [Converter] QASM 인계 완료 ({fw_tag}): {name} ({len(qasm)} chars)")
                 # QIR 변환: 게이트 수 상한 초과 시 스킵
                 try:
@@ -56,6 +46,14 @@ class UQIQIRConverter:
                     print(f"    ⚠ QIR 변환 스킵: {e}")
             ok = [n for n in self.extractor.circuits if self.qasm_results.get(n)]
             print(f"  [Converter] 완료: {len(ok)}/{len(self.extractor.circuits)} QASM 확보")
+
+        # 레거시 perceval_circuits 호환 (구버전 extractor 사용 시)
+        elif getattr(self.extractor, 'perceval_circuits', None):
+            for name, circuit_info in self.extractor.perceval_circuits.items():
+                print(f"  [Converter] 변환 시작 (Perceval 레거시): {name}")
+                self._convert_perceval(name, circuit_info)
+            ok = [n for n in self.extractor.perceval_circuits if self.qir_results.get(n)]
+            print(f"  [Converter] 완료: {len(ok)}/{len(self.extractor.perceval_circuits)} QIR 변환 성공 (Perceval 레거시)")
 
         if not self.qasm_results and not self.qir_results:
             print("  [Converter] 변환할 회로 없음")

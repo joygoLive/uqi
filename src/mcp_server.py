@@ -447,6 +447,14 @@ async def uqi_optimize(
                     result = optimizer.optimize(qc, qpu_name, combination=combination, verify=verify)
                     meta   = optimizer.collect_metadata(name, result, qpu_name)
                     _rag.add_optimization(meta)
+                    qc_final = result.get("circuit")
+                    opt_qasm = None
+                    if qc_final is not None:
+                        try:
+                            from qiskit import qasm2
+                            opt_qasm = qasm2.dumps(qc_final)
+                        except Exception:
+                            pass
                     results[name] = {
                         "combination":     result.get("combination"),
                         "opt_engine":      result.get("opt_engine"),
@@ -458,6 +466,7 @@ async def uqi_optimize(
                         "opt_time_sec":    result.get("opt_time_sec"),
                         "map_time_sec":    result.get("map_time_sec"),
                         "ok":              result.get("ok"),
+                        "qasm":            opt_qasm,
                     }
                 except Exception as e:
                     results[name] = {"error": str(e)}

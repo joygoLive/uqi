@@ -264,6 +264,70 @@ class TestRenderAnalyze:
         """)
         assert "Yes" in result
 
+    def test_TC058_qasm_button_shown_when_qasm_present(self, page):
+        result = page.evaluate("""
+            renderAnalyze({
+                circuits: {'bell': {
+                    profile: {num_qubits:2, total_gates:3, depth:2,
+                              two_q_ratio:0.33, is_parameterized:false},
+                    t2_ratio: 0.1,
+                    qasm: 'OPENQASM 2.0;\\ninclude "qelib1.inc";\\nqreg q[2];\\nh q[0];\\ncx q[0],q[1];'
+                }},
+                framework: 'Qiskit'
+            }, '1s')
+        """)
+        assert "Download .qasm" in result
+        assert "QASM" in result
+
+    def test_TC059_qasm_button_hidden_when_no_qasm(self, page):
+        result = page.evaluate("""
+            renderAnalyze({
+                circuits: {'bell': {
+                    profile: {num_qubits:2, total_gates:3, depth:2,
+                              two_q_ratio:0.33, is_parameterized:false},
+                    t2_ratio: 0.1
+                }},
+                framework: 'Qiskit'
+            }, '1s')
+        """)
+        assert "Download .qasm" not in result
+
+    def test_TC05A_qasm_preview_truncated_at_50_lines(self, page):
+        result = page.evaluate("""
+            (() => {
+                const lines = Array.from({length: 80}, (_, i) => 'gate_' + i);
+                const qasm = lines.join('\\n');
+                const r = _qasmPreview(qasm);
+                return r.truncated && r.preview.split('\\n').length === 50 && r.total === 80;
+            })()
+        """)
+        assert result is True
+
+    def test_TC05B_qasm_preview_not_truncated_under_50_lines(self, page):
+        result = page.evaluate("""
+            (() => {
+                const lines = Array.from({length: 30}, (_, i) => 'gate_' + i);
+                const qasm = lines.join('\\n');
+                const r = _qasmPreview(qasm);
+                return !r.truncated && r.preview === qasm;
+            })()
+        """)
+        assert result is True
+
+    def test_TC05C_truncated_qasm_shows_truncation_notice(self, page):
+        result = page.evaluate("""
+            renderAnalyze({
+                circuits: {'big': {
+                    profile: {num_qubits:10, total_gates:200, depth:100,
+                              two_q_ratio:0.5, is_parameterized:false},
+                    t2_ratio: 0.3,
+                    qasm: Array.from({length: 80}, (_, i) => 'cx q[' + i + '],q[0];').join('\\n')
+                }},
+                framework: 'Qiskit'
+            }, '1s')
+        """)
+        assert "truncated" in result
+
 
 # ─────────────────────────────────────────────────────────────
 # TC-06x: renderOptimize
@@ -312,6 +376,47 @@ class TestRenderOptimize:
             }, '1s')
         """)
         assert "0.0%" in result
+
+    def test_TC066_qasm_button_shown_when_qasm_present(self, page):
+        result = page.evaluate("""
+            renderOptimize({
+                results: {'bell': {
+                    gate_reduction: 0.2, depth_reduction: 0.1,
+                    combination: 'qiskit+sabre', opt1_gates: 8,
+                    opt1_depth: 4, opt_time_sec: 1.0,
+                    qasm: 'OPENQASM 2.0;\\ninclude "qelib1.inc";\\nqreg q[2];\\ncx q[0],q[1];'
+                }},
+                qpu_name: 'ibm_fez'
+            }, '1s')
+        """)
+        assert "Download .qasm" in result
+        assert "QASM" in result
+
+    def test_TC067_qasm_button_hidden_when_no_qasm(self, page):
+        result = page.evaluate("""
+            renderOptimize({
+                results: {'bell': {
+                    gate_reduction: 0.2, depth_reduction: 0.1,
+                    combination: 'qiskit+sabre'
+                }},
+                qpu_name: 'ibm_fez'
+            }, '1s')
+        """)
+        assert "Download .qasm" not in result
+
+    def test_TC068_truncated_qasm_shows_truncation_notice(self, page):
+        result = page.evaluate("""
+            renderOptimize({
+                results: {'big': {
+                    gate_reduction: 0.3, depth_reduction: 0.2,
+                    combination: 'qiskit+sabre', opt1_gates: 50,
+                    opt1_depth: 20, opt_time_sec: 2.0,
+                    qasm: Array.from({length: 80}, (_, i) => 'cx q[' + i + '],q[0];').join('\\n')
+                }},
+                qpu_name: 'ibm_fez'
+            }, '1s')
+        """)
+        assert "truncated" in result
 
 
 # ─────────────────────────────────────────────────────────────

@@ -4,13 +4,21 @@
 
 import os
 import json
+import sqlite3
 import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
 
-CALIBRATION_FILE = "uqi_calibration.json"
+CALIBRATION_DB = "uqi_calibration.db"
+
+# SQLite의 표준 컬럼 집합 (extra_data에 저장되지 않을 필드)
+_KNOWN_COLS = frozenset({
+    'vendor', 'num_qubits', 'avg_t1_ms', 'avg_t2_ms',
+    'avg_ro_error', 'avg_1q_error', 'avg_2q_error',
+    'avg_1q_ns', 'avg_2q_ns', 'basis_gates', 'coupling_map', 'last_updated',
+})
 CALIBRATION_TTL = {
     "ibm":      timedelta(hours=24),
     "iqm":      timedelta(hours=12),
@@ -25,15 +33,19 @@ class UQICalibration:
     """
     QPU 캘리브레이션 수집 및 관리
     - 벤더별 API에서 실시간 수집
-    - JSON 기반 이력 저장 (시계열)
+    - SQLite 기반 이력 저장 (시계열)
     - TTL 기반 캐시 만료 판단
     - 트랜스파일 전 자동 호출 인터페이스
     """
 
     _SYNC_CACHE = {}
 
-    def __init__(self, calibration_file: str = CALIBRATION_FILE):
+    def __init__(self, calibration_file: str = CALIBRATION_DB):
         self.calibration_file = calibration_file
+        try:
+            self._init_db()
+        except Exception:
+            pass
         self.data = self._load()
         env_path = Path(__file__).parent / ".env"
         load_dotenv(dotenv_path=env_path)
@@ -42,18 +54,108 @@ class UQICalibration:
     # 저장 / 로드
     # ─────────────────────────────────────────
 
-    def _load(self) -> dict:
-        if Path(self.calibration_file).exists():
+    def _init_db(self):
+        conn = sqlite3.connect(self.calibration_file)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS calibrations (
+                qpu_name    TEXT PRIMARY KEY,
+                vendor      TEXT,
+                num_qubits  INTEGER,
+                avg_t1_ms   REAL,
+                avg_t2_ms   REAL,
+                avg_ro_error REAL,
+                avg_1q_error REAL,
+                avg_2q_error REAL,
+                avg_1q_ns   REAL,
+                avg_2q_ns   REAL,
+                basis_gates TEXT,
+                coupling_map TEXT,
+                extra_data  TEXT,
+                last_updated TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS calibration_history (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                qpu_name    TEXT NOT NULL,
+                snapshot    TEXT NOT NULL,
+                recorded_at TEXT NOT NULL
+            )
+        """)
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_history_qpu_time
+            ON calibration_history(qpu_name, recorded_at)
+        """)
+        conn.commit()
+        conn.close()
+
+    def _row_to_dict(self, row) -> dict:
+        d = {k: row[k] for k in row.keys()}
+        if d.get('basis_gates') is not None:
             try:
-                with open(self.calibration_file, 'r') as f:
-                    return json.load(f)
+                d['basis_gates'] = json.loads(d['basis_gates'])
             except Exception:
                 pass
-        return {}
+        if d.get('coupling_map') is not None:
+            try:
+                d['coupling_map'] = json.loads(d['coupling_map'])
+            except Exception:
+                pass
+        extra = d.pop('extra_data', None)
+        if extra:
+            try:
+                d.update(json.loads(extra))
+            except Exception:
+                pass
+        d.pop('qpu_name', None)
+        return d
+
+    def _dict_to_row(self, qpu_name: str, entry: dict) -> tuple:
+        extra = {k: v for k, v in entry.items() if k not in _KNOWN_COLS}
+        bg = entry.get('basis_gates')
+        cm = entry.get('coupling_map')
+        return (
+            qpu_name,
+            entry.get('vendor'),
+            entry.get('num_qubits'),
+            entry.get('avg_t1_ms'),
+            entry.get('avg_t2_ms'),
+            entry.get('avg_ro_error'),
+            entry.get('avg_1q_error'),
+            entry.get('avg_2q_error'),
+            entry.get('avg_1q_ns'),
+            entry.get('avg_2q_ns'),
+            json.dumps(bg) if bg is not None else None,
+            json.dumps(cm) if cm is not None else None,
+            json.dumps(extra, default=str) if extra else None,
+            entry.get('last_updated'),
+        )
+
+    def _load(self) -> dict:
+        try:
+            conn = sqlite3.connect(self.calibration_file)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute("SELECT * FROM calibrations").fetchall()
+            conn.close()
+            return {row['qpu_name']: self._row_to_dict(row) for row in rows}
+        except Exception:
+            return {}
 
     def _save(self):
-        with open(self.calibration_file, 'w') as f:
-            json.dump(self.data, f, indent=2, default=str)
+        try:
+            conn = sqlite3.connect(self.calibration_file)
+            for qpu_name, entry in self.data.items():
+                conn.execute("""
+                    INSERT OR REPLACE INTO calibrations
+                    (qpu_name, vendor, num_qubits, avg_t1_ms, avg_t2_ms,
+                     avg_ro_error, avg_1q_error, avg_2q_error, avg_1q_ns, avg_2q_ns,
+                     basis_gates, coupling_map, extra_data, last_updated)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, self._dict_to_row(qpu_name, entry))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"  [Calibration] DB 저장 오류: {e}")
 
     # ─────────────────────────────────────────
     # TTL 판단
@@ -160,17 +262,41 @@ class UQICalibration:
         if not entry:
             return
 
-        history = self.data.setdefault(f"{qpu_name}__history", [])
-        snapshot = {k: v for k, v in entry.items() if k != '__history'}
-        history.append(snapshot)
-
-        # 최대 90일치 보존
-        if len(history) > 2160:  # 24h/cycle * 90days
-            history.pop(0)
+        snapshot = json.dumps(entry, default=str)
+        recorded_at = datetime.now().isoformat()
+        try:
+            conn = sqlite3.connect(self.calibration_file)
+            conn.execute(
+                "INSERT INTO calibration_history (qpu_name, snapshot, recorded_at) VALUES (?, ?, ?)",
+                (qpu_name, snapshot, recorded_at)
+            )
+            # 최대 90일치 보존 (2160개 초과분 삭제)
+            conn.execute("""
+                DELETE FROM calibration_history
+                WHERE qpu_name = ? AND id NOT IN (
+                    SELECT id FROM calibration_history
+                    WHERE qpu_name = ?
+                    ORDER BY recorded_at DESC
+                    LIMIT 2160
+                )
+            """, (qpu_name, qpu_name))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"  [Calibration] 이력 저장 오류: {e}")
 
     def get_history(self, qpu_name: str) -> list:
         """캘리브레이션 이력 반환"""
-        return self.data.get(f"{qpu_name}__history", [])
+        try:
+            conn = sqlite3.connect(self.calibration_file)
+            rows = conn.execute(
+                "SELECT snapshot FROM calibration_history WHERE qpu_name = ? ORDER BY recorded_at ASC",
+                (qpu_name,)
+            ).fetchall()
+            conn.close()
+            return [json.loads(row[0]) for row in rows]
+        except Exception:
+            return []
 
     # ─────────────────────────────────────────
     # IBM 동기화

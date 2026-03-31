@@ -3,6 +3,7 @@
 import os
 import sys
 import json
+import sqlite3
 import pytest
 import tempfile
 from datetime import datetime, timedelta
@@ -17,16 +18,18 @@ from uqi_calibration import UQICalibration, CALIBRATION_TTL
 # ─────────────────────────────────────────────────────────────
 
 def _make_cal(data=None, tmp_file=None):
-    """임시 파일 기반 UQICalibration 생성"""
+    """임시 SQLite DB 기반 UQICalibration 생성"""
     if tmp_file is None:
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.json',
-                                        delete=False)
-        if data:
-            json.dump(data, f)
+        f = tempfile.NamedTemporaryFile(suffix='.db', delete=False)
         f.close()
         tmp_file = f.name
     with patch("uqi_calibration.load_dotenv"):
         cal = UQICalibration(calibration_file=tmp_file)
+    if data:
+        for qpu_name, entry in data.items():
+            if not qpu_name.endswith('__history'):
+                cal.data[qpu_name] = entry
+        cal._save()
     return cal, tmp_file
 
 
@@ -78,8 +81,8 @@ class TestInitAndLoad:
             os.unlink(tmp)
 
     def test_TC013_corrupt_file_loads_empty_dict(self):
-        f = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-        f.write("NOT VALID JSON {{{{")
+        f = tempfile.NamedTemporaryFile(mode='wb', suffix='.db', delete=False)
+        f.write(b"NOT A VALID SQLITE DATABASE {{{{")
         f.close()
         with patch("uqi_calibration.load_dotenv"):
             cal = UQICalibration(calibration_file=f.name)
@@ -90,7 +93,7 @@ class TestInitAndLoad:
 
     def test_TC014_nonexistent_file_loads_empty_dict(self):
         with patch("uqi_calibration.load_dotenv"):
-            cal = UQICalibration(calibration_file="/nonexistent/path.json")
+            cal = UQICalibration(calibration_file="/nonexistent/path.db")
         assert cal.data == {}
 
     def test_TC015_calibration_file_stored(self):
@@ -112,9 +115,8 @@ class TestSave:
         try:
             cal.data["ibm_fez"] = _base_entry()
             cal._save()
-            with open(tmp, 'r') as f:
-                loaded = json.load(f)
-            assert "ibm_fez" in loaded
+            reloaded = cal._load()
+            assert "ibm_fez" in reloaded
         finally:
             os.unlink(tmp)
 
@@ -124,9 +126,8 @@ class TestSave:
         try:
             cal.data["ibm_fez"]["num_qubits"] = 99
             cal._save()
-            with open(tmp, 'r') as f:
-                loaded = json.load(f)
-            assert loaded["ibm_fez"]["num_qubits"] == 99
+            reloaded = cal._load()
+            assert reloaded["ibm_fez"]["num_qubits"] == 99
         finally:
             os.unlink(tmp)
 
@@ -381,19 +382,27 @@ class TestHistory:
 
     def test_TC074_history_capped_at_2160(self):
         self.cal.data["ibm_fez"] = _base_entry()
-        history_key = "ibm_fez__history"
-        self.cal.data[history_key] = [{"snapshot": i} for i in range(2160)]
+        # DB에 2160개 직접 삽입
+        conn = sqlite3.connect(self.cal.calibration_file)
+        conn.executemany(
+            "INSERT INTO calibration_history (qpu_name, snapshot, recorded_at) VALUES (?, ?, ?)",
+            [("ibm_fez", json.dumps({"snapshot": i}), datetime.now().isoformat()) for i in range(2160)]
+        )
+        conn.commit()
+        conn.close()
         self.cal._append_history("ibm_fez")
-        assert len(self.cal.data[history_key]) == 2160
+        assert len(self.cal.get_history("ibm_fez")) == 2160
 
     def test_TC075_get_history_empty_when_no_history(self):
         assert self.cal.get_history("nonexistent_qpu") == []
 
-    def test_TC076_history_key_separate_from_main_data(self):
+    def test_TC076_history_stored_separately_from_main_data(self):
         self.cal.data["ibm_fez"] = _base_entry()
         self.cal._append_history("ibm_fez")
-        assert "ibm_fez__history" in self.cal.data
+        # 이력은 별도 테이블에 저장, self.data에는 현재 캘리브레이션만 존재
+        assert "ibm_fez__history" not in self.cal.data
         assert "ibm_fez" in self.cal.data
+        assert len(self.cal.get_history("ibm_fez")) == 1
 
 
 # ─────────────────────────────────────────────────────────────

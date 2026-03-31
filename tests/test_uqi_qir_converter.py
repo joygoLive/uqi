@@ -14,9 +14,11 @@ from uqi_qir_converter import UQIQIRConverter
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-def _make_extractor(framework=None, circuits=None, perceval_circuits=None):
+def _make_extractor(framework=None, circuits=None, perceval_circuits=None, frameworks=None):
     ext = MagicMock()
     ext.framework = framework
+    # frameworks: 복수 framework 지원 (None이면 framework 단일 항목으로 설정)
+    ext.frameworks = frameworks if frameworks is not None else ([framework] if framework else [])
     ext.circuits = circuits or {}
     ext.perceval_circuits = perceval_circuits or {}
     return ext

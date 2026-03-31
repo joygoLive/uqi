@@ -113,6 +113,29 @@ class TestDetectFramework:
         try:
             ext.detect_framework()
             assert ext.framework == "Qiskit"
+            assert "Qiskit" in ext.frameworks
+        finally:
+            os.unlink(path)
+
+    def test_TC01H_commented_import_ignored(self):
+        """주석 처리된 import는 framework 감지에서 무시됨"""
+        # # import pennylane 만 있으면 PennyLane으로 감지되면 안 됨
+        source = "# import pennylane as qml\nimport qiskit\n"
+        assert self._detect(source) == "Qiskit"
+
+    def test_TC01I_string_literal_import_ignored(self):
+        """문자열 안의 import는 framework 감지에서 무시됨"""
+        source = 'doc = "import pennylane"\nimport qiskit\n'
+        assert self._detect(source) == "Qiskit"
+
+    def test_TC01J_multi_framework_detected(self):
+        """복수 framework import 시 모두 감지되고 frameworks 리스트에 저장됨"""
+        ext, path = _make_extractor("import pennylane as qml\nimport qiskit\n")
+        try:
+            ext.detect_framework()
+            assert "PennyLane" in ext.frameworks
+            assert "Qiskit" in ext.frameworks
+            assert ext.framework == "PennyLane"  # 우선순위: PennyLane > Qiskit
         finally:
             os.unlink(path)
 
@@ -123,9 +146,18 @@ class TestDetectFramework:
 
 class TestExtractCircuitsRouting:
 
-    def _ext(self, framework: str) -> UQIExtractor:
+    def _ext(self, framework) -> UQIExtractor:
+        """framework가 문자열이면 단일 framework, 리스트면 복수 framework로 설정"""
         ext = UQIExtractor("dummy.py")
-        ext.framework = framework
+        if isinstance(framework, list):
+            ext.frameworks = framework
+            ext.framework = framework[0] if framework else None
+        elif framework is not None:
+            ext.frameworks = [framework]
+            ext.framework = framework
+        else:
+            ext.frameworks = []
+            ext.framework = None
         return ext
 
     def test_TC021_routes_pennylane(self):
@@ -158,15 +190,35 @@ class TestExtractCircuitsRouting:
             ext.extract_circuits()
             m.assert_called_once()
 
-    def test_TC026_unknown_framework_raises(self):
+    def test_TC026_unknown_framework_prints_warning(self):
+        """알 수 없는 framework는 경고 출력 후 계속 진행 (예외 없음)"""
         ext = self._ext("UnknownSDK")
-        with pytest.raises(NotImplementedError):
-            ext.extract_circuits()
+        # NotImplementedError 대신 warning만 출력되고 정상 종료
+        ext.extract_circuits()  # should not raise
 
     def test_TC027_none_framework_raises(self):
+        """frameworks 목록이 비어 있으면 RuntimeError"""
         ext = self._ext(None)
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(RuntimeError):
             ext.extract_circuits()
+
+    def test_TC028_multi_framework_routes_both(self):
+        """복수 framework 감지 시 각 framework 추출기가 모두 호출됨"""
+        ext = self._ext(["PennyLane", "Qiskit"])
+        with patch.object(ext, "_extract_pennylane_circuits") as m_pl, \
+             patch.object(ext, "_extract_qiskit_circuits") as m_qk:
+            ext.extract_circuits()
+            m_pl.assert_called_once()
+            m_qk.assert_called_once()
+
+    def test_TC029_multi_framework_prefix_passed(self):
+        """복수 framework 시 각 추출기에 prefix 인자가 전달됨"""
+        ext = self._ext(["PennyLane", "Qiskit"])
+        with patch.object(ext, "_extract_pennylane_circuits") as m_pl, \
+             patch.object(ext, "_extract_qiskit_circuits") as m_qk:
+            ext.extract_circuits()
+            m_pl.assert_called_once_with(prefix="pennylane__")
+            m_qk.assert_called_once_with(prefix="qiskit__")
 
 
 # ─────────────────────────────────────────────────────────────
@@ -220,6 +272,30 @@ class TestRunSubprocess:
         script = 'print("[1, 2, 3]")\n'
         result = self.ext._run_subprocess(script, timeout=10)
         assert result is None
+
+    def test_TC038_sentinel_json_parsed(self):
+        """__UQI_JSON__: sentinel 기반 JSON 파싱"""
+        script = (
+            'import json\n'
+            'print("some debug output")\n'
+            'print("more noise")\n'
+            'print("__UQI_JSON__:" + json.dumps({"sentinel": True, "val": 99}))\n'
+        )
+        result = self.ext._run_subprocess(script, timeout=10)
+        assert result is not None
+        assert result["sentinel"] is True
+        assert result["val"] == 99
+
+    def test_TC039_sentinel_takes_priority_over_fallback(self):
+        """sentinel 형식이 일반 JSON 출력보다 우선 적용됨"""
+        script = (
+            'import json\n'
+            'print(json.dumps({"source": "fallback"}))\n'
+            'print("__UQI_JSON__:" + json.dumps({"source": "sentinel"}))\n'
+        )
+        result = self.ext._run_subprocess(script, timeout=10)
+        assert result is not None
+        assert result["source"] == "sentinel"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -334,9 +410,64 @@ class TestTapeToOpenQASM:
         assert "tdg q[0];" in self._qasm([_mock_op("Adjoint(T)", [0])], num_wires=1)
 
     def test_TC05L_unknown_gate_skipped(self):
+        """알 수 없는 게이트는 comment로 표시되고 실제 게이트 명령은 생성되지 않음"""
         qasm = self._qasm([_mock_op("SomeUnknownGate", [0])], num_wires=1)
         assert "OPENQASM 2.0;" in qasm
-        assert "SomeUnknownGate" not in qasm
+        # 게이트 명령이 아닌 주석으로만 나타나야 함
+        lines = [l.strip() for l in qasm.splitlines()]
+        gate_lines = [l for l in lines if l.startswith("SomeUnknownGate")]
+        assert len(gate_lines) == 0, "게이트 명령으로 출력되면 안 됨"
+        assert "// unknown gate: SomeUnknownGate" in qasm
+
+    def test_TC05O_cy_gate(self):
+        assert "cy q[0], q[1];" in self._qasm([_mock_op("CY", [0, 1])], num_wires=2)
+
+    def test_TC05P_ch_gate(self):
+        assert "ch q[0], q[1];" in self._qasm([_mock_op("CH", [0, 1])], num_wires=2)
+
+    def test_TC05Q_adjoint_sx_gate(self):
+        qasm = self._qasm([_mock_op("Adjoint(SX)", [0])], num_wires=1)
+        assert "sxdg q[0];" in qasm
+        assert "gate sxdg" in qasm  # 커스텀 정의 포함
+
+    def test_TC05R_iswap_gate(self):
+        qasm = self._qasm([_mock_op("ISWAP", [0, 1])], num_wires=2)
+        assert "iswap q[0], q[1];" in qasm
+        assert "gate iswap" in qasm  # 커스텀 정의 포함
+
+    def test_TC05S_rzz_gate(self):
+        qasm = self._qasm([_mock_op("RZZ", [0, 1], [math.pi / 4])], num_wires=2)
+        assert "rzz(" in qasm
+        assert "gate rzz" in qasm
+
+    def test_TC05T_rxx_gate(self):
+        qasm = self._qasm([_mock_op("RXX", [0, 1], [math.pi / 4])], num_wires=2)
+        assert "rxx(" in qasm
+        assert "gate rxx" in qasm
+
+    def test_TC05U_ryy_gate(self):
+        qasm = self._qasm([_mock_op("RYY", [0, 1], [math.pi / 4])], num_wires=2)
+        assert "ryy(" in qasm
+        assert "gate ryy" in qasm
+
+    def test_TC05V_ecr_gate(self):
+        qasm = self._qasm([_mock_op("ECR", [0, 1])], num_wires=2)
+        assert "ecr q[0], q[1];" in qasm
+        assert "gate ecr" in qasm
+
+    def test_TC05W_global_phase_skipped(self):
+        """GlobalPhase는 QASM에 영향 없이 무시됨"""
+        qasm = self._qasm([_mock_op("GlobalPhase", [0], [0.5])], num_wires=1)
+        assert "OPENQASM 2.0;" in qasm
+        assert "GlobalPhase" not in qasm
+        assert "// unknown gate" not in qasm
+
+    def test_TC05X_custom_gate_def_before_use(self):
+        """커스텀 게이트 정의가 게이트 사용 이전에 나타나야 함"""
+        qasm = self._qasm([_mock_op("RZZ", [0, 1], [1.0])], num_wires=2)
+        def_pos = qasm.index("gate rzz")
+        use_pos = qasm.index("rzz(")
+        assert def_pos < use_pos
 
     def test_TC05M_expand_exception_fallback(self):
         tape = MagicMock()

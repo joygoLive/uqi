@@ -29,7 +29,8 @@ class UQIExtractor:
 
     def __init__(self, algorithm_file: str):
         self.algorithm_file = algorithm_file
-        self.framework = None
+        self.framework = None         # 하위 호환성 유지 (첫 번째 감지된 framework)
+        self.frameworks = []          # 감지된 모든 framework 목록
         self.tapes = {}               # (legacy, 미사용)
         self.sessions = {}            # (legacy, 미사용)
         self.cudaq_kernels = {}       # (legacy, 미사용)
@@ -43,26 +44,78 @@ class UQIExtractor:
     # Framework 감지
     # ─────────────────────────────────────────
 
+    @staticmethod
+    def _strip_comments(source: str) -> str:
+        """Python 소스에서 # 주석과 문자열 리터럴 내부를 제거 (import 감지 정확도 향상)"""
+        result = []
+        i = 0
+        n = len(source)
+        while i < n:
+            # 삼중 따옴표 문자열 스킵
+            if source[i:i+3] in ('"""', "'''"):
+                quote = source[i:i+3]
+                i += 3
+                end = source.find(quote, i)
+                i = (end + 3) if end != -1 else n
+            # 단일 따옴표 문자열 스킵
+            elif source[i] in ('"', "'"):
+                q = source[i]
+                i += 1
+                while i < n and source[i] != q:
+                    if source[i] == '\\':
+                        i += 1
+                    i += 1
+                i += 1  # 닫는 따옴표
+            # 라인 주석 스킵
+            elif source[i] == '#':
+                while i < n and source[i] != '\n':
+                    i += 1
+            else:
+                result.append(source[i])
+                i += 1
+        return ''.join(result)
+
     def detect_framework(self) -> str:
+        """소스 파일에서 사용된 양자 프레임워크를 모두 감지한다.
+        주석 및 문자열 리터럴 내부의 import 문은 무시된다.
+        self.frameworks: 감지된 모든 framework 목록 (우선순위 순)
+        self.framework:  첫 번째 감지된 framework (하위 호환성)
+        """
         if not Path(self.algorithm_file).exists():
             raise FileNotFoundError(f"파일 없음: {self.algorithm_file}")
 
         with open(self.algorithm_file, 'r') as f:
             source = f.read()
 
-        if 'import cudaq' in source or 'from cudaq' in source:
-            self.framework = 'CUDAQ'
-        elif 'import perceval' in source or 'from perceval' in source:
-            self.framework = 'Perceval'
-        elif ('import pennylane' in source or 'import qml' in source
-              or 'from pennylane' in source):
-            self.framework = 'PennyLane'
-        elif 'import qrisp' in source or 'from qrisp' in source:
-            self.framework = 'Qrisp'
-        elif 'import qiskit' in source or 'from qiskit' in source:
-            self.framework = 'Qiskit'
-        else:
+        # 주석/문자열 제거 후 활성 소스만 검사
+        active = self._strip_comments(source)
+
+        # 우선순위 순서대로 (CUDAQ > Perceval > PennyLane > Qrisp > Qiskit)
+        framework_patterns = [
+            ('CUDAQ',     [r'\bimport\s+cudaq\b',    r'\bfrom\s+cudaq\b']),
+            ('Perceval',  [r'\bimport\s+perceval\b', r'\bfrom\s+perceval\b']),
+            ('PennyLane', [r'\bimport\s+pennylane\b', r'\bimport\s+qml\b',
+                           r'\bfrom\s+pennylane\b']),
+            ('Qrisp',     [r'\bimport\s+qrisp\b',    r'\bfrom\s+qrisp\b']),
+            ('Qiskit',    [r'\bimport\s+qiskit\b',   r'\bfrom\s+qiskit\b']),
+        ]
+
+        detected = []
+        for fw, patterns in framework_patterns:
+            if any(re.search(p, active) for p in patterns):
+                detected.append(fw)
+
+        if not detected:
             raise ValueError("양자 프레임워크를 감지할 수 없습니다")
+
+        self.frameworks = detected
+        self.framework = detected[0]  # 하위 호환성
+
+        if len(detected) > 1:
+            print(f"  [Extractor] 복수 framework 감지: {', '.join(detected)}")
+            print(f"    각 framework 독립 추출 모드로 실행")
+        else:
+            print(f"  [Extractor] framework 감지: {detected[0]}")
 
         return self.framework
 
@@ -71,25 +124,40 @@ class UQIExtractor:
     # ─────────────────────────────────────────
 
     def extract_circuits(self):
-        if self.framework == 'PennyLane':
-            self._extract_pennylane_circuits()
-        elif self.framework == 'Qrisp':
-            self._extract_qrisp_circuits()
-        elif self.framework == 'CUDAQ':
-            self._extract_cudaq_circuits()
-        elif self.framework == 'Qiskit':
-            self._extract_qiskit_circuits()
-        elif self.framework == 'Perceval':
-            self._extract_perceval_circuits()
-        else:
-            raise NotImplementedError(f"현재 검증 범위 외 framework: {self.framework}")
+        """감지된 모든 framework에 대해 독립적으로 회로를 추출한다.
+        복수 framework인 경우 회로 이름에 'fw__' 접두어를 붙여 구분한다.
+        """
+        if not self.frameworks:
+            raise RuntimeError("detect_framework()를 먼저 호출하세요")
+
+        multi = len(self.frameworks) > 1
+
+        for fw in self.frameworks:
+            prefix = f"{fw.lower()}__" if multi else ""
+            if fw == 'PennyLane':
+                self._extract_pennylane_circuits(prefix=prefix)
+            elif fw == 'Qrisp':
+                self._extract_qrisp_circuits(prefix=prefix)
+            elif fw == 'CUDAQ':
+                self._extract_cudaq_circuits(prefix=prefix)
+            elif fw == 'Qiskit':
+                self._extract_qiskit_circuits(prefix=prefix)
+            elif fw == 'Perceval':
+                self._extract_perceval_circuits(prefix=prefix)
+            else:
+                print(f"  [Extractor] 현재 검증 범위 외 framework: {fw}")
 
     # ─────────────────────────────────────────
     # subprocess 공통 실행기
     # ─────────────────────────────────────────
 
+    _SUBPROCESS_SENTINEL = "__UQI_JSON__:"
+
     def _run_subprocess(self, script: str, timeout: int = 120) -> Optional[dict]:
-        """script를 subprocess로 실행, stdout JSON 파싱 후 반환"""
+        """script를 subprocess로 실행, sentinel(__UQI_JSON__:) 기반 JSON 파싱 후 반환.
+        각 subprocess 스크립트는 결과를 print('__UQI_JSON__:' + json.dumps(data)) 형식으로 출력해야 함.
+        """
+        SENTINEL = self._SUBPROCESS_SENTINEL
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
             f.write(script)
             tmp_path = f.name
@@ -98,11 +166,20 @@ class UQIExtractor:
                 [sys.executable, tmp_path],
                 capture_output=True, text=True, timeout=timeout
             )
-            stdout = result.stdout.strip()
-            if not stdout:
+            stdout = result.stdout
+            if not stdout.strip():
                 print(f"  [Extractor] subprocess 출력 없음: {result.stderr[:300]}")
                 return None
-            # stdout 마지막 줄에서 JSON 파싱 (print 출력이 섞일 수 있음)
+            # sentinel 기반 JSON 파싱 (가장 신뢰성 높음)
+            for line in reversed(stdout.splitlines()):
+                line = line.strip()
+                if line.startswith(SENTINEL):
+                    json_str = line[len(SENTINEL):]
+                    try:
+                        return json.loads(json_str)
+                    except Exception:
+                        continue
+            # fallback: 마지막 { 로 시작하는 줄 (구버전 스크립트 호환)
             for line in reversed(stdout.splitlines()):
                 line = line.strip()
                 if line.startswith('{'):
@@ -125,7 +202,7 @@ class UQIExtractor:
     # PennyLane 추출 (subprocess 격리)
     # ─────────────────────────────────────────
 
-    def _extract_pennylane_circuits(self):
+    def _extract_pennylane_circuits(self, prefix: str = ""):
         print(f"  [Extractor] PennyLane 회로 추출 시작")
 
         alg_file = self.algorithm_file
@@ -225,11 +302,26 @@ def tape_to_qasm(tape):
     def w(wire):
         return f"q[{{wire_to_idx[wire]}}]"
 
+    # 커스텀 게이트 정의 (qelib1.inc에 없는 게이트)
+    CUSTOM_GATE_DEFS = {{
+        'sxdg':  'gate sxdg a {{ rx(-pi/2) a; }}',
+        'iswap': 'gate iswap a, b {{ s a; s b; h a; cx a, b; cx b, a; h b; }}',
+        'rzz':   'gate rzz(theta) a, b {{ cx a, b; rz(theta) b; cx a, b; }}',
+        'rxx':   'gate rxx(theta) a, b {{ h a; h b; cx a, b; rz(theta) b; cx a, b; h b; h a; }}',
+        'ryy':   'gate ryy(theta) a, b {{ rx(pi/2) a; rx(pi/2) b; cx a, b; rz(theta) b; cx a, b; rx(-pi/2) a; rx(-pi/2) b; }}',
+        'ecr':   'gate ecr a, b {{ h b; cx a, b; rz(pi/4) b; cx a, b; h b; x a; h b; cx a, b; rz(-pi/4) b; cx a, b; h b; }}',
+    }}
+
+    # qelib1.inc에 포함된 단순 게이트 매핑 (파라미터 없음)
     single_map = {{
         "Hadamard": "h", "PauliX": "x", "PauliY": "y", "PauliZ": "z",
         "S": "s", "T": "t", "SX": "sx", "Adjoint(S)": "sdg",
         "Adjoint(T)": "tdg", "CNOT": "cx", "CZ": "cz", "SWAP": "swap",
+        "CY": "cy", "CH": "ch",
     }}
+
+    used_custom = set()
+    gate_lines = []
 
     for op in expanded.operations:
         name = op.name
@@ -238,38 +330,71 @@ def tape_to_qasm(tape):
         if name in single_map:
             gate = single_map[name]
             args = ", ".join(w(wire) for wire in wires)
-            lines.append(f"{{gate}} {{args}};")
+            gate_lines.append(f"{{gate}} {{args}};")
         elif name == "RX":
-            lines.append(f"rx({{float(params[0])}}) {{w(wires[0])}};")
+            gate_lines.append(f"rx({{float(params[0])}}) {{w(wires[0])}};")
         elif name == "RY":
-            lines.append(f"ry({{float(params[0])}}) {{w(wires[0])}};")
+            gate_lines.append(f"ry({{float(params[0])}}) {{w(wires[0])}};")
         elif name == "RZ":
-            lines.append(f"rz({{float(params[0])}}) {{w(wires[0])}};")
+            gate_lines.append(f"rz({{float(params[0])}}) {{w(wires[0])}};")
         elif name == "PhaseShift":
-            lines.append(f"p({{float(params[0])}}) {{w(wires[0])}};")
+            gate_lines.append(f"p({{float(params[0])}}) {{w(wires[0])}};")
         elif name == "U1":
-            lines.append(f"u1({{float(params[0])}}) {{w(wires[0])}};")
+            gate_lines.append(f"u1({{float(params[0])}}) {{w(wires[0])}};")
         elif name == "U2":
-            lines.append(f"u2({{float(params[0])}},{{float(params[1])}}) {{w(wires[0])}};")
+            gate_lines.append(f"u2({{float(params[0])}},{{float(params[1])}}) {{w(wires[0])}};")
         elif name == "U3":
-            lines.append(f"u3({{float(params[0])}},{{float(params[1])}},{{float(params[2])}}) {{w(wires[0])}};")
+            gate_lines.append(f"u3({{float(params[0])}},{{float(params[1])}},{{float(params[2])}}) {{w(wires[0])}};")
         elif name in ("Toffoli", "CCX"):
-            lines.append(f"ccx {{w(wires[0])}}, {{w(wires[1])}}, {{w(wires[2])}};")
+            gate_lines.append(f"ccx {{w(wires[0])}}, {{w(wires[1])}}, {{w(wires[2])}};")
         elif name in ("MultiControlledX", "ctrl"):
             ctrl_args = ", ".join(w(wire) for wire in wires[:-1])
             tgt_arg = w(wires[-1])
             if len(wires) == 3:
-                lines.append(f"ccx {{ctrl_args}}, {{tgt_arg}};")
+                gate_lines.append(f"ccx {{ctrl_args}}, {{tgt_arg}};")
             elif len(wires) == 2:
-                lines.append(f"cx {{ctrl_args}}, {{tgt_arg}};")
+                gate_lines.append(f"cx {{ctrl_args}}, {{tgt_arg}};")
         elif name == "CRX":
-            lines.append(f"crx({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+            gate_lines.append(f"crx({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
         elif name == "CRY":
-            lines.append(f"cry({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+            gate_lines.append(f"cry({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
         elif name == "CRZ":
-            lines.append(f"crz({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+            gate_lines.append(f"crz({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
         elif name == "Identity":
-            lines.append(f"id {{w(wires[0])}};")
+            gate_lines.append(f"id {{w(wires[0])}};")
+        elif name in ("Adjoint(SX)", "SXdg"):
+            used_custom.add('sxdg')
+            gate_lines.append(f"sxdg {{w(wires[0])}};")
+        elif name == "ISWAP":
+            used_custom.add('iswap')
+            gate_lines.append(f"iswap {{w(wires[0])}}, {{w(wires[1])}};")
+        elif name == "RZZ":
+            used_custom.add('rzz')
+            gate_lines.append(f"rzz({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+        elif name == "RXX":
+            used_custom.add('rxx')
+            gate_lines.append(f"rxx({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+        elif name == "RYY":
+            used_custom.add('ryy')
+            gate_lines.append(f"ryy({{float(params[0])}}) {{w(wires[0])}}, {{w(wires[1])}};")
+        elif name == "ECR":
+            used_custom.add('ecr')
+            gate_lines.append(f"ecr {{w(wires[0])}}, {{w(wires[1])}};")
+        elif name == "GlobalPhase":
+            pass  # 전역 위상 무시 (측정 결과에 영향 없음)
+        else:
+            import sys as _sys
+            print(f"  [QASM] 알 수 없는 게이트 스킵: {{name}}", file=_sys.stderr)
+            gate_lines.append(f"// unknown gate: {{name}}")
+
+    # 필요한 커스텀 게이트 정의를 헤더에 삽입
+    # rzz가 필요한 경우 rzz 정의를 rxx/ryy/ecr 보다 먼저 삽입
+    CUSTOM_GATE_ORDER = ['sxdg', 'iswap', 'rzz', 'rxx', 'ryy', 'ecr']
+    for cg in CUSTOM_GATE_ORDER:
+        if cg in used_custom:
+            lines.append(CUSTOM_GATE_DEFS[cg])
+
+    lines.extend(gate_lines)
 
     for wire in wires_list:
         lines.append(f"measure {{w(wire)}} -> c[{{wire_to_idx[wire]}}];")
@@ -284,7 +409,7 @@ for name, tape in tapes.items():
     except Exception as e:
         results[name] = {{'qasm': None, 'ok': False, 'error': str(e)}}
 
-print(json.dumps(results))
+print('__UQI_JSON__:' + json.dumps(results))
 """
 
         data = self._run_subprocess(script, timeout=120)
@@ -296,25 +421,29 @@ print(json.dumps(results))
             print(f"  [Extractor] 실행 오류: {data['__error__']}")
             return
 
+        new_circuits = {}
         for name, info in data.items():
             if info.get('ok') and info.get('qasm'):
-                self.circuits[name] = info['qasm']
-                self.qnode_call_counts[name] = info.get('calls', 0)
+                key = f"{prefix}{name}"
+                new_circuits[key] = info['qasm']
+                self.circuits[key] = info['qasm']
+                self.qnode_call_counts[key] = info.get('calls', 0)
 
-        if not self.circuits:
+        if not new_circuits:
             print(f"  [Extractor] 추출된 회로 없음")
             return
 
-        print(f"  [Extractor] QNode {len(self.circuits)}개 발견: {', '.join(self.circuits.keys())}")
-        print(f"  [Extractor] 추출 완료: {len(self.circuits)}개 tape")
-        for name, count in self.qnode_call_counts.items():
-            print(f"    {name}: {count}회 호출")
+        print(f"  [Extractor] QNode {len(new_circuits)}개 발견: {', '.join(new_circuits.keys())}")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 tape")
+        for key, count in self.qnode_call_counts.items():
+            if key in new_circuits:
+                print(f"    {key}: {count}회 호출")
 
     # ─────────────────────────────────────────
     # Qrisp 추출 (subprocess 격리)
     # ─────────────────────────────────────────
 
-    def _extract_qrisp_circuits(self):
+    def _extract_qrisp_circuits(self, prefix: str = ""):
         print(f"  [Extractor] Qrisp 회로 추출 시작")
 
         alg_file = self.algorithm_file
@@ -389,7 +518,7 @@ for idx, qs in enumerate(target_sessions):
             results[name] = {{'qasm': None, 'ok': False, 'error': str(e2)}}
 
 results['__measurement_count__'] = measurement_count[0]
-print(json.dumps(results))
+print('__UQI_JSON__:' + json.dumps(results))
 """
 
         data = self._run_subprocess(script, timeout=120)
@@ -399,28 +528,29 @@ print(json.dumps(results))
 
         measurement_count = data.pop('__measurement_count__', 0)
 
+        new_circuits = {}
         for name, info in data.items():
             if info.get('ok') and info.get('qasm'):
-                self.circuits[name] = info['qasm']
+                key = f"{prefix}{name}"
+                new_circuits[key] = info['qasm']
+                self.circuits[key] = info['qasm']
 
-        if not self.circuits:
+        if not new_circuits:
             print(f"  [Extractor] 유효한 QuantumSession 없음")
             return
 
-        print(f"  [Extractor] 추출 완료: {len(self.circuits)}개 세션")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 세션")
         for name, info in data.items():
             if info.get('ok'):
-                print(f"    {name}: 큐비트 수 {info.get('num_qubits', '?')}")
+                key = f"{prefix}{name}"
+                print(f"    {key}: 큐비트 수 {info.get('num_qubits', '?')}")
         print(f"    측정 호출: {measurement_count}회")
 
     # ─────────────────────────────────────────
     # CUDAQ 추출 (subprocess 격리)
     # ─────────────────────────────────────────
 
-    def _extract_cudaq_circuits(self):
-        import subprocess
-        import tempfile
-
+    def _extract_cudaq_circuits(self, prefix: str = ""):
         print(f"  [Extractor] CUDAQ 커널 추출 시작 (subprocess 격리)")
 
         alg_file = self.algorithm_file
@@ -463,21 +593,13 @@ try:
             qasm = cudaq.translate(info['kernel'], *info['args'], format="openqasm2")
             results[name] = {{'qasm': qasm, 'ok': True}}
         except Exception as e:
-            try:
-                import re
-                qir_ll = cudaq.translate(info['kernel'], *info['args'], format="qir")
-                if isinstance(qir_ll, bytes):
-                    qir_ll = qir_ll.decode('utf-8')
-                indices = [int(m) for m in re.findall(r'array_get_element_ptr_1d.*?i64\s+(\d+)', qir_ll)]
-                n = max(indices) + 1 if indices else 1
-                results[name] = {{'qasm': f'OPENQASM 2.0;\\ninclude "qelib1.inc";\\nqreg q[{{n}}];\\ncreg c[{{n}}];\\nmeasure q -> c;', 'ok': True}}
-            except Exception as e2:
-                results[name] = {{'qasm': None, 'ok': False, 'error': str(e2)}}
+            # openqasm2 변환 실패 시 더미 QASM 대신 오류 반환
+            results[name] = {{'qasm': None, 'ok': False, 'error': f'openqasm2 변환 실패: {{e}}'}}
 
-    print(json.dumps(results))
+    print('__UQI_JSON__:' + json.dumps(results))
 
 except Exception as e:
-    print(json.dumps({{'__error__': str(e)}}))
+    print('__UQI_JSON__:' + json.dumps({{'__error__': str(e)}}))
 """
 
         data = self._run_subprocess(script, timeout=120)
@@ -489,162 +611,207 @@ except Exception as e:
             print(f"  [Extractor] 실행 오류: {data['__error__']}")
             return
 
+        new_circuits = {}
         for name, info in data.items():
             if info.get('ok') and info.get('qasm'):
-                self.circuits[name] = info['qasm']
+                key = f"{prefix}{name}"
+                new_circuits[key] = info['qasm']
+                self.circuits[key] = info['qasm']
+            elif not info.get('ok') and info.get('error'):
+                print(f"  [Extractor] CUDAQ 커널 변환 실패 ({name}): {info['error']}")
 
-        if not self.circuits:
+        if not new_circuits:
             print(f"  [Extractor] CUDAQ 추출 실패: QASM 없음")
             return
 
-        print(f"  [Extractor] 추출 완료: {len(self.circuits)}개 커널")
-        print(f"    커널 목록: {', '.join(self.circuits.keys())}")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 커널")
+        print(f"    커널 목록: {', '.join(new_circuits.keys())}")
 
     # ─────────────────────────────────────────
-    # Qiskit 추출 (monkey patch 기반, 인프로세스)
+    # Qiskit 추출 (subprocess 격리)
     # ─────────────────────────────────────────
 
-    def _extract_qiskit_circuits(self):
-        import importlib
-        import inspect
-        from qiskit import QuantumCircuit
+    def _extract_qiskit_circuits(self, prefix: str = ""):
+        print(f"  [Extractor] Qiskit 회로 추출 시작 (subprocess 격리)")
 
-        print(f"  [Extractor] Qiskit 회로 추출 시작")
+        alg_file = self.algorithm_file
+        alg_dir = os.path.dirname(os.path.abspath(alg_file))
 
-        captured_circuits = {}
-        self.qiskit_run_count = 0
-        extractor_self = self
+        script = f"""
+import sys, json, os, importlib, inspect
+sys.path.insert(0, '{alg_dir}')
 
-        targets = [
-            ("qiskit.primitives",     "StatevectorSampler",   "run"),
-            ("qiskit.primitives",     "Sampler",              "run"),
-            ("qiskit.primitives",     "StatevectorEstimator", "run"),
-            ("qiskit.primitives",     "Estimator",            "run"),
-            ("qiskit_aer.primitives", "SamplerV2",            "run"),
-            ("qiskit_aer.primitives", "Sampler",              "run"),
-            ("qiskit_aer.primitives", "EstimatorV2",          "run"),
-            ("qiskit_aer",            "AerSimulator",         "run"),
-            ("qiskit_ibm_runtime",    "SamplerV2",            "run"),
-            ("qiskit_ibm_runtime",    "Sampler",              "run"),
-            ("qiskit_ibm_runtime",    "EstimatorV2",          "run"),
-            ("qiskit.providers",      "BackendV2",            "run"),
-            ("qiskit.providers",      "BackendV1",            "run"),
-        ]
+import matplotlib
+matplotlib.use('Agg')
 
-        original_methods = []
+try:
+    from qiskit import QuantumCircuit
+    from qiskit.qasm2 import dumps as qasm2_dumps
+except ImportError as e:
+    print('__UQI_JSON__:' + json.dumps({{'__error__': str(e)}}))
+    sys.exit(0)
 
-        def wrap_run(original_func):
-            def patched_run(self_obj, circuits, *args, **kwargs):
-                extractor_self.qiskit_run_count += 1
-                target_circuits = []
+captured = {{}}
+run_count = [0]
 
-                caller_context = "qiskit_circuit"
+targets = [
+    ("qiskit.primitives",     "StatevectorSampler",   "run"),
+    ("qiskit.primitives",     "Sampler",              "run"),
+    ("qiskit.primitives",     "StatevectorEstimator", "run"),
+    ("qiskit.primitives",     "Estimator",            "run"),
+    ("qiskit_aer.primitives", "SamplerV2",            "run"),
+    ("qiskit_aer.primitives", "Sampler",              "run"),
+    ("qiskit_aer.primitives", "EstimatorV2",          "run"),
+    ("qiskit_aer",            "AerSimulator",         "run"),
+    ("qiskit_ibm_runtime",    "SamplerV2",            "run"),
+    ("qiskit_ibm_runtime",    "Sampler",              "run"),
+    ("qiskit_ibm_runtime",    "EstimatorV2",          "run"),
+    ("qiskit.providers",      "BackendV2",            "run"),
+    ("qiskit.providers",      "BackendV1",            "run"),
+]
+
+def _extract_qcs(circuits):
+    result = []
+    if isinstance(circuits, QuantumCircuit):
+        result = [(circuits, None)]
+    elif hasattr(circuits, "__iter__"):
+        for item in circuits:
+            if isinstance(item, tuple) and len(item) > 0:
+                if isinstance(item[0], QuantumCircuit):
+                    params = None
+                    if len(item) == 2 and not hasattr(item[1], 'num_qubits'):
+                        params = item[1]
+                    elif len(item) >= 3:
+                        params = item[2]
+                    result.append((item[0], params))
+            elif isinstance(item, QuantumCircuit):
+                result.append((item, None))
+    if not result and hasattr(circuits, 'circuits'):
+        result = [(qc, None) for qc in circuits.circuits]
+    return result
+
+def _qc_to_qasm(qc):
+    cloned = qc.copy()
+    if not cloned.cregs:
+        cloned.measure_all()
+    qasm = qasm2_dumps(cloned)
+    return "\\n".join(
+        line for line in qasm.splitlines()
+        if not line.strip().startswith("gphase")
+    ), cloned.num_qubits, len(cloned.data)
+
+def wrap_run(original_func):
+    def patched_run(self_obj, circuits, *args, **kwargs):
+        run_count[0] += 1
+        caller_context = "qiskit_circuit"
+        try:
+            for frame_info in inspect.stack():
+                frame_locals = frame_info.frame.f_locals
+                if 'self' in frame_locals:
+                    cls_name = frame_locals['self'].__class__.__name__
+                    if any(t in cls_name for t in [
+                        'Pricing', 'Delta', 'Estimation', 'AmplitudeEstimation'
+                    ]):
+                        caller_context = cls_name
+                        break
+        except Exception:
+            pass
+
+        for qc, params in _extract_qcs(circuits):
+            cloned = qc.copy()
+            base_name = getattr(qc, 'name', 'qc')
+            if base_name in ("circuit-0", "circuit"):
+                base_name = "qc"
+            name = f"{{caller_context}}_{{base_name}}_{{len(captured)}}"
+            if params is not None and cloned.parameters:
                 try:
-                    for frame_info in inspect.stack():
-                        frame_locals = frame_info.frame.f_locals
-                        if 'self' in frame_locals:
-                            cls_name = frame_locals['self'].__class__.__name__
-                            if any(t in cls_name for t in [
-                                'Pricing', 'Delta', 'Estimation', 'AmplitudeEstimation'
-                            ]):
-                                caller_context = cls_name
-                                break
+                    import numpy as np
+                    param_dict = dict(zip(cloned.parameters, np.asarray(params).flatten()))
+                    cloned = cloned.assign_parameters(param_dict)
                 except Exception:
                     pass
-
-                if isinstance(circuits, QuantumCircuit):
-                    target_circuits = [(circuits, None)]
-                elif hasattr(circuits, "__iter__"):
-                    for item in circuits:
-                        if isinstance(item, tuple) and len(item) > 0:
-                            if isinstance(item[0], QuantumCircuit):
-                                params = None
-                                if len(item) == 2 and not hasattr(item[1], 'num_qubits'):
-                                    params = item[1]
-                                elif len(item) >= 3:
-                                    params = item[2]
-                                target_circuits.append((item[0], params))
-                        elif isinstance(item, QuantumCircuit):
-                            target_circuits.append((item, None))
-
-                if not target_circuits and hasattr(circuits, 'circuits'):
-                    target_circuits = [(qc, None) for qc in circuits.circuits]
-
-                for qc, params in target_circuits:
-                    cloned = qc.copy()
-                    base_name = getattr(qc, 'name', 'qc')
-                    if base_name in ("circuit-0", "circuit"):
-                        base_name = "qc"
-                    name = f"{caller_context}_{base_name}_{len(captured_circuits)}"
-                    if params is not None and cloned.parameters:
-                        try:
-                            import numpy as np
-                            param_dict = dict(
-                                zip(cloned.parameters, np.asarray(params).flatten())
-                            )
-                            cloned = cloned.assign_parameters(param_dict)
-                            print(f"    ✓ 파라미터 바인딩: {name} ({len(param_dict)}개)")
-                        except Exception as e:
-                            print(f"    ⚠ 파라미터 바인딩 실패: {e} → 미바인딩 상태로 저장")
-                    captured_circuits[name] = cloned
-
-                return original_func(self_obj, circuits, *args, **kwargs)
-            return patched_run
-
-        for module_name, class_name, method_name in targets:
             try:
-                mod = importlib.import_module(module_name)
-                cls = getattr(mod, class_name)
-                orig = getattr(cls, method_name)
-                original_methods.append((cls, method_name, orig))
-                setattr(cls, method_name, wrap_run(orig))
-            except (ImportError, AttributeError):
-                continue
-
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            with open(self.algorithm_file, 'r') as f:
-                code = f.read()
-            _apply_resource_limits()
-            exec(code, {'__name__': '__main__'})
-        except Exception as e:
-            print(f"  [Extractor] 실행 오류: {e}")
-        finally:
-            for cls, method_name, orig in original_methods:
-                setattr(cls, method_name, orig)
-
-        if not captured_circuits:
-            try:
-                exec_globals_scan = {'__name__': '__main__'}
-                import matplotlib
-                matplotlib.use('Agg')
-                with open(self.algorithm_file, 'r') as f:
-                    code = f.read()
-                _apply_resource_limits()
-                exec(code, exec_globals_scan)
-                for var_name, var_val in exec_globals_scan.items():
-                    if isinstance(var_val, QuantumCircuit) and var_val.num_qubits > 0:
-                        captured_circuits[var_name] = var_val.copy()
-                if captured_circuits:
-                    print(f"  [Extractor] fallback 스캔으로 {len(captured_circuits)}개 회로 발견")
+                qasm, nq, ng = _qc_to_qasm(cloned)
+                captured[name] = {{'qasm': qasm, 'ok': True, 'num_qubits': nq, 'num_gates': ng}}
             except Exception as e:
-                print(f"  [Extractor] fallback 스캔 오류: {e}")
+                captured[name] = {{'qasm': None, 'ok': False, 'error': str(e)}}
 
-        if not captured_circuits:
+        return original_func(self_obj, circuits, *args, **kwargs)
+    return patched_run
+
+original_methods = []
+for module_name, class_name, method_name in targets:
+    try:
+        mod = importlib.import_module(module_name)
+        cls = getattr(mod, class_name)
+        orig = getattr(cls, method_name)
+        original_methods.append((cls, method_name, orig))
+        setattr(cls, method_name, wrap_run(orig))
+    except (ImportError, AttributeError):
+        continue
+
+try:
+    with open(r'{alg_file}', 'r') as f:
+        code = f.read()
+    exec(code, {{'__name__': '__main__'}})
+except Exception:
+    pass
+finally:
+    for cls, method_name, orig in original_methods:
+        setattr(cls, method_name, orig)
+
+# fallback: 전역 변수에서 QuantumCircuit 스캔
+if not captured:
+    try:
+        scan_globals = {{'__name__': '__main__'}}
+        with open(r'{alg_file}', 'r') as f:
+            code = f.read()
+        exec(code, scan_globals)
+        for var_name, var_val in scan_globals.items():
+            if isinstance(var_val, QuantumCircuit) and var_val.num_qubits > 0:
+                try:
+                    qasm, nq, ng = _qc_to_qasm(var_val)
+                    captured[var_name] = {{'qasm': qasm, 'ok': True, 'num_qubits': nq, 'num_gates': ng}}
+                except Exception as e:
+                    captured[var_name] = {{'qasm': None, 'ok': False, 'error': str(e)}}
+    except Exception:
+        pass
+
+captured['__run_count__'] = run_count[0]
+print('__UQI_JSON__:' + json.dumps(captured))
+"""
+
+        data = self._run_subprocess(script, timeout=120)
+        if not data:
+            print(f"  [Extractor] Qiskit subprocess 실패")
+            return
+
+        if '__error__' in data:
+            print(f"  [Extractor] 실행 오류: {data['__error__']}")
+            return
+
+        run_count = data.pop('__run_count__', 0)
+
+        new_circuits = {}
+        for name, info in data.items():
+            if info.get('ok') and info.get('qasm'):
+                key = f"{prefix}{name}"
+                new_circuits[key] = info['qasm']
+                self.circuits[key] = info['qasm']
+
+        if not new_circuits:
             print(f"  [Extractor] 추출된 회로 없음")
             return
 
-        self.circuits = captured_circuits
-        print(f"  [Extractor] 추출 완료: {len(captured_circuits)}개 회로")
-        print(f"    회로 목록: {', '.join(captured_circuits.keys())}")
-        print(f"    Sampler.run() 호출: {self.qiskit_run_count}회")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 회로")
+        print(f"    회로 목록: {', '.join(new_circuits.keys())}")
+        print(f"    Sampler.run() 호출: {run_count}회")
 
     # ─────────────────────────────────────────
     # Perceval 추출 (monkey patch 기반, 인프로세스)
     # ─────────────────────────────────────────
 
-    def _extract_perceval_circuits(self):
+    def _extract_perceval_circuits(self, prefix: str = ""):
         import perceval as pcvl
         import matplotlib
         matplotlib.use('Agg')
@@ -749,9 +916,10 @@ except Exception as e:
             print(f"  [Extractor] 추출된 회로 없음")
             return
 
-        self.perceval_circuits = captured
+        for name, val in captured.items():
+            self.perceval_circuits[f"{prefix}{name}"] = val
         print(f"  [Extractor] 추출 완료: {len(captured)}개 회로")
-        print(f"    회로 목록: {', '.join(captured.keys())}")
+        print(f"    회로 목록: {', '.join(f'{prefix}{n}' for n in captured)}")
 
     # ─────────────────────────────────────────
     # Utility
@@ -759,6 +927,17 @@ except Exception as e:
 
     def get_total_call_count(self) -> int:
         return sum(self.qnode_call_counts.values())
+
+    # 커스텀 게이트 정의 (qelib1.inc에 없는 게이트)
+    _CUSTOM_GATE_DEFS = {
+        'sxdg':  'gate sxdg a { rx(-pi/2) a; }',
+        'iswap': 'gate iswap a, b { s a; s b; h a; cx a, b; cx b, a; h b; }',
+        'rzz':   'gate rzz(theta) a, b { cx a, b; rz(theta) b; cx a, b; }',
+        'rxx':   'gate rxx(theta) a, b { h a; h b; cx a, b; rz(theta) b; cx a, b; h b; h a; }',
+        'ryy':   'gate ryy(theta) a, b { rx(pi/2) a; rx(pi/2) b; cx a, b; rz(theta) b; cx a, b; rx(-pi/2) a; rx(-pi/2) b; }',
+        'ecr':   'gate ecr a, b { h b; cx a, b; rz(pi/4) b; cx a, b; h b; x a; h b; cx a, b; rz(-pi/4) b; cx a, b; h b; }',
+    }
+    _CUSTOM_GATE_ORDER = ['sxdg', 'iswap', 'rzz', 'rxx', 'ryy', 'ecr']
 
     def tape_to_openqasm(self, tape) -> str:
         """tape → OpenQASM 2.0 (게이트별 직접 변환, 행렬 계산 없음)"""
@@ -774,7 +953,7 @@ except Exception as e:
         wires_list = list(expanded.wires)
         wire_to_idx = {w: i for i, w in enumerate(wires_list)}
 
-        lines = [
+        header = [
             "OPENQASM 2.0;",
             'include "qelib1.inc";',
             f"qreg q[{num_wires}];",
@@ -784,11 +963,16 @@ except Exception as e:
         def w(wire):
             return f"q[{wire_to_idx[wire]}]"
 
+        # qelib1.inc에 포함된 단순 게이트 매핑
         single_map = {
             "Hadamard": "h", "PauliX": "x", "PauliY": "y", "PauliZ": "z",
             "S": "s", "T": "t", "SX": "sx", "Adjoint(S)": "sdg",
             "Adjoint(T)": "tdg", "CNOT": "cx", "CZ": "cz", "SWAP": "swap",
+            "CY": "cy", "CH": "ch",
         }
+
+        used_custom = set()
+        gate_lines = []
 
         for op in expanded.operations:
             name = op.name
@@ -797,38 +981,66 @@ except Exception as e:
             if name in single_map:
                 gate = single_map[name]
                 args = ", ".join(w(wire) for wire in wires)
-                lines.append(f"{gate} {args};")
+                gate_lines.append(f"{gate} {args};")
             elif name == "RX":
-                lines.append(f"rx({float(params[0])}) {w(wires[0])};")
+                gate_lines.append(f"rx({float(params[0])}) {w(wires[0])};")
             elif name == "RY":
-                lines.append(f"ry({float(params[0])}) {w(wires[0])};")
+                gate_lines.append(f"ry({float(params[0])}) {w(wires[0])};")
             elif name == "RZ":
-                lines.append(f"rz({float(params[0])}) {w(wires[0])};")
+                gate_lines.append(f"rz({float(params[0])}) {w(wires[0])};")
             elif name == "PhaseShift":
-                lines.append(f"p({float(params[0])}) {w(wires[0])};")
+                gate_lines.append(f"p({float(params[0])}) {w(wires[0])};")
             elif name == "U1":
-                lines.append(f"u1({float(params[0])}) {w(wires[0])};")
+                gate_lines.append(f"u1({float(params[0])}) {w(wires[0])};")
             elif name == "U2":
-                lines.append(f"u2({float(params[0])},{float(params[1])}) {w(wires[0])};")
+                gate_lines.append(f"u2({float(params[0])},{float(params[1])}) {w(wires[0])};")
             elif name == "U3":
-                lines.append(f"u3({float(params[0])},{float(params[1])},{float(params[2])}) {w(wires[0])};")
+                gate_lines.append(f"u3({float(params[0])},{float(params[1])},{float(params[2])}) {w(wires[0])};")
             elif name in ("Toffoli", "CCX"):
-                lines.append(f"ccx {w(wires[0])}, {w(wires[1])}, {w(wires[2])};")
+                gate_lines.append(f"ccx {w(wires[0])}, {w(wires[1])}, {w(wires[2])};")
             elif name in ("MultiControlledX", "ctrl"):
                 ctrl_args = ", ".join(w(wire) for wire in wires[:-1])
                 tgt_arg = w(wires[-1])
                 if len(wires) == 3:
-                    lines.append(f"ccx {ctrl_args}, {tgt_arg};")
+                    gate_lines.append(f"ccx {ctrl_args}, {tgt_arg};")
                 elif len(wires) == 2:
-                    lines.append(f"cx {ctrl_args}, {tgt_arg};")
+                    gate_lines.append(f"cx {ctrl_args}, {tgt_arg};")
             elif name == "CRX":
-                lines.append(f"crx({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+                gate_lines.append(f"crx({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
             elif name == "CRY":
-                lines.append(f"cry({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+                gate_lines.append(f"cry({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
             elif name == "CRZ":
-                lines.append(f"crz({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+                gate_lines.append(f"crz({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
             elif name == "Identity":
-                lines.append(f"id {w(wires[0])};")
+                gate_lines.append(f"id {w(wires[0])};")
+            elif name in ("Adjoint(SX)", "SXdg"):
+                used_custom.add('sxdg')
+                gate_lines.append(f"sxdg {w(wires[0])};")
+            elif name == "ISWAP":
+                used_custom.add('iswap')
+                gate_lines.append(f"iswap {w(wires[0])}, {w(wires[1])};")
+            elif name == "RZZ":
+                used_custom.add('rzz')
+                gate_lines.append(f"rzz({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+            elif name == "RXX":
+                used_custom.add('rxx')
+                gate_lines.append(f"rxx({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+            elif name == "RYY":
+                used_custom.add('ryy')
+                gate_lines.append(f"ryy({float(params[0])}) {w(wires[0])}, {w(wires[1])};")
+            elif name == "ECR":
+                used_custom.add('ecr')
+                gate_lines.append(f"ecr {w(wires[0])}, {w(wires[1])};")
+            elif name == "GlobalPhase":
+                pass  # 전역 위상 무시 (측정 결과에 영향 없음)
+            else:
+                print(f"  [QASM] 알 수 없는 게이트 스킵: {name}")
+                gate_lines.append(f"// unknown gate: {name}")
+
+        # 커스텀 게이트 정의를 헤더 직후 삽입 (의존 관계 순서 유지)
+        custom_defs = [self._CUSTOM_GATE_DEFS[cg]
+                       for cg in self._CUSTOM_GATE_ORDER if cg in used_custom]
+        lines = header + custom_defs + gate_lines
 
         for wire in wires_list:
             lines.append(f"measure {w(wire)} -> c[{wire_to_idx[wire]}];")

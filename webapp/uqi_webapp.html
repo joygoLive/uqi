@@ -1048,16 +1048,16 @@ function renderQPUGrid(qpus) {
       metricsHtml = `
         <div class="qpu-metrics">
           <div class="qpu-metric">
+            <div class="qpu-metric-label">Qubits</div>
+            <div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div>
+          </div>
+          <div class="qpu-metric">
             <div class="qpu-metric-label">2Q Error</div>
             <div class="qpu-metric-value ${q2eCls}">${q2e != null ? (q2e*100).toFixed(2)+'%' : '—'}</div>
           </div>
           <div class="qpu-metric">
             <div class="qpu-metric-label">T2</div>
             <div class="qpu-metric-value ${t2Cls}">${t2 != null ? t2+'μs' : '—'}</div>
-          </div>
-          <div class="qpu-metric">
-            <div class="qpu-metric-label">Qubits</div>
-            <div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div>
           </div>
           <div class="qpu-metric">
             <div class="qpu-metric-label">1Q Error</div>

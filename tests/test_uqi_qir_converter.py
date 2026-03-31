@@ -149,22 +149,6 @@ class TestConvertAll:
         conv.convert_all()
         assert "circ_a" not in conv.qasm_results
 
-    def test_TC029_large_circuit_skips_qir(self):
-        # 게이트 수 > 500 → QIR 변환 스킵
-        qc = QuantumCircuit(2, 2)
-        for _ in range(501):
-            qc.h(0)
-        qc.measure([0, 1], [0, 1])
-        from qiskit.qasm2 import dumps
-        qasm = dumps(qc)
-        conv, _ = _make_converter(
-            framework="PennyLane",
-            circuits={"big_circ": qasm}
-        )
-        with patch.object(conv, "_qasm_to_qir") as m:
-            conv.convert_all()
-            m.assert_not_called()
-
 
 # ─────────────────────────────────────────────────────────────
 # TC-03x: _convert_qiskit

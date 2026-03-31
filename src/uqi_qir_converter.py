@@ -34,16 +34,7 @@ class UQIQIRConverter:
                 self.qasm_results[name] = qasm
                 fw_tag = name.split('__')[0] if '__' in name else (frameworks[0] if frameworks else '?')
                 print(f"  [Converter] QASM 인계 완료 ({fw_tag}): {name} ({len(qasm)} chars)")
-                # QIR 변환: 게이트 수 상한 초과 시 스킵
-                try:
-                    from qiskit import QuantumCircuit
-                    qc = QuantumCircuit.from_qasm_str(qasm)
-                    if len(qc.data) > 500:
-                        print(f"    ⚠ 게이트 수 {len(qc.data)} > 500, QIR 변환 스킵")
-                    else:
-                        self._qasm_to_qir(name, qasm)
-                except Exception as e:
-                    print(f"    ⚠ QIR 변환 스킵: {e}")
+                self._qasm_to_qir(name, qasm)
             ok = [n for n in self.extractor.circuits if self.qasm_results.get(n)]
             print(f"  [Converter] 완료: {len(ok)}/{len(self.extractor.circuits)} QASM 확보")
 

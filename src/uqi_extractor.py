@@ -587,14 +587,237 @@ try:
     mod.__name__ = "__main__"
     spec.loader.exec_module(mod)
 
+    def _draw_to_qasm(draw_str, n_qubits_hint=None):
+        # cudaq.draw() ASCII art (multi-page) → OpenQASM 2.0
+        import re as _re
+
+        BOX_L  = '\u2524'   # ┤
+        BOX_R  = '\u251c'   # ├
+        CTRL   = '\u25cf'   # ●
+        CONT   = '\u00bb'   # » (line continuation marker)
+
+        # Step 1: strip trailing » from all lines
+        all_lines = [l.rstrip(CONT).rstrip() for l in draw_str.splitlines()]
+
+        # Step 2: split into page blocks by ### separators
+        blocks = []
+        cur = []
+        for line in all_lines:
+            if _re.match(r'^[#]{{5,}}', line.strip()):
+                if cur:
+                    blocks.append(cur)
+                cur = []
+            else:
+                cur.append(line)
+        if cur:
+            blocks.append(cur)
+
+        if not blocks:
+            return None
+
+        # Step 3: find qubit row offsets from first block (has "qN :" labels)
+        first = blocks[0]
+        qubit_row = {{}}   # q_idx -> row index within first block
+        for ri, line in enumerate(first):
+            mm = _re.match(r'^\s*q(\d+)\s*:\s*(.*)', line)
+            if mm:
+                qubit_row[int(mm.group(1))] = ri
+        if not qubit_row:
+            return None
+
+        n_q = max(qubit_row.keys()) + 1
+        if n_qubits_hint and n_qubits_hint > n_q:
+            n_q = n_qubits_hint
+
+        # Step 4: build per-qubit wire by concatenating across pages
+        # Continuation pages have the same row structure but offset by +1
+        # (one extra leading line before the first qubit row)
+        qubit_wires = {{}}
+        for qi, ri in qubit_row.items():
+            mm = _re.match(r'^\s*q\d+\s*:\s*(.*)', first[ri])
+            qubit_wires[qi] = mm.group(1) if mm else ''
+        for block in blocks[1:]:
+            for qi, ri in qubit_row.items():
+                cont_ri = ri + 1
+                if cont_ri < len(block):
+                    qubit_wires[qi] += block[cont_ri]
+
+        # Step 5: parse each qubit wire → QASM operations
+        # gate name map (cudaq draw uses lowercase names)
+        single_q = {{
+            'h':'h','x':'x','y':'y','z':'z','s':'s','t':'t',
+            'sdg':'sdg','tdg':'tdg','rx':'rx','ry':'ry','rz':'rz',
+            'r1':'p','p':'p','u1':'u1',
+            'H':'h','X':'x','Y':'y','Z':'z','S':'s','T':'t',
+        }}
+        gate_lines = []
+        meas_lines = []
+
+        for qi in sorted(qubit_wires.keys()):
+            wire = qubit_wires[qi]
+            pos = 0
+            while pos < len(wire):
+                box_p  = wire.find(BOX_L, pos)
+                ctrl_p = wire.find(CTRL, pos)
+                meas_p = -1
+                for mp in range(pos, len(wire)):
+                    if wire[mp] == 'M':
+                        meas_p = mp
+                        break
+                cands = [(p, t) for p, t in
+                         [(box_p,'box'),(ctrl_p,'ctrl'),(meas_p,'meas')] if p >= 0]
+                if not cands:
+                    break
+                nxt, ev = min(cands, key=lambda x: x[0])
+
+                if ev == 'box':
+                    end = wire.find(BOX_R, nxt + 1)
+                    if end < 0:
+                        pos = nxt + 1
+                        continue
+                    gs = wire[nxt+1:end].strip()
+                    pos = end + 1
+                    # Skip CNOT target x (no params, lowercase)
+                    if gs.lower() == 'x':
+                        continue
+                    # Skip measure boxes (handled as 'M' or fallback)
+                    if gs.lower() in ('mz', 'mx', 'my', 'm'):
+                        meas_lines.append('measure q[%d] -> c[%d];' % (qi, qi))
+                        continue
+                    pmm = _re.match(r'([A-Za-z]\w*)\((.+?)\)', gs)
+                    if pmm:
+                        gname = pmm.group(1)
+                        ps    = pmm.group(2).split('...')[0].strip().rstrip(',')
+                        qg    = single_q.get(gname, gname.lower())
+                        try:
+                            angle = float(ps)
+                            gate_lines.append('%s(%.10g) q[%d];' % (qg, angle, qi))
+                        except Exception:
+                            gate_lines.append('%s(0) q[%d];' % (qg, qi))
+                    else:
+                        qg = single_q.get(gs, None)
+                        if qg and qg in ('h','x','y','z','s','t','sdg','tdg'):
+                            gate_lines.append('%s q[%d];' % (qg, qi))
+
+                elif ev == 'ctrl':
+                    target = qi + 1
+                    for tq in [qi + 1, qi - 1]:
+                        if tq in qubit_wires and 0 <= tq < n_q:
+                            tw = qubit_wires[tq]
+                            s2 = max(0, nxt - 3)
+                            e2 = min(len(tw), nxt + 10)
+                            if _re.search(BOX_L + '[ ]*[Xx][ ]*' + BOX_R, tw[s2:e2]):
+                                target = tq
+                                break
+                    if 0 <= target < n_q:
+                        gate_lines.append('cx q[%d], q[%d];' % (qi, target))
+                    pos = nxt + 1
+
+                else:   # 'M' measurement marker
+                    meas_lines.append('measure q[%d] -> c[%d];' % (qi, qi))
+                    pos = nxt + 1
+
+        if not meas_lines:
+            meas_lines = ['measure q[%d] -> c[%d];' % (i, i) for i in range(n_q)]
+        header = [
+            "OPENQASM 2.0;",
+            'include "qelib1.inc";',
+            "qreg q[%d];" % n_q,
+            "creg c[%d];" % n_q,
+        ]
+        return '\\n'.join(header + gate_lines + meas_lines)
+
+    def _qir_to_qasm(qir_ll, n_qubits):
+        # QIR LLVM IR to OpenQASM 2.0 (CUDAQ gate pattern parsing)
+        import re as _re
+        header = [
+            "OPENQASM 2.0;",
+            'include "qelib1.inc";',
+            "qreg q[%d];" % n_qubits,
+            "creg c[%d];" % n_qubits,
+        ]
+        one_q   = {{'h':'h','x':'x','y':'y','z':'z','s':'s','t':'t','sdg':'sdg','tdg':'tdg'}}
+        two_q   = {{'cnot':'cx','cz':'cz','swap':'swap'}}
+        param_q = {{'rx':'rx','ry':'ry','rz':'rz','r1':'p','u1':'u1'}}
+        def q_idx(ref):
+            mm = _re.search(r'inttoptr\s*\(\s*i64\s+(\d+)', ref)
+            if mm:
+                return int(mm.group(1))
+            mm = _re.search(r'i64\s+(\d+)\s+to\s+%Qubit', ref)
+            return int(mm.group(1)) if mm else 0
+        gate_lines    = []
+        measure_lines = []
+        for line in qir_ll.splitlines():
+            line = line.strip()
+            mm = _re.match(
+                r'(?:tail\s+)?call\s+void\s+@__quantum__qis__(\w+?)(?:__body)?\s*\((.+)\)',
+                line
+            )
+            if not mm:
+                continue
+            gate   = mm.group(1).lower()
+            args_s = mm.group(2)
+            q_refs = _re.findall(r'%Qubit\*[^,)]*', args_s)
+            if gate in one_q and q_refs:
+                gate_lines.append('%s q[%d];' % (one_q[gate], q_idx(q_refs[0])))
+            elif gate in two_q and len(q_refs) >= 2:
+                gate_lines.append('%s q[%d], q[%d];' % (
+                    two_q[gate], q_idx(q_refs[0]), q_idx(q_refs[1])))
+            elif gate in param_q and q_refs:
+                pm = _re.search(r'double\s+(-?[\d.e+\-]+)', args_s)
+                if pm:
+                    gate_lines.append('%s(%s) q[%d];' % (
+                        param_q[gate], pm.group(1), q_idx(q_refs[0])))
+            elif gate in ('mz', 'mx', 'my') and q_refs:
+                q = q_idx(q_refs[0])
+                if q < n_qubits:
+                    measure_lines.append('measure q[%d] -> c[%d];' % (q, q))
+        if measure_lines:
+            gate_lines.extend(measure_lines)
+        else:
+            gate_lines.extend('measure q[%d] -> c[%d];' % (i, i) for i in range(n_qubits))
+        return '\\n'.join(header + gate_lines)
+
+    def _extract_n_qubits_from_qir(qir_ll):
+        # QIR에서 큐비트 수 추출 (inttoptr literal 패턴)
+        import re as _re
+        mm = _re.search(r'__quantum__rt__qubit_allocate_array[^(]*\(\s*i64\s+(\d+)', qir_ll)
+        if mm:
+            return int(mm.group(1))
+        indices = [int(x) for x in _re.findall(r'i64\s+(\d+)\s+to\s+%Qubit', qir_ll)]
+        return max(indices) + 1 if indices else 1
+
     results = {{}}
     for name, info in captured.items():
         try:
             qasm = cudaq.translate(info['kernel'], *info['args'], format="openqasm2")
             results[name] = {{'qasm': qasm, 'ok': True}}
-        except Exception as e:
-            # openqasm2 변환 실패 시 더미 QASM 대신 오류 반환
-            results[name] = {{'qasm': None, 'ok': False, 'error': f'openqasm2 변환 실패: {{e}}'}}
+        except Exception as e_openqasm:
+            # openqasm2 실패 → draw() 기반 재구성 (1순위)
+            int_args = [a for a in info['args'] if isinstance(a, int)]
+            n_qubits_hint = max(int_args) if int_args else None
+            try:
+                draw_str = cudaq.draw(info['kernel'], *info['args'])
+                qasm = _draw_to_qasm(draw_str, n_qubits_hint)
+                if qasm:
+                    results[name] = {{'qasm': qasm, 'ok': True, 'from_draw': True,
+                                      'note': 'openqasm2 미지원 → draw() 기반 재구성'}}
+                else:
+                    raise ValueError("draw() parsing 실패")
+            except Exception as e_draw:
+                # draw 실패 → QIR 폴백 (2순위)
+                try:
+                    qir_ll = cudaq.translate(info['kernel'], *info['args'], format="qir")
+                    if isinstance(qir_ll, bytes):
+                        qir_ll = qir_ll.decode('utf-8')
+                    n_qubits = n_qubits_hint or _extract_n_qubits_from_qir(qir_ll)
+                    qasm = _qir_to_qasm(qir_ll, n_qubits)
+                    results[name] = {{'qasm': qasm, 'ok': True, 'from_qir': True,
+                                      'note': 'openqasm2 미지원 → QIR 변환 (동적 qubit 할당)'}}
+                except Exception as e_qir:
+                    results[name] = {{'qasm': None, 'ok': False,
+                                      'error': 'openqasm2: %s / draw: %s / qir: %s' % (
+                                          str(e_openqasm), str(e_draw), str(e_qir))}}
 
     print('__UQI_JSON__:' + json.dumps(results))
 
@@ -617,6 +840,8 @@ except Exception as e:
                 key = f"{prefix}{name}"
                 new_circuits[key] = info['qasm']
                 self.circuits[key] = info['qasm']
+                if info.get('from_qir'):
+                    print(f"  [Extractor] CUDAQ QIR→QASM 변환 ({name}): {info.get('note', '')}")
             elif not info.get('ok') and info.get('error'):
                 print(f"  [Extractor] CUDAQ 커널 변환 실패 ({name}): {info['error']}")
 

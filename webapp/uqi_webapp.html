@@ -2052,6 +2052,7 @@ function renderAnalyze(data, el) {
   for (const [name, c] of Object.entries(circuits)) {
     if (c.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(c.error)}</div>`; continue; }
     const p = c.profile||{};
+    const qasmId = `qasm-${name.replace(/\W/g,'_')}`;
     html += `
       <div class="section-divider">${name}</div>
       <div class="metric-grid">
@@ -2062,9 +2063,28 @@ function renderAnalyze(data, el) {
         <div class="metric-item"><div class="metric-label">T2 Ratio</div><div class="metric-value ${c.t2_ratio>0.5?'bad':c.t2_ratio>0.2?'warn':'good'}">${c.t2_ratio??'—'}</div></div>
         <div class="metric-item"><div class="metric-label">Param?</div><div class="metric-value neutral">${p.is_parameterized?'Yes':'No'}</div></div>
       </div>
-      ${p.ops?`<div class="gates-list">${Object.entries(p.ops).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`:''}`;
+      ${p.ops?`<div class="gates-list">${Object.entries(p.ops).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`:''}
+      ${c.qasm ? `
+      <div style="margin-top:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <button onclick="document.getElementById('${qasmId}').style.display=document.getElementById('${qasmId}').style.display==='none'?'block':'none';this.textContent=this.textContent.includes('▼')?'QASM ▲':'QASM ▼'"
+            style="font-size:10px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer">QASM ▼</button>
+          <button onclick="_downloadQasm('${escHtml(name)}', \`${escHtml(c.qasm)}\`)"
+            style="font-size:10px;color:var(--accent);background:transparent;border:1px solid var(--accent);border-radius:4px;padding:2px 8px;cursor:pointer">↓ Download .qasm</button>
+        </div>
+        <pre id="${qasmId}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:10px;line-height:1.5;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre;color:var(--text2)">${escHtml(c.qasm)}</pre>
+      </div>` : ''}`;
   }
   return html;
+}
+
+function _downloadQasm(name, qasm) {
+  const blob = new Blob([qasm], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${name}.qasm`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 // ── Optimize ──

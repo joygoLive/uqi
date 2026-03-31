@@ -355,6 +355,7 @@ async def uqi_analyze(
                         "t2_ratio":  t2_ratio,
                         "qpu_name":  qpu_name,
                         "framework": framework,
+                        "qasm":      qasm,
                     }
                     _should_cache = True
                 except Exception as e:

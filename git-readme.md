@@ -16,7 +16,8 @@ pip install -r requirements.txt
 npm install
 ```
 
-> 커밋 메시지 규칙(`feat:` / `fix:` / `chore:` / `docs:` / `wip:`)을 지키지 않으면 커밋이 거부됩니다.
+> 커밋 메시지 규칙(`feat:` / `fix:` / `chore:` / `docs:`...)을 지키지 않으면 커밋이 거부됩니다.
+npx commitlint --print-config # 전체 리스트 출력
 
 `.env` 파일은 Sean에게 별도 수령 (repo에 포함 안 됨)
 

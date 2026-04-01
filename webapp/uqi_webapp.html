@@ -368,9 +368,9 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
     <div class="compare-section">
       <div class="compare-title">QPU Comparison</div>
       <div class="compare-tabs">
-        <button class="compare-tab active" onclick="showCompare('2q_error',this)">2Q Error</button>
+        <button class="compare-tab active" onclick="showCompare('qubits',this)">Qubits</button>
+        <button class="compare-tab" onclick="showCompare('2q_error',this)">2Q Error</button>
         <button class="compare-tab" onclick="showCompare('t2',this)">T2 Coherence</button>
-        <button class="compare-tab" onclick="showCompare('qubits',this)">Qubits</button>
         <button class="compare-tab" onclick="showCompare('1q_error',this)">1Q Error</button>
       </div>
       <div id="compare-chart" class="bar-chart">
@@ -861,7 +861,7 @@ function switchMain(name,el) {
 // QPU Dashboard
 // ─────────────────────────────────────────────────────────
 let _qpuData = {};
-let _compareMetric = '2q_error';
+let _compareMetric = 'qubits';
 
 const _QPU_CACHE_KEY = 'uqi_qpu_cache_v4';
 const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
@@ -1016,21 +1016,21 @@ function renderQPUGrid(qpus) {
           <div class="qpu-metric"><div class="qpu-metric-label">Photon Loss</div><div class="qpu-metric-value ${ps.photon_loss==='0%'?'good':'warn'}" style="font-size:12px">${ps.photon_loss ?? '—'}</div></div>
         </div>`;
       } else if (_typeKey === 'quera') {
-      const t1 = d.avg_t1_ms ? (d.avg_t1_ms * 1000).toFixed(0) : null;
+      const t1 = fmtMs(d.avg_t1_ms);
       metricsHtml = `
         <div class="qpu-metrics">
           <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">Coherence</div><div class="qpu-metric-value ${t1 ? 'good' : 'dim'}">${t1 ? t1+'μs' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Coherence</div><div class="qpu-metric-value ${t1 ? 'good' : 'dim'}">${t1 ? t1.text+t1.unit : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Rabi Max</div><div class="qpu-metric-value neutral">${d.rabi_freq_max_mhz ? d.rabi_freq_max_mhz.toFixed(1)+'MHz' : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
         </div>`;
     } else if (_typeKey === 'ionq') {
-      const t1 = d.avg_t1_ms ? (d.avg_t1_ms * 1000).toFixed(0) : null;
+      const t1 = fmtMs(d.avg_t1_ms);
       const q2e = d.avg_2q_error;
       metricsHtml = `
         <div class="qpu-metrics">
           <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">T1</div><div class="qpu-metric-value good">${t1 ? t1+'μs' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">T1</div><div class="qpu-metric-value good">${t1 ? t1.text+t1.unit : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">2Q Error</div><div class="qpu-metric-value ${q2e != null ? (q2e < 0.01 ? 'good' : 'warn') : 'dim'}">${q2e != null ? (q2e*100).toFixed(2)+'%' : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
         </div>`;
@@ -1042,9 +1042,10 @@ function renderQPUGrid(qpus) {
       metricsHtml = `<div style="font-size:10px;color:var(--text3);margin-top:6px">No calibration data</div>`;
     } else {
       const q2e = d.avg_2q_error;
-      const t2  = d.avg_t2_ms ? (d.avg_t2_ms*1000).toFixed(0) : null;
+      const t2r = fmtMs(d.avg_t2_ms);
+      const t2us = d.avg_t2_ms ? d.avg_t2_ms * 1000 : null;
       const q2eCls = q2e == null ? 'dim' : q2e < 0.01 ? 'good' : q2e < 0.03 ? 'warn' : 'bad';
-      const t2Cls  = t2  == null ? 'dim' : t2 > 100 ? 'good' : t2 > 30 ? 'warn' : 'bad';
+      const t2Cls  = t2us == null ? 'dim' : t2us > 100 ? 'good' : t2us > 30 ? 'warn' : 'bad';
       metricsHtml = `
         <div class="qpu-metrics">
           <div class="qpu-metric">
@@ -1057,7 +1058,7 @@ function renderQPUGrid(qpus) {
           </div>
           <div class="qpu-metric">
             <div class="qpu-metric-label">T2</div>
-            <div class="qpu-metric-value ${t2Cls}">${t2 != null ? t2+'μs' : '—'}</div>
+            <div class="qpu-metric-value ${t2Cls}">${t2r ? t2r.text+t2r.unit : '—'}</div>
           </div>
           <div class="qpu-metric">
             <div class="qpu-metric-label">1Q Error</div>
@@ -1105,7 +1106,7 @@ function renderCompareChart(metric) {
     const d = _qpuData[qpu];
     if (!d) return null;
     if (metric === '2q_error') return d.avg_2q_error;
-    if (metric === 't2') return d.avg_t2_ms ? d.avg_t2_ms * 1000 : null;
+    if (metric === 't2') return d.avg_t2_ms ?? null;
     if (metric === 'qubits') return d.num_qubits;
     if (metric === '1q_error') return d.avg_1q_error;
     return null;
@@ -1115,7 +1116,7 @@ function renderCompareChart(metric) {
     const v = getValue(qpu);
     if (v == null) return '—';
     if (metric === '2q_error' || metric === '1q_error') return (v*100).toFixed(3)+'%';
-    if (metric === 't2') return v.toFixed(0)+'μs';
+    if (metric === 't2') { const r=fmtMs(v); return r ? r.text+r.unit : '—'; }
     if (metric === 'qubits') return String(v);
   };
 
@@ -1770,39 +1771,52 @@ function renderQPUDetail(container, qpu, d) {
     : qpu.startsWith('rigetti') ? 'rigetti'
     : qpu.startsWith('iqm') ? 'iqm' : 'ibm';
 
-  const t1  = d.avg_t1_ms ? (d.avg_t1_ms*1000).toFixed(1) : '—';
-  const t2  = d.avg_t2_ms ? (d.avg_t2_ms*1000).toFixed(1) : '—';
+  const t1r = fmtMs(d.avg_t1_ms);
+  const t2r = fmtMs(d.avg_t2_ms);
   const q1e = errorRate(d.avg_1q_error);
   const q2e = errorRate(d.avg_2q_error);
   const roe = errorRate(d.avg_ro_error);
+
+  const _vendorLinks = {
+    ibm:     {label: 'IBM Quantum',        url: 'https://quantum.ibm.com/services/resources'},
+    iqm:     {label: 'IQM Resonance',        url: 'https://resonance.meetiqm.com/'},
+    ionq:    {label: 'IonQ Quantum Cloud', url: 'https://ionq.com/quantum-systems'},
+    rigetti: {label: 'Rigetti QCS',        url: 'https://qcs.rigetti.com/'},
+    quera:   {label: 'QuEra Aquila',       url: 'https://www.quera.com/aquila'},
+  };
+  const _vlink = _vendorLinks[_vk];
+  const vendorLinkHtml = _vlink
+    ? `<div style="margin-top:12px">
+        <a href="${_vlink.url}" target="_blank" rel="noopener noreferrer"
+           style="font-size:11px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;opacity:0.85">
+          ↗ ${_vlink.label} — 토폴로지 및 세부 스펙 확인
+        </a>
+       </div>`
+    : '';
 
   let calGridHtml = '';
   if (_vk === 'quera') {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
-      <div class="cal-item"><div class="cal-label">Coherence</div><div class="cal-value good">${t1}<span class="cal-unit">μs</span></div></div>
-      <div class="cal-item"><div class="cal-label">Rabi Max</div><div class="cal-value neutral">${d.rabi_freq_max_mhz?.toFixed(1)??'—'}<span class="cal-unit">MHz</span></div></div>
-      <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:13px">All-to-All</div></div>
-      <div class="cal-item"><div class="cal-label">Type</div><div class="cal-value neutral" style="font-size:13px">Neutral Atom</div></div>
-      <div class="cal-item"><div class="cal-label">Mode</div><div class="cal-value neutral" style="font-size:13px">Analog</div></div>`;
+      <div class="cal-item"><div class="cal-label">Coherence</div><div class="cal-value good">${t1r ? t1r.text+'<span class="cal-unit">'+t1r.unit+'</span>' : '—'}</div></div>
+      <div class="cal-item"><div class="cal-label">Rabi Max</div><div class="cal-value neutral">${d.rabi_freq_max_mhz?.toFixed(1)??'—'}<span class="cal-unit">MHz</span></div></div>`;
   } else if (_vk === 'ionq') {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
-      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value good">${t1}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value good">${t1r ? t1r.text+'<span class="cal-unit">'+t1r.unit+'</span>' : '—'}</div></div>
       <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
       <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
-      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${d.avg_2q_ns?.toFixed(0)??'—'}<span class="cal-unit">ns</span></div></div>
-      <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:13px">All-to-All</div></div>`;
+      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${(r=>r?r.text+'<span class="cal-unit">'+r.unit+'</span>':'—')(fmtNs(d.avg_2q_ns))}</div></div>`;
   } else {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
-      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value neutral">${t1}<span class="cal-unit">μs</span></div></div>
-      <div class="cal-item"><div class="cal-label">T2</div><div class="cal-value neutral">${t2}<span class="cal-unit">μs</span></div></div>
+      <div class="cal-item"><div class="cal-label">T1</div><div class="cal-value neutral">${t1r ? t1r.text+'<span class="cal-unit">'+t1r.unit+'</span>' : '—'}</div></div>
+      <div class="cal-item"><div class="cal-label">T2</div><div class="cal-value neutral">${t2r ? t2r.text+'<span class="cal-unit">'+t2r.unit+'</span>' : '—'}</div></div>
       <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
       <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
       <div class="cal-item"><div class="cal-label">RO Error</div><div class="cal-value ${roe.cls}">${roe.text}</div></div>
-      <div class="cal-item"><div class="cal-label">1Q Gate</div><div class="cal-value neutral">${d.avg_1q_ns?.toFixed(1)??'—'}<span class="cal-unit">ns</span></div></div>
-      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${d.avg_2q_ns?.toFixed(1)??'—'}<span class="cal-unit">ns</span></div></div>`;
+      <div class="cal-item"><div class="cal-label">1Q Gate</div><div class="cal-value neutral">${(r=>r?r.text+'<span class="cal-unit">'+r.unit+'</span>':'—')(fmtNs(d.avg_1q_ns))}</div></div>
+      <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${(r=>r?r.text+'<span class="cal-unit">'+r.unit+'</span>':'—')(fmtNs(d.avg_2q_ns))}</div></div>`;
   }
 
   container.innerHTML = `
@@ -1816,6 +1830,7 @@ function renderQPUDetail(container, qpu, d) {
       </div>
       <div class="cal-grid">${calGridHtml}</div>
       ${d.basis_gates ? `<div class="gates-list">${d.basis_gates.map(g=>`<span class="gate-tag">${g}</span>`).join('')}</div>` : ''}
+      ${vendorLinkHtml}
       <div style="margin-top:10px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? new Date(d.last_updated).toLocaleString() : '—'}</div>
     </div>`;
 }
@@ -1853,8 +1868,10 @@ async function loadQPUSelectors() {
       const el = document.getElementById(id);
       if (!el) return;
       const cur = el.value;
-      el.innerHTML = qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+      const prefix = id === 'rag-qpu' ? '<option value="">All QPUs</option>' : '';
+      el.innerHTML = prefix + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
       if ([...el.options].some(o=>o.value===cur)) el.value=cur;
+      else if (id === 'rag-qpu') el.value = '';
     });
     // QPU Submit selector
     const qpuSel = document.getElementById('qpu-qpu');
@@ -2568,6 +2585,30 @@ function renderRAG(body, text, queryType) {
 // ─────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────
+// Auto-selects best unit for a time value stored in ms.
+// Returns {text, unit} e.g. {text:'100', unit:'s'} or null if ms is null.
+function fmtMs(ms) {
+  if (ms == null) return null;
+  if (ms >= 1000) {
+    const s = ms / 1000;
+    return {text: s >= 100 ? s.toFixed(0) : s >= 10 ? s.toFixed(1) : s.toFixed(2), unit: 's'};
+  }
+  if (ms >= 1) {
+    return {text: ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms.toFixed(2), unit: 'ms'};
+  }
+  const us = ms * 1000;
+  return {text: us >= 100 ? us.toFixed(0) : us.toFixed(1), unit: 'μs'};
+}
+// Auto-selects best unit for a time value stored in ns.
+// Returns {text, unit} e.g. {text:'600', unit:'μs'} or null if ns is null.
+function fmtNs(ns) {
+  if (ns == null) return null;
+  if (ns >= 1000) {
+    const us = ns / 1000;
+    return {text: us >= 100 ? us.toFixed(0) : us >= 10 ? us.toFixed(1) : us.toFixed(1), unit: 'μs'};
+  }
+  return {text: ns.toFixed(0), unit: 'ns'};
+}
 function errorRate(v) {
   if (v==null) return {text:'—',cls:''};
   const p=(v*100).toFixed(3)+'%';

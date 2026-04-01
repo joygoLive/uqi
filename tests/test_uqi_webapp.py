@@ -536,5 +536,217 @@ class TestRenderQECAnalyze:
         assert "T2 ratio too high" in result
 
 
+# ─────────────────────────────────────────────────────────────
+# TC-09x: fmtMs (ms → 자동 단위 변환)
+# ─────────────────────────────────────────────────────────────
+
+class TestFmtMs:
+
+    def test_TC091_null_returns_null(self, page):
+        result = page.evaluate("fmtMs(null)")
+        assert result is None
+
+    def test_TC092_large_ms_converts_to_seconds(self, page):
+        """IonQ T1: 100000ms → 100s"""
+        result = page.evaluate("fmtMs(100000)")
+        assert result["unit"] == "s"
+        assert result["text"] == "100"
+
+    def test_TC093_medium_ms_stays_ms(self, page):
+        """QuEra T1: 75ms → 75.0ms"""
+        result = page.evaluate("fmtMs(75)")
+        assert result["unit"] == "ms"
+
+    def test_TC094_small_ms_converts_to_us(self, page):
+        """IBM T1: 0.155ms → 155μs"""
+        result = page.evaluate("fmtMs(0.155)")
+        assert result["unit"] == "μs"
+        assert result["text"] == "155"
+
+    def test_TC095_very_small_ms_converts_to_us(self, page):
+        """IQM T2: 0.0074ms → 7.4μs"""
+        result = page.evaluate("fmtMs(0.0074)")
+        assert result["unit"] == "μs"
+        assert result["text"] == "7.4"
+
+    def test_TC096_threshold_1000ms_is_seconds(self, page):
+        result = page.evaluate("fmtMs(1000)")
+        assert result["unit"] == "s"
+
+    def test_TC097_threshold_1ms_is_ms(self, page):
+        result = page.evaluate("fmtMs(1)")
+        assert result["unit"] == "ms"
+
+    def test_TC098_text_is_string(self, page):
+        result = page.evaluate("typeof fmtMs(0.155).text")
+        assert result == "string"
+
+    def test_TC099_large_seconds_no_decimal(self, page):
+        """100s 이상은 소수점 없이"""
+        result = page.evaluate("fmtMs(500000)")
+        assert result["unit"] == "s"
+        assert "." not in result["text"]
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-10x: fmtNs (ns → 자동 단위 변환)
+# ─────────────────────────────────────────────────────────────
+
+class TestFmtNs:
+
+    def test_TC101_null_returns_null(self, page):
+        result = page.evaluate("fmtNs(null)")
+        assert result is None
+
+    def test_TC102_large_ns_converts_to_us(self, page):
+        """IonQ 2Q gate: 600000ns → 600μs"""
+        result = page.evaluate("fmtNs(600000)")
+        assert result["unit"] == "μs"
+        assert result["text"] == "600"
+
+    def test_TC103_small_ns_stays_ns(self, page):
+        """IBM 2Q gate: 68ns → 68ns"""
+        result = page.evaluate("fmtNs(68)")
+        assert result["unit"] == "ns"
+        assert result["text"] == "68"
+
+    def test_TC104_threshold_1000ns_is_us(self, page):
+        result = page.evaluate("fmtNs(1000)")
+        assert result["unit"] == "μs"
+
+    def test_TC105_threshold_999ns_is_ns(self, page):
+        result = page.evaluate("fmtNs(999)")
+        assert result["unit"] == "ns"
+
+    def test_TC106_text_is_string(self, page):
+        result = page.evaluate("typeof fmtNs(68).text")
+        assert result == "string"
+
+    def test_TC107_fractional_us_one_decimal(self, page):
+        """1500ns → 1.5μs (소수점 1자리)"""
+        result = page.evaluate("fmtNs(1500)")
+        assert result["unit"] == "μs"
+        assert result["text"] == "1.5"
+
+    def test_TC108_sub10_us_no_trailing_zero(self, page):
+        """5000ns → 5.0μs (불필요한 자릿수 없음)"""
+        result = page.evaluate("fmtNs(5000)")
+        assert result["unit"] == "μs"
+        assert result["text"] == "5.0"
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-11x: QPU 비교 탭 순서 및 기본 메트릭
+# ─────────────────────────────────────────────────────────────
+
+class TestCompareTab:
+
+    def test_TC111_default_metric_is_qubits(self, page):
+        result = page.evaluate("_compareMetric")
+        assert result == "qubits"
+
+    def test_TC112_first_compare_tab_is_qubits(self, page):
+        result = page.evaluate("""
+            document.querySelector('.compare-tab').textContent.trim()
+        """)
+        assert result == "Qubits"
+
+    def test_TC113_first_compare_tab_has_active_class(self, page):
+        result = page.evaluate("""
+            document.querySelector('.compare-tab').classList.contains('active')
+        """)
+        assert result is True
+
+    def test_TC114_2q_error_tab_is_second(self, page):
+        result = page.evaluate("""
+            document.querySelectorAll('.compare-tab')[1].textContent.trim()
+        """)
+        assert result == "2Q Error"
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-12x: renderQPUDetail — 벤더 링크 및 토폴로지 제거
+# ─────────────────────────────────────────────────────────────
+
+class TestRenderQPUDetail:
+
+    def _render(self, page, qpu, data):
+        return page.evaluate(f"""
+            (() => {{
+                const c = document.createElement('div');
+                renderQPUDetail(c, '{qpu}', {data});
+                return c.innerHTML;
+            }})()
+        """)
+
+    def test_TC121_quera_no_topology(self, page):
+        html = self._render(page, 'quera_aquila',
+            '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
+        assert "Topology" not in html
+
+    def test_TC122_quera_no_type(self, page):
+        html = self._render(page, 'quera_aquila',
+            '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
+        assert ">Type<" not in html
+
+    def test_TC123_quera_no_mode(self, page):
+        html = self._render(page, 'quera_aquila',
+            '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
+        assert ">Mode<" not in html
+
+    def test_TC124_ionq_no_topology(self, page):
+        html = self._render(page, 'ionq_forte1',
+            '{"num_qubits":36,"avg_t1_ms":100000,"avg_1q_error":0.001,"avg_2q_error":0.01,"avg_2q_ns":600000}')
+        assert "Topology" not in html
+
+    def test_TC125_quera_has_vendor_link(self, page):
+        html = self._render(page, 'quera_aquila',
+            '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
+        assert "quera.com" in html
+
+    def test_TC126_ionq_has_vendor_link(self, page):
+        html = self._render(page, 'ionq_forte1',
+            '{"num_qubits":36,"avg_t1_ms":100000,"avg_1q_error":0.001,"avg_2q_error":0.01,"avg_2q_ns":600000}')
+        assert "ionq.com" in html
+
+    def test_TC127_ibm_has_vendor_link(self, page):
+        html = self._render(page, 'ibm_fez',
+            '{"num_qubits":156,"avg_t1_ms":0.155,"avg_t2_ms":0.110,"avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,"avg_1q_ns":24,"avg_2q_ns":68}')
+        assert "quantum.ibm.com" in html
+
+    def test_TC128_iqm_has_vendor_link(self, page):
+        html = self._render(page, 'iqm_garnet',
+            '{"num_qubits":20,"avg_t1_ms":0.034,"avg_t2_ms":0.007,"avg_1q_error":0.001,"avg_2q_error":0.007,"avg_ro_error":0.005,"avg_1q_ns":16,"avg_2q_ns":40}')
+        assert "meetiqm.com" in html
+
+    def test_TC129_vendor_link_opens_new_tab(self, page):
+        html = self._render(page, 'ibm_fez',
+            '{"num_qubits":156,"avg_t1_ms":0.155,"avg_t2_ms":0.110,"avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,"avg_1q_ns":24,"avg_2q_ns":68}')
+        assert 'target="_blank"' in html
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-13x: Knowledge 페이지 rag-qpu 기본값
+# ─────────────────────────────────────────────────────────────
+
+class TestRagQpuDefault:
+
+    def test_TC131_rag_qpu_initial_value_is_empty(self, page):
+        result = page.evaluate("document.getElementById('rag-qpu').value")
+        assert result == ""
+
+    def test_TC132_rag_qpu_first_option_is_all(self, page):
+        result = page.evaluate("""
+            document.getElementById('rag-qpu').options[0].textContent.trim()
+        """)
+        assert result == "All QPUs"
+
+    def test_TC133_rag_qpu_first_option_value_is_empty(self, page):
+        result = page.evaluate("""
+            document.getElementById('rag-qpu').options[0].value
+        """)
+        assert result == ""
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

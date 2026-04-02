@@ -11,7 +11,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-CALIBRATION_DB = "uqi_calibration.db"
+# src/ 기준 상위 디렉토리의 data/ 폴더로 고정 (실행 위치 무관)
+CALIBRATION_DB = str(Path(__file__).parent.parent / "data" / "uqi_calibration.db")
 
 
 def _compute_layout_positions(coupling_edges: list) -> dict:

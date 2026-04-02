@@ -60,6 +60,7 @@ CALIBRATION_TTL = {
     "rigetti":  timedelta(hours=24),
     "quera":    timedelta(hours=48),
     "quandela": timedelta(hours=72),
+    "pasqal":   timedelta(hours=72),
 }
 
 
@@ -221,6 +222,8 @@ class UQICalibration:
             return 'rigetti'
         elif 'quera' in qpu_name or 'aquila' in qpu_name:
             return 'quera'
+        elif 'pasqal' in qpu_name:
+            return 'pasqal'
         elif qpu_name.startswith('qpu:') or qpu_name.startswith('sim:'):
             return 'quandela'
         return 'unknown'
@@ -260,6 +263,8 @@ class UQICalibration:
                 ok = self._sync_rigetti(qpu_name)
             elif vendor == 'quera':
                 ok = self._sync_quera(qpu_name)
+            elif vendor == 'pasqal':
+                ok = self._sync_pasqal(qpu_name)
             elif vendor == 'quandela':
                 ok = self._sync_quandela(qpu_name)
             else:
@@ -583,13 +588,18 @@ class UQICalibration:
             from braket.aws import AwsDevice, AwsSession
             import boto3
 
+            _ionq_arn_map = {
+                "ionq_forte1": os.getenv("IONQ_FORTE_ARN"),
+                "ionq_aria1":  os.getenv("IONQ_ARIA1_ARN"),
+            }
+            arn = _ionq_arn_map.get(qpu_name) or os.getenv("IONQ_FORTE_ARN")
+
             boto_session = boto3.Session(
                 aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
                 aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
                 region_name="us-east-1"
             )
             aws_session = AwsSession(boto_session=boto_session)
-            arn    = os.getenv("IONQ_FORTE_ARN")
             device = AwsDevice(arn, aws_session=aws_session)
             props  = device.properties.dict()
             paradigm = props.get('paradigm', {})
@@ -738,6 +748,75 @@ class UQICalibration:
             print(f"      ⚠ QuEra sync error: {e}")
             return False
 
+    def _sync_pasqal(self, qpu_name: str) -> bool:
+        """Pasqal Fresnel — 공개 REST 엔드포인트, 인증 불필요"""
+        try:
+            import requests as _req
+            import json as _json
+            import math as _math
+
+            url = "https://apis.pasqal.cloud/core-fast/api/v1/devices/public-specs"
+            resp = _req.get(url, timeout=15)
+            resp.raise_for_status()
+
+            items = resp.json().get("data", [])
+            # device_type 매핑: pasqal_fresnel → "FRESNEL"
+            _device_map = {
+                "pasqal_fresnel": "FRESNEL",
+            }
+            target = _device_map.get(qpu_name, "FRESNEL")
+            specs_raw = next((i["specs"] for i in items if i.get("device_type") == target), None)
+            if not specs_raw:
+                print(f"      ⚠ Pasqal: device '{target}' not found in public specs")
+                return False
+
+            specs = _json.loads(specs_raw) if isinstance(specs_raw, str) else specs_raw
+
+            n_qubits       = specs.get("max_atom_num", 100)
+            min_atom_dist  = specs.get("min_atom_distance")    # µm
+            max_radius     = specs.get("max_radial_distance")  # µm
+            max_seq_dur_ns = specs.get("max_sequence_duration")# ns → T1 추정 상한
+            rydberg_level  = specs.get("rydberg_level")
+
+            # Rabi freq: channel max_amp (rad/µs) → MHz (÷ 2π)
+            channels = specs.get("channels", [])
+            rabi_rad_us = None
+            max_detuning_rad_us = None
+            for ch in (channels if isinstance(channels, list) else channels.values()):
+                if isinstance(ch, dict) and "max_amp" in ch:
+                    rabi_rad_us = ch.get("max_amp")
+                    max_detuning_rad_us = ch.get("max_abs_detuning")
+                    break
+
+            rabi_freq_max_mhz = float(rabi_rad_us) / (2 * _math.pi) if rabi_rad_us else None
+            # T1 추정: max_sequence_duration (ns) → ms (실제 coherence 시간 하한)
+            t1_ms = float(max_seq_dur_ns) / 1e6 if max_seq_dur_ns else None
+
+            self.data[qpu_name] = {
+                "vendor":              "pasqal",
+                "type":                "neutral_atom",
+                "num_qubits":          n_qubits,
+                "avg_t1_ms":           t1_ms,
+                "avg_t2_ms":           None,
+                "avg_1q_error":        None,
+                "avg_2q_error":        None,
+                "avg_ro_error":        None,
+                "avg_1q_ns":           None,
+                "avg_2q_ns":           None,
+                "basis_gates":         ["rydberg_global"],
+                "coupling_map":        "all_to_all",
+                "rabi_freq_max_mhz":   rabi_freq_max_mhz,
+                "min_atom_distance_um": min_atom_dist,
+                "max_radial_distance_um": max_radius,
+                "rydberg_level":       rydberg_level,
+                "last_updated":        datetime.now().isoformat(),
+            }
+            return True
+
+        except Exception as e:
+            print(f"      ⚠ Pasqal sync error: {e}")
+            return False
+
     def _sync_quandela(self, qpu_name: str) -> bool:
         try:
             import perceval as pcvl
@@ -794,9 +873,20 @@ class UQICalibration:
             "qubit_t1_ms":   cal.get("qubit_t1_ms"),
             "qubit_t2_ms":   cal.get("qubit_t2_ms"),
             "qubit_ro_error":cal.get("qubit_ro_error"),
-            "qubit_1q_error":  cal.get("qubit_1q_error"),
-            "edge_2q_error":   cal.get("edge_2q_error"),
-            "qubit_positions": cal.get("qubit_positions"),
+            "qubit_1q_error":         cal.get("qubit_1q_error"),
+            "edge_2q_error":          cal.get("edge_2q_error"),
+            "qubit_positions":        cal.get("qubit_positions"),
+            # neutral atom 전용
+            "rabi_freq_max_mhz":      cal.get("rabi_freq_max_mhz"),
+            "rydberg_level":          cal.get("rydberg_level"),
+            "min_atom_distance_um":   cal.get("min_atom_distance_um"),
+            "max_radial_distance_um": cal.get("max_radial_distance_um"),
+            "c6_coefficient":         cal.get("c6_coefficient"),
+            # photonic 전용
+            "max_mode_count":         cal.get("max_mode_count"),
+            "max_photon_count":       cal.get("max_photon_count"),
+            "avg_transmittance":      cal.get("avg_transmittance"),
+            "avg_hom":                cal.get("avg_hom"),
         }
 
     # ─────────────────────────────────────────

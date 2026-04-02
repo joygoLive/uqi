@@ -124,7 +124,8 @@ IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
 SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
-                   "ionq_forte1", "rigetti_ankaa3", "quera_aquila",
+                   "ionq_forte1", "ionq_aria1", "rigetti_ankaa3",
+                   "quera_aquila", "pasqal_fresnel",
                    "sim:ascella", "sim:belenos", "qpu:ascella", "qpu:belenos"]
 
 _pending_submissions = {}
@@ -968,9 +969,20 @@ async def uqi_calibration_info(
                 "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
                 "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
                 "qubit_ro_error":  calibration.get("qubit_ro_error"),
-                "qubit_1q_error":  calibration.get("qubit_1q_error"),
-                "edge_2q_error":   calibration.get("edge_2q_error"),
-                "qubit_positions": calibration.get("qubit_positions"),
+                "qubit_1q_error":        calibration.get("qubit_1q_error"),
+                "edge_2q_error":         calibration.get("edge_2q_error"),
+                "qubit_positions":       calibration.get("qubit_positions"),
+                # neutral atom 전용
+                "rabi_freq_max_mhz":     calibration.get("rabi_freq_max_mhz"),
+                "rydberg_level":         calibration.get("rydberg_level"),
+                "min_atom_distance_um":  calibration.get("min_atom_distance_um"),
+                "max_radial_distance_um":calibration.get("max_radial_distance_um"),
+                "c6_coefficient":        calibration.get("c6_coefficient"),
+                # photonic 전용
+                "max_mode_count":        calibration.get("max_mode_count"),
+                "max_photon_count":      calibration.get("max_photon_count"),
+                "avg_transmittance":     calibration.get("avg_transmittance"),
+                "avg_hom":               calibration.get("avg_hom"),
             })
         except Exception as e:
             return json.dumps({"error": str(e)})

@@ -920,7 +920,7 @@ function switchMain(name,el) {
 // ─────────────────────────────────────────────────────────
 let _qpuData = {};
 
-const _QPU_CACHE_KEY = 'uqi_qpu_cache_v5';
+const _QPU_CACHE_KEY = 'uqi_qpu_cache_v6';
 const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
 
 function _loadQPUCache() {
@@ -1045,6 +1045,7 @@ function renderQPUGrid(qpus) {
       'rigetti':  { label: 'Superconducting', color: 'var(--accent)' },
       'ionq':     { label: 'Ion Trap',        color: 'var(--warn)' },
       'quera':    { label: 'Neutral Atom',    color: '#f97316' },
+      'pasqal':   { label: 'Neutral Atom',    color: '#f97316' },
       'photonic': { label: 'Photonic',        color: 'var(--accent2)' },
     };
     const _typeKey = isPhotonic ? 'photonic'
@@ -1053,6 +1054,7 @@ function renderQPUGrid(qpus) {
       : qpu.startsWith('ionq') ? 'ionq'
       : qpu.startsWith('rigetti') ? 'rigetti'
       : qpu.startsWith('quera') ? 'quera'
+      : qpu.startsWith('pasqal') ? 'pasqal'
       : 'ibm';
     const _typeInfo = _QPU_TYPE_MAP[_typeKey];
 
@@ -1072,13 +1074,13 @@ function renderQPUGrid(qpus) {
           <div class="qpu-metric"><div class="qpu-metric-label">Detection Eff</div><div class="qpu-metric-value ${ps.detection_eff?.includes('100')?'good':ps.detection_eff?.includes('8')?'warn':'neutral'}" style="font-size:12px">${ps.detection_eff ?? '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Photon Loss</div><div class="qpu-metric-value ${ps.photon_loss==='0%'?'good':'warn'}" style="font-size:12px">${ps.photon_loss ?? '—'}</div></div>
         </div>`;
-      } else if (_typeKey === 'quera') {
+      } else if (_typeKey === 'quera' || _typeKey === 'pasqal') {
       const t1 = fmtMs(d.avg_t1_ms);
       metricsHtml = `
         <div class="qpu-metrics">
           <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Coherence</div><div class="qpu-metric-value ${t1 ? 'good' : 'dim'}">${t1 ? t1.text+t1.unit : '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">Rabi Max</div><div class="qpu-metric-value neutral">${d.rabi_freq_max_mhz ? d.rabi_freq_max_mhz.toFixed(1)+'MHz' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Rabi Max</div><div class="qpu-metric-value neutral">${d.rabi_freq_max_mhz ? d.rabi_freq_max_mhz.toFixed(2)+'MHz' : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
         </div>`;
     } else if (_typeKey === 'ionq') {
@@ -1913,6 +1915,7 @@ function _renderTopologyGraph(qpu, d, metric) {
 
 function renderQPUDetail(container, qpu, d) {
   const _vk = qpu.startsWith('quera') ? 'quera'
+    : qpu.startsWith('pasqal') ? 'pasqal'
     : qpu.startsWith('ionq') ? 'ionq'
     : qpu.startsWith('rigetti') ? 'rigetti'
     : qpu.startsWith('iqm') ? 'iqm' : 'ibm';
@@ -1925,11 +1928,13 @@ function renderQPUDetail(container, qpu, d) {
 
 
   let calGridHtml = '';
-  if (_vk === 'quera') {
+  if (_vk === 'quera' || _vk === 'pasqal') {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
       <div class="cal-item"><div class="cal-label">Coherence</div><div class="cal-value good">${t1r ? t1r.text+'<span class="cal-unit">'+t1r.unit+'</span>' : '—'}</div></div>
-      <div class="cal-item"><div class="cal-label">Rabi Max</div><div class="cal-value neutral">${d.rabi_freq_max_mhz?.toFixed(1)??'—'}<span class="cal-unit">MHz</span></div></div>`;
+      <div class="cal-item"><div class="cal-label">Rabi Max</div><div class="cal-value neutral">${d.rabi_freq_max_mhz?.toFixed(2)??'—'}<span class="cal-unit">MHz</span></div></div>
+      ${d.rydberg_level ? `<div class="cal-item"><div class="cal-label">Rydberg Level</div><div class="cal-value neutral">${d.rydberg_level}</div></div>` : ''}
+      ${d.min_atom_distance_um ? `<div class="cal-item"><div class="cal-label">Min Atom Dist</div><div class="cal-value neutral">${d.min_atom_distance_um}<span class="cal-unit">µm</span></div></div>` : ''}`;
   } else if (_vk === 'ionq') {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
@@ -2175,7 +2180,7 @@ let _boxplotChart = null;
 const _modalityDefs = [
   { id: 'superconducting', label: 'Superconducting', match: q => q.startsWith('ibm') || q.startsWith('iqm') || q.startsWith('rigetti') },
   { id: 'ion-trap',        label: 'Ion-trap',        match: q => q.startsWith('ionq') },
-  { id: 'neutral-atom',   label: 'Neutral Atom',    match: q => q.startsWith('quera') },
+  { id: 'neutral-atom',   label: 'Neutral Atom',    match: q => q.startsWith('quera') || q.startsWith('pasqal') },
   { id: 'photonic',       label: 'Photonic',        match: q => q.startsWith('sim:') || q.startsWith('qpu:') },
 ];
 // 활성화된 모달리티 집합 — 기본값: SC only (가장 완전한 데이터)
@@ -2189,6 +2194,7 @@ const _allRadarMetrics = [
   { key: 'avg_1q_error',       label: '1Q Err', invert: true  },
   { key: 'avg_2q_error',       label: '2Q Err', invert: true  },
   { key: 'avg_ro_error',       label: 'RO Err', invert: true  },
+  { key: 'num_qubits',         label: 'Qubits', invert: false },
   { key: 'rabi_freq_max_mhz',  label: 'Rabi',   invert: false },
   { key: 'avg_transmittance',  label: 'Trans.', invert: false },
   { key: 'avg_hom',            label: 'HOM',    invert: false },
@@ -2388,19 +2394,18 @@ function _getBoxplotQpus() {
 }
 
 // 현재 선택된 QPU들이 실제로 가진 데이터의 합집합으로 박스플롯 탭 결정
+// per-qubit 배열이 있는 메트릭만 포함 (avg만 있는 경우 분포 의미 없음)
 function _getRelevantBoxplotMetrics() {
   const qpus = _getBoxplotQpus();
   if (!qpus.length) return [];
-  const avgKeyMap = {
-    't1':       'avg_t1_ms',
-    't2':       'avg_t2_ms',
-    '1q_error': 'avg_1q_error',
-    '2q_error': 'avg_2q_error',
-    'ro_error': 'avg_ro_error',
-  };
-  return ['t1', 't2', '1q_error', '2q_error', 'ro_error'].filter(m =>
-    qpus.some(q => _qpuData[q][avgKeyMap[m]] != null)
-  );
+  return ['t1', 't2', '1q_error', '2q_error', 'ro_error'].filter(m => {
+    const meta = _boxplotMeta[m];
+    if (!meta) return false;
+    return qpus.some(q => {
+      const arr = _qpuData[q][meta.perKey];
+      return arr && arr.length > 0;
+    });
+  });
 }
 
 // 탭 show/hide + 현재 metric이 숨겨지면 첫 번째 유효한 탭으로 전환

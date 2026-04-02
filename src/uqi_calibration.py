@@ -817,7 +817,18 @@ class UQICalibration:
             print(f"      ⚠ Pasqal sync error: {e}")
             return False
 
+    # 알려진 Quandela 칩 물리 스펙 (API constraints 누락 시 fallback)
+    _QUANDELA_CHIP_SPECS = {
+        'qpu:ascella': {'modes': 12, 'photons': 6},
+        'qpu:belenos':  {'modes':  6, 'photons': 4},
+    }
+
     def _sync_quandela(self, qpu_name: str) -> bool:
+        # 시뮬레이터는 캘리브레이션 데이터 불필요
+        if qpu_name.startswith('sim:'):
+            print(f"      ⚠ Quandela: {qpu_name} 는 시뮬레이터 — 캘리브레이션 스킵")
+            return False
+
         try:
             import perceval as pcvl
 
@@ -826,19 +837,36 @@ class UQICalibration:
                 return False
 
             processor = pcvl.RemoteProcessor(qpu_name, token=token)
-            specs      = processor.specs
+            specs       = processor.specs
             constraints = specs.get('constraints', {})
-            parameters  = specs.get('parameters', {})
+            # p.performance 에서 실제 QPU 캘리브레이션 값 읽기
+            # 예: {'Clock (MHz)': 4.94, 'HOM (%)': 91.2, 'Transmittance (%)': 4.86, 'g2 (%)': 1.7}
+            perf = processor.performance  # dict
+
+            def _pct(key):
+                """퍼센트(%) 값을 0~1 소수로 변환, 없으면 None"""
+                v = perf.get(key)
+                return round(v / 100.0, 6) if v is not None else None
+
+            # 물리 칩 모드/광자 수: API constraints 우선, 없으면 알려진 fallback 사용
+            chip = self._QUANDELA_CHIP_SPECS.get(qpu_name, {})
+            mode_count   = constraints.get('max_mode_count')   or chip.get('modes')
+            photon_count = constraints.get('max_photon_count') or chip.get('photons')
 
             self.data[qpu_name] = {
                 "vendor":            "quandela",
-                "max_mode_count":    constraints.get('max_mode_count', 24),
-                "max_photon_count":  constraints.get('max_photon_count', 6),
-                "avg_transmittance": parameters.get('transmittance', 0.06),
-                "avg_hom":           parameters.get('HOM', 0.92),
-                "avg_g2":            parameters.get('g2', 0.003),
+                "max_mode_count":    mode_count,
+                "max_photon_count":  photon_count,
+                "avg_transmittance": _pct('Transmittance (%)'),
+                "avg_hom":           _pct('HOM (%)'),
+                "avg_g2":            _pct('g2 (%)'),
+                "clock_mhz":         perf.get('Clock (MHz)'),
                 "last_updated":      datetime.now().isoformat(),
             }
+            print(f"      ✓ Quandela {qpu_name}: modes={mode_count}, photons={photon_count}, "
+                  f"trans={self.data[qpu_name]['avg_transmittance']}, "
+                  f"HOM={self.data[qpu_name]['avg_hom']}, g2={self.data[qpu_name]['avg_g2']}, "
+                  f"clock={self.data[qpu_name]['clock_mhz']}MHz")
             return True
 
         except Exception as e:
@@ -887,6 +915,8 @@ class UQICalibration:
             "max_photon_count":       cal.get("max_photon_count"),
             "avg_transmittance":      cal.get("avg_transmittance"),
             "avg_hom":                cal.get("avg_hom"),
+            "avg_g2":                 cal.get("avg_g2"),
+            "clock_mhz":              cal.get("clock_mhz"),
         }
 
     # ─────────────────────────────────────────

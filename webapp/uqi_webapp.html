@@ -652,7 +652,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                   <option value="auto">Auto (Recommended)</option>
                   <option value="ibm_fez">IBM Fez</option>
                   <option value="iqm_garnet">IQM Garnet</option>
-                  <option value="sim:ascella">sim:ascella</option>
+                  <option value="qpu:ascella">qpu:ascella</option>
                   <option value="qpu:belenos">qpu:belenos</option>
                 </select>
               </div>
@@ -999,9 +999,9 @@ async function _fetchQPUData(isBackground) {
 
     // Step3: 각 QPU 병렬로 캘리브레이션 조회 → 도착하는 순서대로 카드 업데이트
     const fetchOne = async (qpu) => {
-      if (qpu.startsWith('sim:') || qpu.startsWith('qpu:')) {
-        _qpuData[qpu] = { qpu_name: qpu, type: 'photonic' };
-        renderQPUGrid(qpus);
+      // 시뮬레이터는 캘리브레이션 불필요 (카드에 표시하지 않음)
+      if (qpu.startsWith('sim:')) {
+        _qpuData[qpu] = { qpu_name: qpu, type: 'photonic', _sim: true };
         return;
       }
       try {
@@ -1032,13 +1032,15 @@ function renderQPUGrid(qpus) {
 
   let html = '<div class="qpu-grid">';
   for (const qpu of qpus) {
+    // 시뮬레이터 카드는 표시 안 함
     if (qpu.startsWith('sim:')) continue;
     const d = _qpuData[qpu] || {};
-    const isPhotonic = qpu.startsWith('sim:') || qpu.startsWith('qpu:');
-    const isOnline = isPhotonic || (!d.error && d.num_qubits != null && d.num_qubits > 0);
+    const isPhotonic = qpu.startsWith('qpu:');
+    const photonicOnline = isPhotonic && !d.error && d.avg_transmittance != null;
+    const isOnline = photonicOnline || (!isPhotonic && !d.error && d.num_qubits != null && d.num_qubits > 0);
     const cls = isPhotonic ? 'photonic' : (isOnline ? 'online' : 'offline');
-    const dotCls = isOnline || isPhotonic ? 'online' : 'offline';
-    const statusLabel = isOnline || isPhotonic ? 'Online' : 'Offline';
+    const dotCls = isOnline ? 'online' : (isPhotonic ? 'photonic' : 'offline');
+    const statusLabel = isOnline ? 'Online' : (isPhotonic && d._loading ? 'Loading' : isPhotonic ? 'No Cal.' : 'Offline');
     const _QPU_TYPE_MAP = {
       'ibm':      { label: 'Superconducting', color: 'var(--accent)' },
       'iqm':      { label: 'Superconducting', color: 'var(--accent)' },
@@ -1060,19 +1062,18 @@ function renderQPUGrid(qpus) {
 
     let metricsHtml = '';
     if (isPhotonic) {
-      const _PHOTONIC_SPECS = {
-        'qpu:ascella': { modes: 12, photon_loss: '~15%', source_fidelity: '~97%', detection_eff: '~85%' },
-        'qpu:belenos': { modes: 6,  photon_loss: '—',    source_fidelity: '~98%', detection_eff: '~90%' },
-        'sim:ascella': { modes: 12, photon_loss: '0%',   source_fidelity: '100%', detection_eff: '100%' },
-        'sim:belenos': { modes: 6,  photon_loss: '0%',   source_fidelity: '100%', detection_eff: '100%' },
-      };
-      const ps = _PHOTONIC_SPECS[qpu] || {};
+      const trans = d.avg_transmittance != null ? (d.avg_transmittance * 100).toFixed(1) + '%' : '—';
+      const hom   = d.avg_hom           != null ? (d.avg_hom           * 100).toFixed(1) + '%' : '—';
+      const g2    = d.avg_g2            != null ? (d.avg_g2            * 100).toFixed(2) + '%' : '—';
+      const modes = d.max_mode_count    != null ? d.max_mode_count                              : '—';
+      const transCls = d.avg_transmittance != null ? (d.avg_transmittance > 0.05 ? 'warn' : 'bad') : 'dim';
+      const homCls   = d.avg_hom           != null ? (d.avg_hom > 0.90 ? 'good' : 'warn')          : 'dim';
       metricsHtml = `
         <div class="qpu-metrics">
-          <div class="qpu-metric"><div class="qpu-metric-label">Modes</div><div class="qpu-metric-value neutral">${ps.modes ?? '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">Source Fidelity</div><div class="qpu-metric-value ${ps.source_fidelity?.includes('97')||ps.source_fidelity?.includes('98')||ps.source_fidelity?.includes('100')?'good':'warn'}" style="font-size:12px">${ps.source_fidelity ?? '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">Detection Eff</div><div class="qpu-metric-value ${ps.detection_eff?.includes('100')?'good':ps.detection_eff?.includes('8')?'warn':'neutral'}" style="font-size:12px">${ps.detection_eff ?? '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">Photon Loss</div><div class="qpu-metric-value ${ps.photon_loss==='0%'?'good':'warn'}" style="font-size:12px">${ps.photon_loss ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Modes</div><div class="qpu-metric-value neutral">${modes}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">HOM</div><div class="qpu-metric-value ${homCls}" style="font-size:12px">${hom}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Transmittance</div><div class="qpu-metric-value ${transCls}" style="font-size:12px">${trans}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">g²(0)</div><div class="qpu-metric-value ${d.avg_g2 != null ? (d.avg_g2 < 0.05 ? 'good' : 'warn') : 'dim'}" style="font-size:12px">${g2}</div></div>
         </div>`;
       } else if (_typeKey === 'quera' || _typeKey === 'pasqal') {
       const t1 = fmtMs(d.avg_t1_ms);
@@ -1161,16 +1162,19 @@ async function showQPUDetail(qpu, el) {
   const container = document.getElementById('qpu-detail-container');
   container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Loading calibration...</div></div>`;
 
-  const isPhotonic = qpu.startsWith('sim:') || qpu.startsWith('qpu:');
+  const isPhotonic = qpu.startsWith('qpu:');
   try {
     if (isPhotonic) {
-      const _PHOTONIC_SPECS = {
-        'qpu:ascella': { modes: 12, source_fidelity: '~97%', detection_eff: '~85%', photon_loss: '~15%', cx_fidelity: '~95%', mode: 'Real QPU' },
-        'qpu:belenos': { modes: 6,  source_fidelity: '~98%', detection_eff: '~90%', photon_loss: '—',    cx_fidelity: '~96%', mode: 'Real QPU' },
-        'sim:ascella': { modes: 12, source_fidelity: '100%', detection_eff: '100%', photon_loss: '0%',   cx_fidelity: '100%', mode: 'Simulator' },
-        'sim:belenos': { modes: 6,  source_fidelity: '100%', detection_eff: '100%', photon_loss: '0%',   cx_fidelity: '100%', mode: 'Simulator' },
-      };
-      const ps = _PHOTONIC_SPECS[qpu] || {};
+      // 실제 캘리브레이션 데이터 사용 (이미 fetchOne에서 로드됨)
+      const d = _qpuData[qpu] || {};
+      const fmtPct = (v, digits=1) => v != null ? (v * 100).toFixed(digits) + '%' : '—';
+      const trans   = fmtPct(d.avg_transmittance);
+      const hom     = fmtPct(d.avg_hom);
+      const g2      = fmtPct(d.avg_g2, 2);
+      const clock   = d.clock_mhz   != null ? d.clock_mhz.toFixed(2) + ' MHz' : '—';
+      const modes   = d.max_mode_count   != null ? d.max_mode_count   : '—';
+      const photons = d.max_photon_count != null ? d.max_photon_count : '—';
+      const updated = d.last_updated ? new Date(d.last_updated).toLocaleString() : '—';
       container.innerHTML = `
         <div class="qpu-detail">
           <div class="qpu-detail-header">
@@ -1178,14 +1182,14 @@ async function showQPUDetail(qpu, el) {
             <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
           </div>
           <div class="cal-grid">
-            <div class="cal-item"><div class="cal-label">Modes</div><div class="cal-value neutral">${ps.modes ?? '—'}</div></div>
-            <div class="cal-item"><div class="cal-label">Mode</div><div class="cal-value neutral" style="font-size:13px">${ps.mode ?? '—'}</div></div>
-            <div class="cal-item"><div class="cal-label">Source Fidelity</div><div class="cal-value good" style="font-size:14px">${ps.source_fidelity ?? '—'}</div></div>
-            <div class="cal-item"><div class="cal-label">Detection Eff</div><div class="cal-value warn" style="font-size:14px">${ps.detection_eff ?? '—'}</div></div>
-            <div class="cal-item"><div class="cal-label">Photon Loss</div><div class="cal-value ${ps.photon_loss === '0%' ? 'good' : 'warn'}" style="font-size:14px">${ps.photon_loss ?? '—'}</div></div>
-            <div class="cal-item"><div class="cal-label">CX Fidelity</div><div class="cal-value good" style="font-size:14px">${ps.cx_fidelity ?? '—'}</div></div>
+            <div class="cal-item"><div class="cal-label">Max Modes</div><div class="cal-value neutral">${modes}</div></div>
+            <div class="cal-item"><div class="cal-label">Max Photons</div><div class="cal-value neutral">${photons}</div></div>
+            <div class="cal-item"><div class="cal-label">Transmittance</div><div class="cal-value ${d.avg_transmittance != null ? 'warn' : 'dim'}" style="font-size:14px">${trans}</div></div>
+            <div class="cal-item"><div class="cal-label">HOM</div><div class="cal-value ${d.avg_hom != null ? (d.avg_hom > 0.90 ? 'good' : 'warn') : 'dim'}" style="font-size:14px">${hom}</div></div>
+            <div class="cal-item"><div class="cal-label">g²(0)</div><div class="cal-value ${d.avg_g2 != null ? (d.avg_g2 < 0.05 ? 'good' : 'warn') : 'dim'}" style="font-size:14px">${g2}</div></div>
+            <div class="cal-item"><div class="cal-label">Clock</div><div class="cal-value neutral" style="font-size:14px">${clock}</div></div>
           </div>
-          <div style="margin-top:12px;font-size:10px;color:var(--text3)">* Quandela 공개 스펙 기준 (근사값)</div>
+          <div style="margin-top:12px;font-size:10px;color:var(--text3)">업데이트: ${updated}</div>
         </div>`;
       return;
     }
@@ -2181,7 +2185,7 @@ const _modalityDefs = [
   { id: 'superconducting', label: 'Superconducting', match: q => q.startsWith('ibm') || q.startsWith('iqm') || q.startsWith('rigetti') },
   { id: 'ion-trap',        label: 'Ion-trap',        match: q => q.startsWith('ionq') },
   { id: 'neutral-atom',   label: 'Neutral Atom',    match: q => q.startsWith('quera') || q.startsWith('pasqal') },
-  { id: 'photonic',       label: 'Photonic',        match: q => q.startsWith('sim:') || q.startsWith('qpu:') },
+  { id: 'photonic',       label: 'Photonic',        match: q => q.startsWith('qpu:') },
 ];
 // 활성화된 모달리티 집합 — 기본값: SC only (가장 완전한 데이터)
 let _activeModalities = new Set(['superconducting']);
@@ -2198,6 +2202,8 @@ const _allRadarMetrics = [
   { key: 'rabi_freq_max_mhz',  label: 'Rabi',   invert: false },
   { key: 'avg_transmittance',  label: 'Trans.', invert: false },
   { key: 'avg_hom',            label: 'HOM',    invert: false },
+  { key: 'avg_g2',             label: 'g²(0)',  invert: true  },
+  { key: 'max_mode_count',     label: 'Modes',  invert: false },
 ];
 
 function toggleRadarModality(modId, btn) {

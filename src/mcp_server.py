@@ -126,7 +126,7 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "ionq_forte1", "ionq_aria1", "rigetti_ankaa3",
                    "quera_aquila", "pasqal_fresnel",
-                   "sim:ascella", "sim:belenos", "qpu:ascella", "qpu:belenos"]
+                   "qpu:ascella", "qpu:belenos"]
 
 _pending_submissions = {}
 
@@ -983,6 +983,8 @@ async def uqi_calibration_info(
                 "max_photon_count":      calibration.get("max_photon_count"),
                 "avg_transmittance":     calibration.get("avg_transmittance"),
                 "avg_hom":               calibration.get("avg_hom"),
+                "avg_g2":                calibration.get("avg_g2"),
+                "clock_mhz":             calibration.get("clock_mhz"),
             })
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1217,7 +1219,7 @@ async def uqi_qpu_submit(
                         "queue_note": s.get("note", ""),
                     })
 
-            PERCEVAL_QPUS = ["sim:ascella", "sim:belenos", "qpu:ascella", "qpu:belenos"]
+            PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos"]
             if qpu_name in PERCEVAL_QPUS:
                 if not confirmed:
                     return _safe_json({

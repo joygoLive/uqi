@@ -54,6 +54,13 @@ def page(page: Page):
                 el.id = 'qpu-cache-ts';
                 document.body.appendChild(el);
             }
+            // qpu-analysis-section
+            if (!document.getElementById('qpu-analysis-section')) {
+                const el = document.createElement('div');
+                el.id = 'qpu-analysis-section';
+                el.style.display = 'none';
+                document.body.appendChild(el);
+            }
         }
     """)
     return page
@@ -635,34 +642,6 @@ class TestFmtNs:
         assert result["text"] == "5.0"
 
 
-# ─────────────────────────────────────────────────────────────
-# TC-11x: QPU 비교 탭 순서 및 기본 메트릭
-# ─────────────────────────────────────────────────────────────
-
-class TestCompareTab:
-
-    def test_TC111_default_metric_is_qubits(self, page):
-        result = page.evaluate("_compareMetric")
-        assert result == "qubits"
-
-    def test_TC112_first_compare_tab_is_qubits(self, page):
-        result = page.evaluate("""
-            document.querySelector('.compare-tab').textContent.trim()
-        """)
-        assert result == "Qubits"
-
-    def test_TC113_first_compare_tab_has_active_class(self, page):
-        result = page.evaluate("""
-            document.querySelector('.compare-tab').classList.contains('active')
-        """)
-        assert result is True
-
-    def test_TC114_2q_error_tab_is_second(self, page):
-        result = page.evaluate("""
-            document.querySelectorAll('.compare-tab')[1].textContent.trim()
-        """)
-        assert result == "2Q Error"
-
 
 # ─────────────────────────────────────────────────────────────
 # TC-12x: renderQPUDetail — 벤더 링크 및 토폴로지 제거
@@ -680,9 +659,12 @@ class TestRenderQPUDetail:
         """)
 
     def test_TC121_quera_no_topology(self, page):
+        # QuEra has all-to-all connectivity → Topology panel shown with All-to-all message, no graph
         html = self._render(page, 'quera_aquila',
             '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
-        assert "Topology" not in html
+        assert "Topology" in html
+        assert "All-to-all" in html
+        assert "topo-canvas" not in html
 
     def test_TC122_quera_no_type(self, page):
         html = self._render(page, 'quera_aquila',
@@ -695,34 +677,13 @@ class TestRenderQPUDetail:
         assert ">Mode<" not in html
 
     def test_TC124_ionq_no_topology(self, page):
+        # IonQ has all-to-all connectivity → Topology panel with All-to-all message, no graph
         html = self._render(page, 'ionq_forte1',
             '{"num_qubits":36,"avg_t1_ms":100000,"avg_1q_error":0.001,"avg_2q_error":0.01,"avg_2q_ns":600000}')
-        assert "Topology" not in html
+        assert "Topology" in html
+        assert "All-to-all" in html
+        assert "topo-canvas" not in html
 
-    def test_TC125_quera_has_vendor_link(self, page):
-        html = self._render(page, 'quera_aquila',
-            '{"num_qubits":256,"avg_t1_ms":75,"rabi_freq_max_mhz":15.8}')
-        assert "quera.com" in html
-
-    def test_TC126_ionq_has_vendor_link(self, page):
-        html = self._render(page, 'ionq_forte1',
-            '{"num_qubits":36,"avg_t1_ms":100000,"avg_1q_error":0.001,"avg_2q_error":0.01,"avg_2q_ns":600000}')
-        assert "ionq.com" in html
-
-    def test_TC127_ibm_has_vendor_link(self, page):
-        html = self._render(page, 'ibm_fez',
-            '{"num_qubits":156,"avg_t1_ms":0.155,"avg_t2_ms":0.110,"avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,"avg_1q_ns":24,"avg_2q_ns":68}')
-        assert "quantum.ibm.com" in html
-
-    def test_TC128_iqm_has_vendor_link(self, page):
-        html = self._render(page, 'iqm_garnet',
-            '{"num_qubits":20,"avg_t1_ms":0.034,"avg_t2_ms":0.007,"avg_1q_error":0.001,"avg_2q_error":0.007,"avg_ro_error":0.005,"avg_1q_ns":16,"avg_2q_ns":40}')
-        assert "meetiqm.com" in html
-
-    def test_TC129_vendor_link_opens_new_tab(self, page):
-        html = self._render(page, 'ibm_fez',
-            '{"num_qubits":156,"avg_t1_ms":0.155,"avg_t2_ms":0.110,"avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,"avg_1q_ns":24,"avg_2q_ns":68}')
-        assert 'target="_blank"' in html
 
 
 # ─────────────────────────────────────────────────────────────
@@ -746,6 +707,124 @@ class TestRagQpuDefault:
             document.getElementById('rag-qpu').options[0].value
         """)
         assert result == ""
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-14x: per-qubit 차트 — renderQPUDetail HTML 구조
+# ─────────────────────────────────────────────────────────────
+
+class TestPerQubitDetail:
+
+    def _render(self, page, qpu, data):
+        return page.evaluate(f"""
+            (() => {{
+                const c = document.createElement('div');
+                renderQPUDetail(c, '{qpu}', {data});
+                return c.innerHTML;
+            }})()
+        """)
+
+    def test_TC141_per_qubit_tabs_shown_when_data_present(self, page):
+        html = self._render(page, 'ibm_fez', """{
+            "num_qubits":5,
+            "avg_t1_ms":0.155,"avg_t2_ms":0.110,
+            "avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,
+            "avg_1q_ns":24,"avg_2q_ns":68,
+            "qubit_1q_error":[0.005,0.007,0.008,0.006,0.009]
+        }""")
+        assert "qubit-dist-tab" in html
+
+    def test_TC142_no_qubit_tabs_when_no_per_qubit_data(self, page):
+        html = self._render(page, 'ibm_fez', """{
+            "num_qubits":5,
+            "avg_t1_ms":0.155,"avg_t2_ms":0.110,
+            "avg_1q_error":0.007,"avg_2q_error":0.033,"avg_ro_error":0.01,
+            "avg_1q_ns":24,"avg_2q_ns":68
+        }""")
+        assert "qubit-dist-tab" not in html
+
+    def test_TC143_1q_error_tab_shown_when_data_present(self, page):
+        html = self._render(page, 'ibm_fez', """{
+            "num_qubits":5,
+            "avg_1q_error":0.007,"avg_2q_error":0.033,
+            "qubit_1q_error":[0.005,0.007,0.008,0.006,0.009]
+        }""")
+        assert "1Q Error" in html
+
+    def test_TC144_t1_tab_shown_when_t1_data_present(self, page):
+        html = self._render(page, 'ibm_fez', """{
+            "num_qubits":5,
+            "avg_t1_ms":0.155,
+            "qubit_t1_ms":[0.14,0.15,0.16,0.155,0.148]
+        }""")
+        assert ">T1<" in html
+
+    def test_TC145_chart_container_id_matches_qpu_name(self, page):
+        html = self._render(page, 'ibm_fez', """{
+            "num_qubits":5,
+            "avg_1q_error":0.007,
+            "qubit_1q_error":[0.005,0.007,0.008,0.006,0.009]
+        }""")
+        assert "qubit-dist-chart-ibm_fez" in html
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-15x: boxStats 로직 (박스플롯 통계 함수)
+# ─────────────────────────────────────────────────────────────
+
+class TestBoxStats:
+
+    def test_TC151_returns_5_elements(self, page):
+        result = page.evaluate("""
+            (() => {
+                const arr = [0.001,0.003,0.005,0.007,0.009,0.010,0.012,0.004,0.006,0.008];
+                function boxStats(arr) {
+                    const s = [...arr].sort((a,b)=>a-b), n=s.length;
+                    const q1=s[Math.floor(n*0.25)], q2=s[Math.floor(n*0.5)], q3=s[Math.floor(n*0.75)];
+                    const iqr=q3-q1, lo=Math.max(s[0],q1-1.5*iqr), hi=Math.min(s[n-1],q3+1.5*iqr);
+                    return [lo,q1,q2,q3,hi];
+                }
+                return boxStats(arr).length;
+            })()
+        """)
+        assert result == 5
+
+    def test_TC152_median_is_middle_value(self, page):
+        # n=10, Math.floor(10*0.5)=5 → s[5]=6
+        result = page.evaluate("""
+            (() => {
+                function boxStats(arr) {
+                    const s=[...arr].sort((a,b)=>a-b),n=s.length;
+                    const q1=s[Math.floor(n*0.25)],q2=s[Math.floor(n*0.5)],q3=s[Math.floor(n*0.75)];
+                    const iqr=q3-q1,lo=Math.max(s[0],q1-1.5*iqr),hi=Math.min(s[n-1],q3+1.5*iqr);
+                    return [lo,q1,q2,q3,hi];
+                }
+                const r = boxStats([1,2,3,4,5,6,7,8,9,10]);
+                return r[2];  // q2 = s[floor(10*0.5)] = s[5] = 6
+            })()
+        """)
+        assert result == 6
+
+    def test_TC153_min_le_q1_le_median(self, page):
+        result = page.evaluate("""
+            (() => {
+                function boxStats(arr) {
+                    const s=[...arr].sort((a,b)=>a-b),n=s.length;
+                    const q1=s[Math.floor(n*0.25)],q2=s[Math.floor(n*0.5)],q3=s[Math.floor(n*0.75)];
+                    const iqr=q3-q1,lo=Math.max(s[0],q1-1.5*iqr),hi=Math.min(s[n-1],q3+1.5*iqr);
+                    return [lo,q1,q2,q3,hi];
+                }
+                const r = boxStats([0.001,0.003,0.005,0.007,0.009,0.011,0.013,0.002,0.006,0.010]);
+                return r[0] <= r[1] && r[1] <= r[2];
+            })()
+        """)
+        assert result is True
+
+    def test_TC154_analysis_section_hidden_with_no_data(self, page):
+        result = page.evaluate("""
+            document.getElementById('qpu-analysis-section').style.display
+        """)
+        assert result == "none"
 
 
 if __name__ == "__main__":

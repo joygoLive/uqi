@@ -118,21 +118,6 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .qpu-pending { margin-top:8px; font-size:10px; color:var(--text3); display:flex; align-items:center; gap:6px; }
 .qpu-pending strong { color:var(--warn); }
 
-/* Compare Chart */
-.compare-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:28px; }
-.compare-title { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:16px; font-weight:600; }
-.compare-tabs { display:flex; gap:4px; margin-bottom:16px; }
-.compare-tab { background:none; border:1px solid var(--border); border-radius:5px; padding:5px 12px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; font-weight:600; }
-.compare-tab.active { background:var(--surface2); color:var(--accent); border-color:rgba(0,212,255,0.3); }
-.bar-chart { display:flex; flex-direction:column; gap:8px; }
-.bar-row { display:flex; align-items:center; gap:10px; }
-.bar-label { width:120px; font-size:11px; color:var(--text2); flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bar-track { flex:1; background:var(--surface2); border-radius:3px; height:20px; position:relative; overflow:hidden; }
-.bar-fill { height:100%; border-radius:3px; transition:width 0.6s ease; display:flex; align-items:center; padding-left:8px; font-size:10px; font-weight:600; white-space:nowrap; }
-.bar-fill.good { background:rgba(63,185,80,0.25); color:var(--success); }
-.bar-fill.warn { background:rgba(240,136,62,0.25); color:var(--warn); }
-.bar-fill.bad { background:rgba(248,81,73,0.25); color:var(--error); }
-.bar-fill.accent { background:rgba(0,212,255,0.15); color:var(--accent); }
 
 /* QPU Detail Drawer */
 .qpu-detail { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
@@ -274,6 +259,35 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 ::-webkit-scrollbar-track { background:var(--surface); }
 ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
 footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); text-align:center; font-size:10px; color:var(--text3); }
+
+/* ── QPU Analysis Section ── */
+.qpu-analysis-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-top:16px; }
+.qpu-analysis-title { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:16px; font-weight:600; }
+.qpu-analysis-charts { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.qpu-chart-box { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:12px; }
+.qpu-chart-box-title { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+.qpu-chart-canvas { width:100%; height:280px; }
+/* QPU 디테일 per-qubit 차트 */
+.qubit-dist-section { margin-top:14px; }
+.qubit-dist-tabs { display:flex; gap:4px; margin-bottom:8px; flex-wrap:wrap; }
+.qubit-dist-tab { font-size:10px; padding:3px 8px; border-radius:4px; background:var(--surface2); border:1px solid var(--border); color:var(--text2); cursor:pointer; }
+.qubit-dist-tab.active { background:var(--accent); color:#000; border-color:var(--accent); }
+.qubit-dist-canvas { width:100%; height:160px; }
+/* QPU 토폴로지 + 퀀텀비트 분포 2열 레이아웃 */
+.topo-dist-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+.topo-panel { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px; }
+.topo-panel-title { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; font-weight:600; }
+.topo-canvas { width:100%; height:210px; }
+.topo-panel .qubit-dist-canvas { height:210px; }
+.topo-legend { display:flex; align-items:center; gap:6px; margin-top:5px; }
+.topo-legend-bar { flex:1; height:4px; border-radius:2px; background:linear-gradient(to right,#3fb950,#d29922,#f85149); }
+.topo-legend-label { font-size:9px; color:var(--text3); white-space:nowrap; }
+.topo-stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:10px; }
+.topo-stat-box { text-align:center; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 4px; }
+.topo-stat-val { font-size:14px; font-weight:700; color:var(--text1); }
+.topo-stat-lbl { font-size:9px; color:var(--text3); margin-top:2px; }
+.topo-type-badge { font-size:10px; color:var(--text3); margin-top:8px; text-align:center; }
+@media (max-width:900px) { .qpu-analysis-charts { grid-template-columns:1fr; } .topo-dist-grid { grid-template-columns:1fr; } }
 </style>
 </head>
 <body>
@@ -365,20 +379,63 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
       <div class="empty-state"><span class="spinner"></span>Loading QPU status...</div>
     </div>
 
-    <div class="compare-section">
-      <div class="compare-title">QPU Comparison</div>
-      <div class="compare-tabs">
-        <button class="compare-tab active" onclick="showCompare('qubits',this)">Qubits</button>
-        <button class="compare-tab" onclick="showCompare('2q_error',this)">2Q Error</button>
-        <button class="compare-tab" onclick="showCompare('t2',this)">T2 Coherence</button>
-        <button class="compare-tab" onclick="showCompare('1q_error',this)">1Q Error</button>
+    <div id="qpu-detail-container"></div>
+
+    <div class="qpu-analysis-section" id="qpu-analysis-section" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div class="qpu-analysis-title" style="margin-bottom:0">QPU Deep Analysis</div>
+        <div class="qubit-dist-tabs radar-modality-tabs" style="margin-bottom:0">
+          <button id="radar-modality-all" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('all',this)" title="SC+Ion 비교 (권장)">SC+Ion</button>
+          <button data-mod="superconducting" class="qubit-dist-tab radar-mod-tab active" onclick="toggleRadarModality('superconducting',this)" title="초전도 방식 (IBM/IQM/Rigetti)">SC</button>
+          <button data-mod="ion-trap" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('ion-trap',this)" title="이온트랩 방식 (IonQ)">Ion</button>
+          <button data-mod="neutral-atom" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('neutral-atom',this)" title="중성원자 방식 (QuEra)">Neutral</button>
+          <button data-mod="photonic" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('photonic',this)" title="광자 방식 (Quandela)">Photonic</button>
+        </div>
       </div>
-      <div id="compare-chart" class="bar-chart">
-        <div class="empty-state">Load QPU data to compare</div>
+      <div class="qpu-analysis-charts">
+        <div class="qpu-chart-box">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div class="qpu-chart-box-title" style="margin-bottom:0">Performance Radar</div>
+            <span style="font-size:9px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;font-family:var(--font-mono)">log scale</span>
+          </div>
+          <div id="chart-radar" class="qpu-chart-canvas"></div>
+        </div>
+        <div class="qpu-chart-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="qpu-chart-box-title" style="margin-bottom:0">Distribution (Box Plot)</div>
+            <div id="boxplot-metric-tabs" class="qubit-dist-tabs" style="margin-bottom:0">
+              <button data-metric="t1"       class="qubit-dist-tab active" onclick="switchBoxplotMetric('t1',this)">T1</button>
+              <button data-metric="t2"       class="qubit-dist-tab" onclick="switchBoxplotMetric('t2',this)">T2</button>
+              <button data-metric="1q_error" class="qubit-dist-tab" onclick="switchBoxplotMetric('1q_error',this)">1Q Err</button>
+              <button data-metric="2q_error" class="qubit-dist-tab" onclick="switchBoxplotMetric('2q_error',this)">2Q Err</button>
+              <button data-metric="ro_error" class="qubit-dist-tab" onclick="switchBoxplotMetric('ro_error',this)">RO Err</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:0 4px">
+            <svg width="188" height="30" viewBox="0 0 188 30" style="flex-shrink:0;overflow:visible">
+              <!-- left whisker -->
+              <line x1="10" y1="10" x2="55" y2="10" stroke="#4a5568" stroke-width="1.2"/>
+              <line x1="10" y1="6"  x2="10" y2="14" stroke="#4a5568" stroke-width="1.2"/>
+              <!-- IQR box -->
+              <rect x="55" y="4" width="78" height="12" fill="none" stroke="#58a6ff" stroke-width="1.4" rx="1"/>
+              <!-- median -->
+              <line x1="94" y1="4" x2="94" y2="16" stroke="#3fb950" stroke-width="2"/>
+              <!-- right whisker -->
+              <line x1="133" y1="10" x2="178" y2="10" stroke="#4a5568" stroke-width="1.2"/>
+              <line x1="178" y1="6"  x2="178" y2="14" stroke="#4a5568" stroke-width="1.2"/>
+              <!-- labels -->
+              <text x="10"  y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Min</text>
+              <text x="55"  y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Q1</text>
+              <text x="94"  y="26" text-anchor="middle" font-size="7.5" fill="#3fb950">Median</text>
+              <text x="133" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Q3</text>
+              <text x="178" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Max</text>
+            </svg>
+            <span style="font-size:9.5px;color:var(--text3);line-height:1.4">박스 = 중간 50% 큐비트 분포 (Q1~Q3)<br>수염 = 이상치 제외 최솟값·최댓값</span>
+          </div>
+          <div id="chart-boxplot" class="qpu-chart-canvas"></div>
+        </div>
       </div>
     </div>
-
-    <div id="qpu-detail-container"></div>
   </div>
 
   <!-- ══════════════ PIPELINE PANEL ══════════════ -->
@@ -722,6 +779,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
   <footer>UQI · Universal Quantum Intelligence · Internal Tool</footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script>
 // ─────────────────────────────────────────────────────────
 // Auth
@@ -861,9 +919,8 @@ function switchMain(name,el) {
 // QPU Dashboard
 // ─────────────────────────────────────────────────────────
 let _qpuData = {};
-let _compareMetric = 'qubits';
 
-const _QPU_CACHE_KEY = 'uqi_qpu_cache_v4';
+const _QPU_CACHE_KEY = 'uqi_qpu_cache_v5';
 const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
 
 function _loadQPUCache() {
@@ -905,7 +962,7 @@ async function loadQPUDashboard(forceRefresh) {
   if (cache && !forceRefresh) {
     _qpuData = cache.data;
     renderQPUGrid(cache.qpus);
-    renderCompareChart(_compareMetric);
+    renderQPUDeepAnalysis();
     _renderCacheTimestamp(cache);
 
     // 12시간 이상 지났으면 백그라운드 갱신
@@ -955,7 +1012,7 @@ async function _fetchQPUData(isBackground) {
         _qpuData[qpu] = { qpu_name: qpu, error: e.message };
       }
       renderQPUGrid(qpus);
-      renderCompareChart(_compareMetric);
+      renderQPUDeepAnalysis();
     };
 
     // 전부 병렬 실행
@@ -1086,72 +1143,6 @@ function renderQPUGrid(qpus) {
   container.innerHTML = html;
 }
 
-function showCompare(metric, el) {
-  _compareMetric = metric;
-  document.querySelectorAll('.compare-tab').forEach(t=>t.classList.remove('active'));
-  el.classList.add('active');
-  renderCompareChart(metric);
-}
-
-function renderCompareChart(metric) {
-  const chart = document.getElementById('compare-chart');
-  const qpus = Object.keys(_qpuData).filter(q => {
-    const d = _qpuData[q];
-    return !q.startsWith('sim:') && !q.startsWith('qpu:') && !d.error && !d._loading && d.qpu_name;
-  });
-
-  if (!qpus.length) { chart.innerHTML='<div class="empty-state">No data</div>'; return; }
-
-  const getValue = (qpu) => {
-    const d = _qpuData[qpu];
-    if (!d) return null;
-    if (metric === '2q_error') return d.avg_2q_error;
-    if (metric === 't2') return d.avg_t2_ms ?? null;
-    if (metric === 'qubits') return d.num_qubits;
-    if (metric === '1q_error') return d.avg_1q_error;
-    return null;
-  };
-
-  const getLabel = (qpu) => {
-    const v = getValue(qpu);
-    if (v == null) return '—';
-    if (metric === '2q_error' || metric === '1q_error') return (v*100).toFixed(3)+'%';
-    if (metric === 't2') { const r=fmtMs(v); return r ? r.text+r.unit : '—'; }
-    if (metric === 'qubits') return String(v);
-  };
-
-  const vals = qpus.map(q=>getValue(q)).filter(v=>v!=null);
-  const maxVal = Math.max(...vals);
-  const minVal = Math.min(...vals);
-
-  // For error rates: lower is better (green=low, red=high)
-  // For T2/qubits: higher is better (green=high, red=low)
-  const isLowerBetter = metric === '2q_error' || metric === '1q_error';
-
-  const sorted = [...qpus].sort((a,b) => {
-    const va = getValue(a) ?? (isLowerBetter ? Infinity : -Infinity);
-    const vb = getValue(b) ?? (isLowerBetter ? Infinity : -Infinity);
-    return isLowerBetter ? va - vb : vb - va;
-  });
-
-  let html = '';
-  for (const qpu of sorted) {
-    const v = getValue(qpu);
-    if (v == null) continue;
-    const pct = maxVal > 0 ? Math.max(4, (v / maxVal) * 100) : 4;
-    // color: best gets 'good', worst gets 'bad'
-    const rank = isLowerBetter ? (v - minVal) / (maxVal - minVal || 1) : 1 - (v - minVal) / (maxVal - minVal || 1);
-    const fillCls = rank < 0.33 ? 'good' : rank < 0.67 ? 'warn' : 'bad';
-    html += `
-      <div class="bar-row">
-        <div class="bar-label" title="${qpu}">${qpu}</div>
-        <div class="bar-track">
-          <div class="bar-fill ${fillCls}" style="width:${pct.toFixed(1)}%">${getLabel(qpu)}</div>
-        </div>
-      </div>`;
-  }
-  chart.innerHTML = html;
-}
 
 let _selectedQPU = null;
 async function showQPUDetail(qpu, el) {
@@ -1765,6 +1756,161 @@ function _renderTopology(containerId, couplingMap, numQubits, qpuName, d) {
   renderView();
 }
 
+// ─────────────────────────────────────────────────────────
+// 토폴로지 그래프 (ECharts graph / force layout)
+// ─────────────────────────────────────────────────────────
+let _topoCharts = {};
+let _qpuDetailData = {};
+
+function _lerpColor(c1, c2, t) {
+  return [0,1,2].map(i => Math.round(c1[i] + (c2[i]-c1[i])*t));
+}
+function _qNodeColor(norm, isError) {
+  if (norm == null) return '#4a4f58';
+  const t = isError ? norm : 1 - norm;  // error: 높을수록 빨강 / T1/T2: 높을수록 초록
+  const g=[63,185,80], y=[210,153,34], r=[248,81,73];
+  const rgb = t < 0.5 ? _lerpColor(g,y,t*2) : _lerpColor(y,r,(t-0.5)*2);
+  return `rgb(${rgb.join(',')})`;
+}
+// 노드 이름 → per-qubit 배열 인덱스
+function _nodeVal(name, arr) {
+  if (!arr) return null;
+  const n = parseInt(name);
+  if (!isNaN(n) && n >= 0 && n < arr.length) return arr[n];
+  const m = name.match(/^QB(\d+)$/i);
+  if (m) { const i = parseInt(m[1])-1; return (i>=0 && i<arr.length) ? arr[i] : null; }
+  return null;
+}
+// edge_2q_error([q1,q2,err]) → 노드별 평균 2Q error 배열
+function _edgesToNodeAvg(edgeData, nodeNames) {
+  const acc = {};
+  (edgeData||[]).forEach(([a,b,err]) => {
+    const sa=String(a), sb=String(b);
+    (acc[sa]=acc[sa]||[]).push(err);
+    (acc[sb]=acc[sb]||[]).push(err);
+  });
+  return nodeNames.map(n => {
+    const vals = acc[n];
+    return vals ? vals.reduce((s,v)=>s+v,0)/vals.length : null;
+  });
+}
+const _topoColorMeta = {
+  '1q_error': { label:'1Q Err', isError:true,  fmt: v=>(v*100).toFixed(3)+'%',
+                getArr: (d,ns) => ns.map(n=>_nodeVal(n, d.qubit_1q_error)) },
+  '2q_error': { label:'2Q Err', isError:true,  fmt: v=>(v*100).toFixed(3)+'%',
+                getArr: (d,ns) => _edgesToNodeAvg(d.edge_2q_error, ns) },
+  't1':       { label:'T1',     isError:false, fmt: v=>{const r=fmtMs(v);return r?r.text+r.unit:'—';},
+                getArr: (d,ns) => ns.map(n=>_nodeVal(n, d.qubit_t1_ms)) },
+  't2':       { label:'T2',     isError:false, fmt: v=>{const r=fmtMs(v);return r?r.text+r.unit:'—';},
+                getArr: (d,ns) => ns.map(n=>_nodeVal(n, d.qubit_t2_ms)) },
+  'ro_error': { label:'RO Err', isError:true,  fmt: v=>(v*100).toFixed(3)+'%',
+                getArr: (d,ns) => ns.map(n=>_nodeVal(n, d.qubit_ro_error)) },
+};
+function _topoType(qpu, cm) {
+  if (!cm||!cm.length||(typeof cm[0]==='string'&&cm[0].startsWith('all'))) return 'All-to-all';
+  if (qpu.startsWith('ibm'))     return 'Heavy-hex lattice';
+  if (qpu.startsWith('iqm'))     return cm.some(e=>e.some(n=>/^COMPR/i.test(String(n)))) ? 'Star lattice' : 'Grid';
+  if (qpu.startsWith('rigetti')) return 'Square lattice';
+  return 'Custom';
+}
+function switchTopoMetric(qpu, metric, btn) {
+  const safeId = qpu.replace(/[^a-z0-9]/gi,'_');
+  document.querySelectorAll(`#topo-tabs-${safeId} .qubit-dist-tab`).forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  _renderTopologyGraph(qpu, _qpuDetailData[qpu]||_qpuData[qpu], metric);
+}
+function _renderTopologyGraph(qpu, d, metric) {
+  const safeId = qpu.replace(/[^a-z0-9]/gi,'_');
+  const el = document.getElementById(`topo-canvas-${safeId}`);
+  if (!el) return;
+  if (_topoCharts[safeId]) { _topoCharts[safeId].dispose(); }
+
+  const cm = Array.isArray(d.coupling_map) ? d.coupling_map : (d.coupling_map ? ['all_to_all'] : []);
+  if (!cm.length || (typeof cm[0] === 'string' && cm[0].startsWith('all'))) return; // handled by static HTML
+
+  // 방향 중복 제거
+  const seen = new Set();
+  const edges = [];
+  cm.forEach(([a,b]) => {
+    const k=[String(a),String(b)].sort().join('\0');
+    if (!seen.has(k)) { seen.add(k); edges.push([String(a),String(b)]); }
+  });
+  const nodeSet = new Set();
+  edges.forEach(([a,b])=>{ nodeSet.add(a); nodeSet.add(b); });
+  const nodeNames = [...nodeSet];
+
+  const meta = _topoColorMeta[metric]||_topoColorMeta['1q_error'];
+  const rawVals = meta.getArr(d, nodeNames);
+  const valid = rawVals.filter(v=>v!=null);
+  const lo = valid.length ? Math.min(...valid) : 0;
+  const hi = valid.length ? Math.max(...valid) : 1;
+  const normFn = v => v==null ? null : (hi===lo ? 0.5 : (v-lo)/(hi-lo));
+
+  const isCoupler = n => /^COMPR|^coupler/i.test(n);
+  const n = nodeNames.length;
+  const sz = n<=20 ? 14 : n<=40 ? 10 : n<=60 ? 7 : n<=100 ? 5 : 4;
+  const showLabel = n <= 25;
+  const isLarge = n > 80;
+
+  const chart = echarts.init(el, 'dark', {backgroundColor:'transparent'});
+  _topoCharts[safeId] = chart;
+
+  // fixed layout from precomputed networkx positions
+  const posMap = d.qubit_positions || null; // {"0":[x,y],...} normalized [0,1]
+  const useFixed = posMap && typeof posMap === 'object' && !Array.isArray(posMap);
+  const W = el.clientWidth  || 400;
+  const H = el.clientHeight || 320;
+  const PAD = 24; // px padding so nodes don't sit on edge
+
+  const nodes = nodeNames.map((name,i)=>{
+    const coupler = isCoupler(name);
+    const color = coupler ? '#4a4f58' : _qNodeColor(normFn(rawVals[i]), meta.isError);
+    const node = {
+      id:name, name,
+      symbolSize: coupler ? 5 : sz,
+      symbol: coupler ? 'diamond' : 'circle',
+      itemStyle:{ color, borderColor:'#21262d', borderWidth:1 },
+      label:{ show:showLabel&&!coupler, formatter:p=>p.name, fontSize:8, color:'#c9d1d9' },
+    };
+    if (useFixed && posMap[name]) {
+      node.x = PAD + posMap[name][0] * (W - PAD*2);
+      node.y = PAD + posMap[name][1] * (H - PAD*2);
+      node.fixed = true;
+    }
+    return node;
+  });
+
+  chart.setOption({
+    backgroundColor:'transparent',
+    tooltip:{
+      trigger:'item',
+      backgroundColor:'#161b22', borderColor:'#30363d',
+      textStyle:{color:'#e6edf3',fontSize:11},
+      formatter: p => {
+        if (p.dataType!=='node') return '';
+        const idx = nodeNames.indexOf(p.name);
+        const v = idx>=0 ? rawVals[idx] : null;
+        return `<b>${p.name}</b><br/>${meta.label}: ${v!=null?meta.fmt(v):'—'}`;
+      },
+    },
+    series:[{
+      type:'graph',
+      layout: useFixed ? 'none' : 'force',
+      ...(useFixed ? {} : {
+        force:{ repulsion:n<=20?120:n<=40?80:n<=80?55:35,
+                gravity:isLarge?0.25:0.12,
+                edgeLength:n<=20?[40,80]:n<=40?[25,55]:n<=80?[15,35]:[8,20],
+                friction:isLarge?0.9:0.65,
+                layoutAnimation:!isLarge },
+      }),
+      nodes,
+      edges: edges.map(([a,b])=>({ source:a, target:b, lineStyle:{color:'#30363d',width:1} })),
+      roam:true, zoom:0.95,
+      emphasis:{ focus:'adjacency' },
+    }],
+  });
+}
+
 function renderQPUDetail(container, qpu, d) {
   const _vk = qpu.startsWith('quera') ? 'quera'
     : qpu.startsWith('ionq') ? 'ionq'
@@ -1777,22 +1923,6 @@ function renderQPUDetail(container, qpu, d) {
   const q2e = errorRate(d.avg_2q_error);
   const roe = errorRate(d.avg_ro_error);
 
-  const _vendorLinks = {
-    ibm:     {label: 'IBM Quantum',        url: 'https://quantum.ibm.com/services/resources'},
-    iqm:     {label: 'IQM Resonance',        url: 'https://resonance.meetiqm.com/'},
-    ionq:    {label: 'IonQ Quantum Cloud', url: 'https://ionq.com/quantum-systems'},
-    rigetti: {label: 'Rigetti QCS',        url: 'https://qcs.rigetti.com/'},
-    quera:   {label: 'QuEra Aquila',       url: 'https://www.quera.com/aquila'},
-  };
-  const _vlink = _vendorLinks[_vk];
-  const vendorLinkHtml = _vlink
-    ? `<div style="margin-top:12px">
-        <a href="${_vlink.url}" target="_blank" rel="noopener noreferrer"
-           style="font-size:11px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;opacity:0.85">
-          ↗ ${_vlink.label} — 토폴로지 및 세부 스펙 확인
-        </a>
-       </div>`
-    : '';
 
   let calGridHtml = '';
   if (_vk === 'quera') {
@@ -1819,6 +1949,89 @@ function renderQPUDetail(container, qpu, d) {
       <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${(r=>r?r.text+'<span class="cal-unit">'+r.unit+'</span>':'—')(fmtNs(d.avg_2q_ns))}</div></div>`;
   }
 
+  const safeId = qpu.replace(/[^a-z0-9]/gi,'_');
+  _qpuDetailData[qpu] = d;
+
+  // ── 토폴로지 왼쪽 패널 ──────────────────────────────────
+  const cm = Array.isArray(d.coupling_map) ? d.coupling_map : (d.coupling_map ? ['all_to_all'] : []);
+  const isAllToAll = !cm.length || (typeof cm[0] === 'string' && cm[0].startsWith('all'));
+  const cmEdges = (() => {
+    const seen=new Set(), out=[];
+    cm.filter(e=>e[0]!=='all_').forEach(([a,b])=>{
+      const k=[String(a),String(b)].sort().join('\0');
+      if(!seen.has(k)){seen.add(k);out.push([String(a),String(b)]);}
+    });
+    return out;
+  })();
+  const cmNodes = [...new Set(cmEdges.flatMap(([a,b])=>[a,b]))];
+  const numEdges = isAllToAll ? null : cmEdges.length;
+  const avgDeg = numEdges && cmNodes.length ? (numEdges*2/cmNodes.length).toFixed(1) : '—';
+  const topoTypeName = _topoType(qpu, cm);
+  const useGraph = !isAllToAll;
+
+  // 토폴로지 색상 메트릭 탭 — 데이터 있는 것만 표시 (2Q는 edge_2q_error 기반)
+  const topoTabDefs = [
+    {id:'t1',       has:!!d.qubit_t1_ms},
+    {id:'t2',       has:!!d.qubit_t2_ms},
+    {id:'1q_error', has:!!d.qubit_1q_error},
+    {id:'2q_error', has:!!(d.edge_2q_error&&d.edge_2q_error.length)},
+    {id:'ro_error', has:!!d.qubit_ro_error},
+  ].filter(t=>t.has);
+  const defaultTopoMetric = topoTabDefs.length ? topoTabDefs[0].id : '1q_error';
+  const hasTopoColor = topoTabDefs.length > 0;
+
+  const topoTabsHtml = (useGraph && hasTopoColor) ? `
+    <div id="topo-tabs-${safeId}" class="qubit-dist-tabs" style="margin-bottom:0">
+      ${topoTabDefs.map((t,i)=>`<button class="qubit-dist-tab${i===0?' active':''}" onclick="switchTopoMetric('${qpu}','${t.id}',this)">${_topoColorMeta[t.id].label}</button>`).join('')}
+    </div>` : '';
+
+  const topoGraphHtml = useGraph
+    ? `<div id="topo-canvas-${safeId}" class="topo-canvas"></div>
+       ${hasTopoColor ? `<div class="topo-legend"><span class="topo-legend-label">Good</span><div class="topo-legend-bar"></div><span class="topo-legend-label">Poor</span></div>` : ''}`
+    : `<div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text3)">${isAllToAll?'All-to-all connectivity':topoTypeName}</div>`;
+
+  const topoLeftHtml = `
+    <div class="topo-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span class="topo-panel-title">Topology</span>
+        ${topoTabsHtml}
+      </div>
+      ${topoGraphHtml}
+      <div class="topo-stats-row">
+        <div class="topo-stat-box"><div class="topo-stat-val">${d.num_qubits??'—'}</div><div class="topo-stat-lbl">Qubits</div></div>
+        <div class="topo-stat-box"><div class="topo-stat-val">${numEdges??'∞'}</div><div class="topo-stat-lbl">Connections</div></div>
+        <div class="topo-stat-box"><div class="topo-stat-val">${isAllToAll?'∞':avgDeg}</div><div class="topo-stat-lbl">Avg Degree</div></div>
+      </div>
+      <div class="topo-type-badge">${topoTypeName}</div>
+    </div>`;
+
+  // ── 퀀텀비트 분포 오른쪽 패널 ───────────────────────────
+  const hasPerQubit = d.qubit_1q_error || d.qubit_t1_ms || d.qubit_t2_ms || d.qubit_ro_error;
+  const distTabDefs = [
+    {id:'t1',       label:'T1',     has:!!d.qubit_t1_ms},
+    {id:'t2',       label:'T2',     has:!!d.qubit_t2_ms},
+    {id:'1q_error', label:'1Q Err', has:!!d.qubit_1q_error},
+    {id:'2q_error', label:'2Q Err', has:!!(d.edge_2q_error&&d.edge_2q_error.length)},
+    {id:'ro_error', label:'RO Err', has:!!d.qubit_ro_error},
+  ].filter(t=>t.has);
+  const defaultDistMetric = distTabDefs.length ? distTabDefs[0].id : '1q_error';
+
+  const distTabsHtml = distTabDefs.length ? `
+    <div class="qubit-dist-tabs" style="margin-bottom:0">
+      ${distTabDefs.map((t,i)=>`<button class="qubit-dist-tab${i===0?' active':''}" onclick="switchQubitDist('${qpu}','${t.id}',this)">${t.label}</button>`).join('')}
+    </div>` : '';
+
+  const distRightHtml = `
+    <div class="topo-panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span class="topo-panel-title">Per-qubit Distribution</span>
+        ${distTabsHtml}
+      </div>
+      ${hasPerQubit
+        ? `<div id="qubit-dist-chart-${safeId}" class="qubit-dist-canvas"></div>`
+        : `<div style="display:flex;align-items:center;justify-content:center;height:210px;color:var(--text3);font-size:11px">퀀텀비트별 데이터 없음</div>`}
+    </div>`;
+
   container.innerHTML = `
     <div class="qpu-detail">
       <div class="qpu-detail-header">
@@ -1829,10 +2042,20 @@ function renderQPUDetail(container, qpu, d) {
         </div>
       </div>
       <div class="cal-grid">${calGridHtml}</div>
-      ${d.basis_gates ? `<div class="gates-list">${d.basis_gates.map(g=>`<span class="gate-tag">${g}</span>`).join('')}</div>` : ''}
-      ${vendorLinkHtml}
-      <div style="margin-top:10px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? new Date(d.last_updated).toLocaleString() : '—'}</div>
+      <div class="topo-dist-grid">${topoLeftHtml}${distRightHtml}</div>
+      ${d.basis_gates ? `<div class="gates-list" style="margin-top:12px">${d.basis_gates.map(g=>`<span class="gate-tag">${g}</span>`).join('')}</div>` : ''}
+      <div style="margin-top:8px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? new Date(d.last_updated).toLocaleString() : '—'}</div>
     </div>`;
+
+  if (hasPerQubit) {
+    _renderQubitDistChart(qpu, defaultDistMetric, d);
+  }
+  if (useGraph) {
+    _renderTopologyGraph(qpu, d, defaultTopoMetric);
+  }
+
+  // 심층 분석 섹션 갱신
+  renderQPUDeepAnalysis();
 }
 
 async function refreshQPUDetail(qpu) {
@@ -1846,13 +2069,469 @@ async function refreshQPUDetail(qpu) {
     : qpu.startsWith('quera') ? 'quera' : 'ibm';
   _qpuData[qpu] = { ...d, type: _vendor };
   renderQPUDetail(container, qpu, d);
-  renderCompareChart(_compareMetric);
 }
 
 function closeQPUDetail() {
   _selectedQPU = null;
   document.querySelectorAll('.qpu-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('qpu-detail-container').innerHTML='';
+  renderQPUDeepAnalysis();
+}
+
+// ─────────────────────────────────────────────────────────
+// Per-qubit 분포 차트 (ECharts bar)
+// ─────────────────────────────────────────────────────────
+let _qubitDistCharts = {};
+
+function _renderQubitDistChart(qpu, metric, d) {
+  const safeId = qpu.replace(/[^a-z0-9]/gi, '_');
+  const el = document.getElementById(`qubit-dist-chart-${safeId}`);
+  if (!el) return;
+
+  let values, label, formatter;
+  if (metric === '1q_error') {
+    values = d.qubit_1q_error;
+    label = '1Q Error';
+    formatter = v => (v * 100).toFixed(3) + '%';
+  } else if (metric === '2q_error') {
+    // edge_2q_error: [[q1,q2,err],...] → 엣지별 err 값을 바 차트로 표시
+    const edges = d.edge_2q_error || [];
+    values = edges.map(e => e[2]);
+    label = '2Q Error (per edge)';
+    formatter = v => (v * 100).toFixed(3) + '%';
+  } else if (metric === 't1') {
+    values = d.qubit_t1_ms;
+    label = 'T1';
+    formatter = v => { const r = fmtMs(v); return r ? r.text + r.unit : '—'; };
+  } else if (metric === 't2') {
+    values = d.qubit_t2_ms;
+    label = 'T2';
+    formatter = v => { const r = fmtMs(v); return r ? r.text + r.unit : '—'; };
+  } else if (metric === 'ro_error') {
+    values = d.qubit_ro_error;
+    label = 'RO Error';
+    formatter = v => (v * 100).toFixed(3) + '%';
+  }
+  if (!values || !values.length) return;
+
+  // 에러 메트릭은 임계값 기반 색상, 시간 메트릭은 단색
+  const isError = metric === '1q_error' || metric === '2q_error' || metric === 'ro_error';
+  const colors = isError
+    ? values.map(v => v < 0.005 ? '#3fb950' : v < 0.02 ? '#d29922' : '#f85149')
+    : values.map(() => 'rgba(0,212,255,0.7)');
+
+  if (_qubitDistCharts[safeId]) {
+    _qubitDistCharts[safeId].dispose();
+  }
+  const chart = echarts.init(el, 'dark', { backgroundColor: 'transparent' });
+  _qubitDistCharts[safeId] = chart;
+
+  chart.setOption({
+    backgroundColor: 'transparent',
+    grid: { top: 8, bottom: 28, left: 48, right: 8 },
+    xAxis: {
+      type: 'category',
+      data: values.map((_, i) => i),
+      axisLabel: { show: values.length <= 30, fontSize: 9, color: '#8b949e' },
+      axisLine: { lineStyle: { color: '#30363d' } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { fontSize: 9, color: '#8b949e', formatter: v => formatter(v) },
+      splitLine: { lineStyle: { color: '#21262d' } },
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#161b22',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3', fontSize: 11 },
+      formatter: p => `Q${p[0].dataIndex}: ${formatter(p[0].value)}`,
+    },
+    series: [{
+      type: 'bar',
+      data: values.map((v, i) => ({ value: v, itemStyle: { color: colors[i] } })),
+      barMaxWidth: 8,
+    }],
+  });
+}
+
+function switchQubitDist(qpu, metric, btn) {
+  const safeId = qpu.replace(/[^a-z0-9]/gi, '_');
+  const container = document.getElementById(`qubit-dist-chart-${safeId}`);
+  if (!container) return;
+  container.closest('.topo-panel').querySelectorAll('.qubit-dist-tab')
+    .forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  const d = _qpuDetailData[qpu] || _qpuData[qpu];
+  if (d) _renderQubitDistChart(qpu, metric, d);
+}
+
+// ─────────────────────────────────────────────────────────
+// QPU 심층 분석: 레이더 + 박스플롯
+// ─────────────────────────────────────────────────────────
+let _radarChart = null;
+let _boxplotChart = null;
+
+const _modalityDefs = [
+  { id: 'superconducting', label: 'Superconducting', match: q => q.startsWith('ibm') || q.startsWith('iqm') || q.startsWith('rigetti') },
+  { id: 'ion-trap',        label: 'Ion-trap',        match: q => q.startsWith('ionq') },
+  { id: 'neutral-atom',   label: 'Neutral Atom',    match: q => q.startsWith('quera') },
+  { id: 'photonic',       label: 'Photonic',        match: q => q.startsWith('sim:') || q.startsWith('qpu:') },
+];
+// 활성화된 모달리티 집합 — 기본값: SC only (가장 완전한 데이터)
+let _activeModalities = new Set(['superconducting']);
+
+// 레이더/박스플롯에 쓸 수 있는 전체 메트릭 레지스트리
+// 선택된 QPU들이 실제로 가진 데이터의 합집합으로 표시 축을 결정
+const _allRadarMetrics = [
+  { key: 'avg_t1_ms',          label: 'T1',     invert: false },
+  { key: 'avg_t2_ms',          label: 'T2',     invert: false },
+  { key: 'avg_1q_error',       label: '1Q Err', invert: true  },
+  { key: 'avg_2q_error',       label: '2Q Err', invert: true  },
+  { key: 'avg_ro_error',       label: 'RO Err', invert: true  },
+  { key: 'rabi_freq_max_mhz',  label: 'Rabi',   invert: false },
+  { key: 'avg_transmittance',  label: 'Trans.', invert: false },
+  { key: 'avg_hom',            label: 'HOM',    invert: false },
+];
+
+function toggleRadarModality(modId, btn) {
+  if (modId === 'all') {
+    // All 버튼: SC+Ion 프리셋 (비교 의미 있는 하드웨어 조합)
+    _activeModalities = new Set(['superconducting', 'ion-trap']);
+  } else {
+    if (_activeModalities.has(modId)) {
+      _activeModalities.delete(modId);
+      // 아무것도 없으면 SC로 복귀
+      if (_activeModalities.size === 0) _activeModalities.add('superconducting');
+    } else {
+      _activeModalities.add(modId);
+    }
+  }
+  // 버튼 active 상태 동기화
+  document.querySelectorAll('.radar-mod-tab[data-mod]').forEach(b => {
+    b.classList.toggle('active', _activeModalities.has(b.dataset.mod));
+  });
+  // All 버튼: SC+Ion 프리셋일 때만 active
+  const allBtn = document.getElementById('radar-modality-all');
+  if (allBtn) {
+    const isPreset = _activeModalities.size === 2 &&
+      _activeModalities.has('superconducting') && _activeModalities.has('ion-trap');
+    allBtn.classList.toggle('active', isPreset);
+  }
+  _reRenderRadar();
+  _updateBoxplotTabs();
+  _reRenderBoxplot();
+}
+
+function _reRenderBoxplot() {
+  const el = document.getElementById('chart-boxplot');
+  if (!el) return;
+  const qpus = _getBoxplotQpus();
+  const relevant = _getRelevantBoxplotMetrics();
+  if (relevant.length === 0) {
+    if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">선택된 모달리티의 분포 데이터가 없습니다.</div>';
+    return;
+  }
+  if (el.innerHTML.trim() && !_boxplotChart) el.innerHTML = '';
+  _renderBoxplotChart(qpus, _boxplotMetric);
+}
+
+function _reRenderRadar() {
+  const el = document.getElementById('chart-radar');
+  if (!el) return;
+
+  const allQpus = Object.keys(_qpuData).filter(q => !_qpuData[q].error);
+  const qpus = allQpus.filter(q =>
+    _modalityDefs.some(m => _activeModalities.has(m.id) && m.match(q))
+  );
+
+  // 선택된 QPU들 중 레이더 메트릭 데이터를 1개라도 가진 QPU가 있어야 함
+  const hasCalData = qpus.some(q =>
+    _allRadarMetrics.some(m => _qpuData[q][m.key] != null)
+  );
+
+  if (!hasCalData) {
+    if (_radarChart) { _radarChart.dispose(); _radarChart = null; }
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">캘리브레이션 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  if (qpus.length < 2) {
+    if (_radarChart) { _radarChart.dispose(); _radarChart = null; }
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">레이더 비교에는 QPU가 2개 이상 필요합니다.</div>`;
+    return;
+  }
+
+  _renderRadarChart(qpus);
+}
+
+function renderQPUDeepAnalysis() {
+  const section = document.getElementById('qpu-analysis-section');
+  if (!section) return;
+  // SC QPU가 2개 이상일 때만 섹션 표시 (기본 SC 모드 기준)
+  const scQpus = Object.keys(_qpuData).filter(q =>
+    !q.startsWith('sim:') && !q.startsWith('qpu:') && !_qpuData[q].error
+  );
+  if (scQpus.length < 2) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+
+  _updateBoxplotTabs();
+  _reRenderRadar();
+  _reRenderBoxplot();
+}
+
+function _renderRadarChart(qpus) {
+  const el = document.getElementById('chart-radar');
+  if (!el) return;
+  if (_radarChart) { _radarChart.dispose(); }
+  _radarChart = echarts.init(el, 'dark', { backgroundColor: 'transparent' });
+
+  // 선택된 QPU들이 실제로 가진 데이터의 합집합으로 축 결정
+  const metrics = _allRadarMetrics.filter(m =>
+    qpus.some(q => _qpuData[q][m.key] != null)
+  );
+  if (!metrics.length) return;
+
+  // 각 메트릭별 QPU 원시값 (정규화 전)
+  const rawVals = metrics.map(m => qpus.map(q => _qpuData[q][m.key] ?? null));
+
+  // 로그 스케일 정규화 (T1/T2처럼 범위가 큰 지표도 균등 비교)
+  // 데이터 없는 QPU는 0 (레이더 중앙) — tooltip에서 N/A 표기
+  const logNorm = (vals, invert) => {
+    const valid = vals.filter(v => v != null && v > 0);
+    if (!valid.length) return vals.map(() => 0);
+    const logVals = valid.map(v => Math.log10(v));
+    const lo = Math.min(...logVals), hi = Math.max(...logVals);
+    const range = hi - lo || 1;
+    return vals.map(v => {
+      if (v == null || v <= 0) return 0;
+      const n = (Math.log10(v) - lo) / range;
+      return invert ? Math.max(0, 1 - n) : n;
+    });
+  };
+
+  const normScores = metrics.map((m, mi) => logNorm(rawVals[mi], m.invert));
+
+  const colors = ['#00d4ff','#3fb950','#d29922','#f85149','#a371f7','#ff9800','#58a6ff'];
+
+  _radarChart.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: '#161b22',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3', fontSize: 11 },
+      formatter: p => {
+        const qi = qpus.indexOf(p.name);
+        if (qi < 0) return p.name;
+        const lines = metrics.map((m, mi) => {
+          const raw = rawVals[mi][qi];
+          let valStr;
+          if (raw == null) {
+            valStr = '<span style="color:#484f58;font-style:italic">N/A</span>';
+          } else if (m.key === 'avg_t1_ms' || m.key === 'avg_t2_ms') {
+            const r = fmtMs(raw); valStr = r ? r.text + r.unit : '—';
+          } else {
+            valStr = (raw * 100).toFixed(3) + '%';
+          }
+          return `${m.label}: ${valStr}`;
+        });
+        return `<b>${p.name}</b><br>${lines.join('<br>')}`;
+      },
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: '#8b949e', fontSize: 10 },
+      itemWidth: 10, itemHeight: 10,
+    },
+    radar: {
+      indicator: metrics.map(m => ({ name: m.label, max: 1 })),
+      center: ['50%', '48%'],
+      radius: '62%',
+      axisName: { color: '#8b949e', fontSize: 10 },
+      splitLine: { lineStyle: { color: '#21262d' } },
+      axisLine: { lineStyle: { color: '#30363d' } },
+      splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'transparent'] } },
+    },
+    series: [{
+      type: 'radar',
+      data: qpus.map((q, i) => ({
+        name: q,
+        value: metrics.map((m, mi) => normScores[mi][i]),
+        lineStyle: { color: colors[i % colors.length], width: 1.5 },
+        areaStyle: { color: colors[i % colors.length], opacity: 0.08 },
+        symbol: 'circle', symbolSize: 4,
+        itemStyle: { color: colors[i % colors.length] },
+      })),
+    }],
+  });
+}
+
+let _boxplotMetric = 't1';
+
+// 메트릭별 설정
+const _boxplotMeta = {
+  '1q_error': { perKey: 'qubit_1q_error', avgKey: 'avg_1q_error', label: '1Q Error', fmt: v => (v*100).toFixed(4)+'%', scale: v => v*100 },
+  '2q_error': { perKey: 'edge_2q_error',  avgKey: 'avg_2q_error', label: '2Q Error', fmt: v => (v*100).toFixed(4)+'%', scale: v => v*100 },
+  'ro_error': { perKey: 'qubit_ro_error', avgKey: 'avg_ro_error', label: 'RO Error', fmt: v => (v*100).toFixed(4)+'%', scale: v => v*100 },
+  't1':       { perKey: 'qubit_t1_ms',   avgKey: 'avg_t1_ms',    label: 'T1',       fmt: v => { const r=fmtMs(v); return r?r.text+r.unit:'—'; }, scale: v => v },
+  't2':       { perKey: 'qubit_t2_ms',   avgKey: 'avg_t2_ms',    label: 'T2',       fmt: v => { const r=fmtMs(v); return r?r.text+r.unit:'—'; }, scale: v => v },
+};
+
+// 현재 모달리티 기준으로 박스플롯에 표시할 QPU 목록
+function _getBoxplotQpus() {
+  const allQpus = Object.keys(_qpuData).filter(q => !_qpuData[q].error);
+  return allQpus.filter(q =>
+    _modalityDefs.some(m => _activeModalities.has(m.id) && m.match(q))
+  );
+}
+
+// 현재 선택된 QPU들이 실제로 가진 데이터의 합집합으로 박스플롯 탭 결정
+function _getRelevantBoxplotMetrics() {
+  const qpus = _getBoxplotQpus();
+  if (!qpus.length) return [];
+  const avgKeyMap = {
+    't1':       'avg_t1_ms',
+    't2':       'avg_t2_ms',
+    '1q_error': 'avg_1q_error',
+    '2q_error': 'avg_2q_error',
+    'ro_error': 'avg_ro_error',
+  };
+  return ['t1', 't2', '1q_error', '2q_error', 'ro_error'].filter(m =>
+    qpus.some(q => _qpuData[q][avgKeyMap[m]] != null)
+  );
+}
+
+// 탭 show/hide + 현재 metric이 숨겨지면 첫 번째 유효한 탭으로 전환
+function _updateBoxplotTabs() {
+  const relevant = _getRelevantBoxplotMetrics();
+  const relevantSet = new Set(relevant);
+  const tabs = document.querySelectorAll('#boxplot-metric-tabs .qubit-dist-tab[data-metric]');
+  tabs.forEach(tab => {
+    tab.style.display = relevantSet.has(tab.dataset.metric) ? '' : 'none';
+  });
+  // 현재 metric이 숨겨진 경우 첫 번째 유효한 탭으로 자동 전환
+  if (!relevantSet.has(_boxplotMetric) && relevant.length > 0) {
+    _boxplotMetric = relevant[0];
+    tabs.forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.metric === _boxplotMetric);
+    });
+  }
+}
+
+function switchBoxplotMetric(metric, btn) {
+  _boxplotMetric = metric;
+  document.querySelectorAll('#boxplot-metric-tabs .qubit-dist-tab')
+    .forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  _renderBoxplotChart(_getBoxplotQpus(), metric);
+}
+
+function _renderBoxplotChart(qpus, metric) {
+  metric = metric || _boxplotMetric;
+  const el = document.getElementById('chart-boxplot');
+  if (!el) return;
+  if (_boxplotChart) { _boxplotChart.dispose(); }
+  _boxplotChart = echarts.init(el, 'dark', { backgroundColor: 'transparent' });
+
+  const colors = ['#00d4ff','#3fb950','#d29922','#f85149','#a371f7','#ff9800','#58a6ff'];
+  const meta = _boxplotMeta[metric] || _boxplotMeta['1q_error'];
+
+  function boxStats(arr) {
+    if (!arr || arr.length === 0) return null;
+    const s = [...arr].sort((a, b) => a - b);
+    const n = s.length;
+    const q1 = s[Math.floor(n * 0.25)];
+    const q2 = s[Math.floor(n * 0.5)];
+    const q3 = s[Math.floor(n * 0.75)];
+    const iqr = q3 - q1;
+    const lo = Math.max(s[0], q1 - 1.5 * iqr);
+    const hi = Math.min(s[n - 1], q3 + 1.5 * iqr);
+    return [lo, q1, q2, q3, hi];
+  }
+
+  // dataKind: 'full' = per-qubit 박스, 'avg' = 평균값만, 'none' = 데이터 없음
+  const boxData = [], labels = [], dataKind = [];
+  qpus.forEach((q, i) => {
+    const d = _qpuData[q];
+    labels.push(q);
+
+    // per-qubit 배열 추출 (edge_2q_error는 [q1,q2,err] 형식이므로 err만 뽑기)
+    let arr = d[meta.perKey];
+    if (metric === '2q_error' && arr) arr = arr.map(e => e[2]);
+
+    const color = colors[i % colors.length];
+    if (arr && arr.length > 1) {
+      const stats = boxStats(arr);
+      boxData.push({ value: stats.map(v => +meta.scale(v).toFixed(6)), itemStyle: { color, borderColor: color, opacity: 0.85 } });
+      dataKind.push('full');
+    } else {
+      const avg = d[meta.avgKey];
+      if (avg != null) {
+        const v = +meta.scale(avg).toFixed(6);
+        boxData.push({ value: [v,v,v,v,v], itemStyle: { color, borderColor: color, opacity: 0.5 } });
+        dataKind.push('avg');
+      } else {
+        // 데이터 없음 — 위치는 아래 후처리에서 설정
+        boxData.push({ value: [0,0,0,0,0], itemStyle: {} });
+        dataKind.push('none');
+      }
+    }
+  });
+
+  // 데이터 없는 항목: 실제 데이터 최댓값의 8% 위치에 점선 박스 + N/A 레이블
+  const realVals = boxData.filter((_,i) => dataKind[i] !== 'none').flatMap(b => b.value).filter(v => v > 0);
+  const dataMax = realVals.length ? Math.max(...realVals) : 1;
+  const naY = +(dataMax * 0.08).toFixed(6);
+  boxData.forEach((b, i) => {
+    if (dataKind[i] === 'none') {
+      b.value = [naY, naY, naY, naY, naY];
+      b.itemStyle = { color: 'transparent', borderColor: '#484f58', borderType: 'dashed', opacity: 0.6 };
+      b.label = { show: true, formatter: 'N/A', color: '#6e7681', fontSize: 9, fontStyle: 'italic', position: 'top' };
+    }
+  });
+
+  const isTime = metric === 't1' || metric === 't2';
+  const yFormatter = isTime ? v => { const r=fmtMs(v); return r?r.text+r.unit:v; } : v => v+'%';
+
+  _boxplotChart.setOption({
+    backgroundColor: 'transparent',
+    grid: { top: 12, bottom: 60, left: 56, right: 12 },
+    tooltip: {
+      trigger: 'item',
+      backgroundColor: '#161b22',
+      borderColor: '#30363d',
+      textStyle: { color: '#e6edf3', fontSize: 11 },
+      formatter: p => {
+        const idx = p.dataIndex;
+        if (dataKind[idx] === 'none') return `${labels[idx]}<br><span style="color:#6e7681;font-style:italic">데이터 없음</span>`;
+        if (dataKind[idx] === 'avg') return `${labels[idx]}<br>${meta.label}: ${meta.fmt(isTime ? p.value[2] : p.value[2]/100)}<br><span style="opacity:0.5;font-size:10px">avg only</span>`;
+        const [lo, q1, q2, q3, hi] = p.value;
+        const f = v => isTime ? meta.fmt(v) : meta.fmt(v/100);
+        return `${labels[idx]}<br>Max: ${f(hi)}<br>Q3: ${f(q3)}<br>Median: ${f(q2)}<br>Q1: ${f(q1)}<br>Min: ${f(lo)}`;
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: { color: '#8b949e', fontSize: 9, rotate: 20, interval: 0 },
+      axisLine: { lineStyle: { color: '#30363d' } },
+    },
+    yAxis: {
+      type: 'value',
+      name: meta.label,
+      nameTextStyle: { color: '#8b949e', fontSize: 9 },
+      axisLabel: { color: '#8b949e', fontSize: 9, formatter: yFormatter },
+      splitLine: { lineStyle: { color: '#21262d' } },
+    },
+    series: [{
+      type: 'boxplot',
+      data: boxData,
+      label: { show: false },
+      tooltip: { trigger: 'item' },
+    }],
+  });
 }
 
 // ─────────────────────────────────────────────────────────

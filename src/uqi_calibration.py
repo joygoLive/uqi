@@ -13,6 +13,40 @@ from dotenv import load_dotenv
 
 CALIBRATION_DB = "uqi_calibration.db"
 
+
+def _compute_layout_positions(coupling_edges: list) -> dict:
+    """
+    커플링 맵에서 2D 레이아웃 좌표 계산 (networkx 기반).
+    Returns: {str(node): [x, y]} 정규화된 [0,1] 범위
+    """
+    try:
+        import networkx as nx
+        G = nx.Graph()
+        seen = set()
+        for a, b in coupling_edges:
+            sa, sb = str(a), str(b)
+            key = tuple(sorted([sa, sb]))
+            if key not in seen:
+                seen.add(key)
+                G.add_edge(sa, sb)
+        if G.number_of_nodes() == 0:
+            return {}
+        # 소규모: Kamada-Kawai (품질↑), 대규모: spectral (속도↑)
+        if G.number_of_nodes() <= 80:
+            pos = nx.kamada_kawai_layout(G)
+        else:
+            pos = nx.spectral_layout(G)
+        xs = [p[0] for p in pos.values()]
+        ys = [p[1] for p in pos.values()]
+        xr = max(xs) - min(xs) or 1
+        yr = max(ys) - min(ys) or 1
+        x0, y0 = min(xs), min(ys)
+        return {n: [round((x-x0)/xr, 4), round((y-y0)/yr, 4)]
+                for n, (x, y) in pos.items()}
+    except Exception as e:
+        print(f"      ⚠ layout pos error: {e}")
+        return {}
+
 # SQLite의 표준 컬럼 집합 (extra_data에 저장되지 않을 필드)
 _KNOWN_COLS = frozenset({
     'vendor', 'num_qubits', 'avg_t1_ms', 'avg_t2_ms',
@@ -352,6 +386,7 @@ class UQICalibration:
 
             # ── per-edge 수집 ──
             q2_err_list, q2_dur_list = [], []
+            edge_2q_error = []
             coupling_map = backend.coupling_map
             if coupling_map:
                 for edge in coupling_map.get_edges():
@@ -360,6 +395,7 @@ class UQICalibration:
                             err = props.gate_error(g, list(edge))
                             if err is not None:
                                 q2_err_list.append(err)
+                                edge_2q_error.append([edge[0], edge[1], round(err, 8)])
                                 break
                         except Exception: pass
                     for g in ['ecr', 'cx', 'cz']:
@@ -392,8 +428,15 @@ class UQICalibration:
                 "avg_1q_ns":     float(np.mean(q1_dur_list)) if q1_dur_list else None,
                 "avg_2q_ns":     float(np.mean(q2_dur_list)) if q2_dur_list else None,
                 "basis_gates":   basis_gates,
-                "coupling_map":  coupling_edges,
-                "last_updated":  datetime.now().isoformat(),
+                "coupling_map":    coupling_edges,
+                "qubit_positions": _compute_layout_positions(coupling_edges) or None,
+                "last_updated":    datetime.now().isoformat(),
+                # per-qubit 분포 데이터
+                "qubit_t1_ms":    [round(v, 4) for v in t1_list]     if t1_list    else None,
+                "qubit_t2_ms":    [round(v, 4) for v in t2_list]     if t2_list    else None,
+                "qubit_ro_error": [round(v, 8) for v in ro_list]     if ro_list    else None,
+                "qubit_1q_error": [round(v, 8) for v in q1_err_list] if q1_err_list else None,
+                "edge_2q_error":  edge_2q_error                       if edge_2q_error else None,
             }
             return True
 
@@ -427,13 +470,18 @@ class UQICalibration:
             qubits  = arch.qubits
 
             t1_list, t2_list = [], []
+            qubit_t1_ms, qubit_t2_ms = [], []
             for q in qubits:
                 try:
                     t1_d, t2_d = metrics.get_coherence_times(components=[q])
                     t1 = t1_d.get(q)
                     t2 = t2_d.get(q)
-                    if t1: t1_list.append(t1 * 1e3)
-                    if t2: t2_list.append(t2 * 1e3)
+                    if t1:
+                        t1_list.append(t1 * 1e3)
+                        qubit_t1_ms.append(round(t1 * 1e3, 4))
+                    if t2:
+                        t2_list.append(t2 * 1e3)
+                        qubit_t2_ms.append(round(t2 * 1e3, 4))
                 except Exception: pass
 
             # ── CZ 엣지 수집 ──
@@ -448,11 +496,14 @@ class UQICalibration:
                         if len(locus) == 2:
                             qubit_pairs.append(tuple(locus))
 
+                edge_2q_error = []
                 for pair in qubit_pairs:
                     impl = override.get(pair, default_cz_impl)
                     try:
                         fid = metrics.get_gate_fidelity('cz', impl, pair)
-                        if fid: q2_fid_list.append(fid)
+                        if fid:
+                            q2_fid_list.append(fid)
+                            edge_2q_error.append([pair[0], pair[1], round(1 - fid, 8)])
                     except Exception: pass
                     try:
                         dur = metrics.get_gate_duration('cz', impl, pair)
@@ -469,10 +520,13 @@ class UQICalibration:
                     default_prx_impl = prx_impls[0]
 
             q1_fid_list, q1_dur_list = [], []
+            qubit_1q_error = []
             for q in qubits:
                 try:
                     fid = metrics.get_gate_fidelity('prx', default_prx_impl, (q,))
-                    if fid: q1_fid_list.append(fid)
+                    if fid:
+                        q1_fid_list.append(fid)
+                        qubit_1q_error.append(round(1 - fid, 8))
                 except Exception: pass
                 try:
                     dur = metrics.get_gate_duration('prx', default_prx_impl, (q,))
@@ -482,10 +536,13 @@ class UQICalibration:
 
             # ── readout 오류 수집 ──
             ro_list = []
+            qubit_ro_error = []
             for q in qubits:
                 try:
                     err = metrics.get_readout_error(q)
-                    if err is not None: ro_list.append(err)
+                    if err is not None:
+                        ro_list.append(err)
+                        qubit_ro_error.append(round(err, 8))
                 except Exception: pass
 
             coupling_edges = [[p[0], p[1]] for p in qubit_pairs]
@@ -501,8 +558,15 @@ class UQICalibration:
                 "avg_1q_ns":    float(np.median(q1_dur_list)) if q1_dur_list else None,
                 "avg_2q_ns":    float(np.median(q2_dur_list)) if q2_dur_list else None,
                 "basis_gates":  ["r", "cz", "id"],
-                "coupling_map": coupling_edges,
-                "last_updated": datetime.now().isoformat(),
+                "coupling_map":    coupling_edges,
+                "qubit_positions": _compute_layout_positions(coupling_edges) or None,
+                "last_updated":    datetime.now().isoformat(),
+                # per-qubit 분포 데이터
+                "qubit_t1_ms":    qubit_t1_ms    if qubit_t1_ms    else None,
+                "qubit_t2_ms":    qubit_t2_ms    if qubit_t2_ms    else None,
+                "qubit_ro_error": qubit_ro_error if qubit_ro_error else None,
+                "qubit_1q_error": qubit_1q_error if qubit_1q_error else None,
+                "edge_2q_error":  edge_2q_error  if edge_2q_error  else None,
             }
             return True
 
@@ -727,6 +791,12 @@ class UQICalibration:
             "avg_1q_ns":     cal.get("avg_1q_ns"),
             "avg_2q_ns":     cal.get("avg_2q_ns"),
             "last_updated":  cal.get("last_updated"),
+            "qubit_t1_ms":   cal.get("qubit_t1_ms"),
+            "qubit_t2_ms":   cal.get("qubit_t2_ms"),
+            "qubit_ro_error":cal.get("qubit_ro_error"),
+            "qubit_1q_error":  cal.get("qubit_1q_error"),
+            "edge_2q_error":   cal.get("edge_2q_error"),
+            "qubit_positions": cal.get("qubit_positions"),
         }
 
     # ─────────────────────────────────────────

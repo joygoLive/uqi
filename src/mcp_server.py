@@ -953,18 +953,24 @@ async def uqi_calibration_info(
             if not calibration:
                 return json.dumps({"error": f"캘리브레이션 없음: {qpu_name}"})
             return _safe_json({
-                "qpu_name":     qpu_name,
-                "num_qubits":   calibration.get("num_qubits"),
-                "basis_gates":  calibration.get("basis_gates"),
-                "coupling_map": calibration.get("coupling_map"),
-                "avg_t1_ms":    calibration.get("avg_t1_ms"),
-                "avg_t2_ms":    calibration.get("avg_t2_ms"),
-                "avg_1q_ns":    calibration.get("avg_1q_ns"),
-                "avg_2q_ns":    calibration.get("avg_2q_ns"),
-                "avg_1q_error": calibration.get("avg_1q_error"),
-                "avg_2q_error": calibration.get("avg_2q_error"),
-                "avg_ro_error": calibration.get("avg_ro_error"),
-                "last_updated": calibration.get("last_updated"),
+                "qpu_name":        qpu_name,
+                "num_qubits":      calibration.get("num_qubits"),
+                "basis_gates":     calibration.get("basis_gates"),
+                "coupling_map":    calibration.get("coupling_map"),
+                "avg_t1_ms":       calibration.get("avg_t1_ms"),
+                "avg_t2_ms":       calibration.get("avg_t2_ms"),
+                "avg_1q_ns":       calibration.get("avg_1q_ns"),
+                "avg_2q_ns":       calibration.get("avg_2q_ns"),
+                "avg_1q_error":    calibration.get("avg_1q_error"),
+                "avg_2q_error":    calibration.get("avg_2q_error"),
+                "avg_ro_error":    calibration.get("avg_ro_error"),
+                "last_updated":    calibration.get("last_updated"),
+                "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
+                "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
+                "qubit_ro_error":  calibration.get("qubit_ro_error"),
+                "qubit_1q_error":  calibration.get("qubit_1q_error"),
+                "edge_2q_error":   calibration.get("edge_2q_error"),
+                "qubit_positions": calibration.get("qubit_positions"),
             })
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -991,22 +997,28 @@ async def uqi_all_calibrations() -> str:
                         'ibm'
                     )
                     results[qpu] = {
-                        'qpu_name':      qpu,
-                        'num_qubits':    cal.get('num_qubits'),
-                        'avg_t1_ms':     cal.get('avg_t1_ms'),
-                        'avg_t2_ms':     cal.get('avg_t2_ms'),
-                        'avg_1q_ns':     cal.get('avg_1q_ns'),
-                        'avg_2q_ns':     cal.get('avg_2q_ns'),
-                        'avg_1q_error':  cal.get('avg_1q_error'),
-                        'avg_2q_error':  cal.get('avg_2q_error'),
-                        'avg_ro_error':  cal.get('avg_ro_error'),
-                        'basis_gates':   cal.get('basis_gates'),
-                        'coupling_map':  cal.get('coupling_map'),
-                        'last_updated':  cal.get('last_updated'),
-                        'type':          _vendor,
+                        'qpu_name':          qpu,
+                        'num_qubits':        cal.get('num_qubits'),
+                        'avg_t1_ms':         cal.get('avg_t1_ms'),
+                        'avg_t2_ms':         cal.get('avg_t2_ms'),
+                        'avg_1q_ns':         cal.get('avg_1q_ns'),
+                        'avg_2q_ns':         cal.get('avg_2q_ns'),
+                        'avg_1q_error':      cal.get('avg_1q_error'),
+                        'avg_2q_error':      cal.get('avg_2q_error'),
+                        'avg_ro_error':      cal.get('avg_ro_error'),
+                        'basis_gates':       cal.get('basis_gates'),
+                        'coupling_map':      cal.get('coupling_map'),
+                        'last_updated':      cal.get('last_updated'),
+                        'type':              _vendor,
                         # QuEra 전용 필드
                         'c6_coefficient':    cal.get('c6_coefficient'),
                         'rabi_freq_max_mhz': cal.get('rabi_freq_max_mhz'),
+                        # per-qubit 분포 데이터
+                        'qubit_t1_ms':       cal.get('qubit_t1_ms'),
+                        'qubit_t2_ms':       cal.get('qubit_t2_ms'),
+                        'qubit_ro_error':    cal.get('qubit_ro_error'),
+                        'qubit_1q_error':    cal.get('qubit_1q_error'),
+                        'edge_2q_error':     cal.get('edge_2q_error'),
                     }
                 else:
                     results[qpu] = {'qpu_name': qpu, 'error': 'no calibration data'}

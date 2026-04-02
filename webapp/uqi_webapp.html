@@ -2193,17 +2193,17 @@ let _activeModalities = new Set(['superconducting']);
 // 레이더/박스플롯에 쓸 수 있는 전체 메트릭 레지스트리
 // 선택된 QPU들이 실제로 가진 데이터의 합집합으로 표시 축을 결정
 const _allRadarMetrics = [
-  { key: 'avg_t1_ms',          label: 'T1',     invert: false },
-  { key: 'avg_t2_ms',          label: 'T2',     invert: false },
-  { key: 'avg_1q_error',       label: '1Q Err', invert: true  },
-  { key: 'avg_2q_error',       label: '2Q Err', invert: true  },
-  { key: 'avg_ro_error',       label: 'RO Err', invert: true  },
-  { key: 'num_qubits',         label: 'Qubits', invert: false },
-  { key: 'rabi_freq_max_mhz',  label: 'Rabi',   invert: false },
-  { key: 'avg_transmittance',  label: 'Trans.', invert: false },
-  { key: 'avg_hom',            label: 'HOM',    invert: false },
-  { key: 'avg_g2',             label: 'g²(0)',  invert: true  },
-  { key: 'max_mode_count',     label: 'Modes',  invert: false },
+  { key: 'avg_t1_ms',         label: 'T1',     invert: false, fmt: v => { const r = fmtMs(v); return r ? r.text + r.unit : '—'; } },
+  { key: 'avg_t2_ms',         label: 'T2',     invert: false, fmt: v => { const r = fmtMs(v); return r ? r.text + r.unit : '—'; } },
+  { key: 'avg_1q_error',      label: '1Q Err', invert: true,  fmt: v => (v * 100).toFixed(3) + '%' },
+  { key: 'avg_2q_error',      label: '2Q Err', invert: true,  fmt: v => (v * 100).toFixed(3) + '%' },
+  { key: 'avg_ro_error',      label: 'RO Err', invert: true,  fmt: v => (v * 100).toFixed(3) + '%' },
+  { key: 'num_qubits',        label: 'Qubits', invert: false, fmt: v => String(v) },
+  { key: 'rabi_freq_max_mhz', label: 'Rabi',   invert: false, fmt: v => v.toFixed(2) + ' MHz' },
+  { key: 'avg_transmittance', label: 'Trans.', invert: false, fmt: v => (v * 100).toFixed(2) + '%' },
+  { key: 'avg_hom',           label: 'HOM',    invert: false, fmt: v => (v * 100).toFixed(1) + '%' },
+  { key: 'avg_g2',            label: 'g²(0)',  invert: true,  fmt: v => (v * 100).toFixed(2) + '%' },
+  { key: 'max_mode_count',    label: 'Modes',  invert: false, fmt: v => v + ' modes' },
 ];
 
 function toggleRadarModality(modId, btn) {
@@ -2339,14 +2339,9 @@ function _renderRadarChart(qpus) {
         if (qi < 0) return p.name;
         const lines = metrics.map((m, mi) => {
           const raw = rawVals[mi][qi];
-          let valStr;
-          if (raw == null) {
-            valStr = '<span style="color:#484f58;font-style:italic">N/A</span>';
-          } else if (m.key === 'avg_t1_ms' || m.key === 'avg_t2_ms') {
-            const r = fmtMs(raw); valStr = r ? r.text + r.unit : '—';
-          } else {
-            valStr = (raw * 100).toFixed(3) + '%';
-          }
+          const valStr = raw == null
+            ? '<span style="color:#484f58;font-style:italic">N/A</span>'
+            : m.fmt(raw);
           return `${m.label}: ${valStr}`;
         });
         return `<b>${p.name}</b><br>${lines.join('<br>')}`;

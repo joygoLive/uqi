@@ -385,10 +385,9 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div class="qpu-analysis-title" style="margin-bottom:0">QPU Deep Analysis</div>
         <div class="qubit-dist-tabs radar-modality-tabs" style="margin-bottom:0">
-          <button id="radar-modality-all" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('all',this)" title="SC+Ion 비교 (권장)">SC+Ion</button>
           <button data-mod="superconducting" class="qubit-dist-tab radar-mod-tab active" onclick="toggleRadarModality('superconducting',this)" title="초전도 방식 (IBM/IQM/Rigetti)">SC</button>
-          <button data-mod="ion-trap" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('ion-trap',this)" title="이온트랩 방식 (IonQ)">Ion</button>
-          <button data-mod="neutral-atom" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('neutral-atom',this)" title="중성원자 방식 (QuEra)">Neutral</button>
+          <button data-mod="ion-trap" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('ion-trap',this)" title="이온트랩 방식 (IonQ/Quantinuum)">Ion</button>
+          <button data-mod="neutral-atom" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('neutral-atom',this)" title="중성원자 방식 (QuEra/Pasqal)">Neutral</button>
           <button data-mod="photonic" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('photonic',this)" title="광자 방식 (Quandela)">Photonic</button>
         </div>
       </div>
@@ -2234,29 +2233,15 @@ const _allRadarMetrics = [
 ];
 
 function toggleRadarModality(modId, btn) {
-  if (modId === 'all') {
-    // All 버튼: SC+Ion 프리셋 (비교 의미 있는 하드웨어 조합)
-    _activeModalities = new Set(['superconducting', 'ion-trap']);
+  if (_activeModalities.has(modId)) {
+    _activeModalities.delete(modId);
   } else {
-    if (_activeModalities.has(modId)) {
-      _activeModalities.delete(modId);
-      // 아무것도 없으면 SC로 복귀
-      if (_activeModalities.size === 0) _activeModalities.add('superconducting');
-    } else {
-      _activeModalities.add(modId);
-    }
+    _activeModalities.add(modId);
   }
   // 버튼 active 상태 동기화
   document.querySelectorAll('.radar-mod-tab[data-mod]').forEach(b => {
     b.classList.toggle('active', _activeModalities.has(b.dataset.mod));
   });
-  // All 버튼: SC+Ion 프리셋일 때만 active
-  const allBtn = document.getElementById('radar-modality-all');
-  if (allBtn) {
-    const isPreset = _activeModalities.size === 2 &&
-      _activeModalities.has('superconducting') && _activeModalities.has('ion-trap');
-    allBtn.classList.toggle('active', isPreset);
-  }
   _reRenderRadar();
   _updateBoxplotTabs();
   _reRenderBoxplot();
@@ -2265,6 +2250,11 @@ function toggleRadarModality(modId, btn) {
 function _reRenderBoxplot() {
   const el = document.getElementById('chart-boxplot');
   if (!el) return;
+  if (_activeModalities.size === 0) {
+    if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">선택된 모달리티 없음</div>';
+    return;
+  }
   const qpus = _getBoxplotQpus();
   const relevant = _getRelevantBoxplotMetrics();
   if (relevant.length === 0) {
@@ -2285,20 +2275,28 @@ function _reRenderRadar() {
     _modalityDefs.some(m => _activeModalities.has(m.id) && m.match(q))
   );
 
+  const _emptyMsg = msg => {
+    if (_radarChart) { _radarChart.dispose(); _radarChart = null; }
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">${msg}</div>`;
+  };
+
+  if (_activeModalities.size === 0) {
+    _emptyMsg('선택된 모달리티 없음');
+    return;
+  }
+
   // 선택된 QPU들 중 레이더 메트릭 데이터를 1개라도 가진 QPU가 있어야 함
   const hasCalData = qpus.some(q =>
     _allRadarMetrics.some(m => _qpuData[q][m.key] != null)
   );
 
   if (!hasCalData) {
-    if (_radarChart) { _radarChart.dispose(); _radarChart = null; }
-    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">캘리브레이션 데이터가 없습니다.</div>`;
+    _emptyMsg('캘리브레이션 데이터가 없습니다.');
     return;
   }
 
   if (qpus.length < 2) {
-    if (_radarChart) { _radarChart.dispose(); _radarChart = null; }
-    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">레이더 비교에는 QPU가 2개 이상 필요합니다.</div>`;
+    _emptyMsg('레이더 비교에는 QPU가 2개 이상 필요합니다.');
     return;
   }
 
@@ -2308,11 +2306,9 @@ function _reRenderRadar() {
 function renderQPUDeepAnalysis() {
   const section = document.getElementById('qpu-analysis-section');
   if (!section) return;
-  // SC QPU가 2개 이상일 때만 섹션 표시 (기본 SC 모드 기준)
-  const scQpus = Object.keys(_qpuData).filter(q =>
-    !q.startsWith('sim:') && !q.startsWith('qpu:') && !_qpuData[q].error
-  );
-  if (scQpus.length < 2) { section.style.display = 'none'; return; }
+  // 전체 QPU 중 캘리브레이션 데이터가 있는 게 2개 이상이면 섹션 표시
+  const validQpus = Object.keys(_qpuData).filter(q => !_qpuData[q].error && !_qpuData[q]._loading);
+  if (validQpus.length < 2) { section.style.display = 'none'; return; }
   section.style.display = 'block';
 
   _updateBoxplotTabs();

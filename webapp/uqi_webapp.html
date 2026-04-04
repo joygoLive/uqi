@@ -385,10 +385,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div class="qpu-analysis-title" style="margin-bottom:0">QPU Deep Analysis</div>
         <div class="qubit-dist-tabs radar-modality-tabs" style="margin-bottom:0">
-          <button data-mod="superconducting" class="qubit-dist-tab radar-mod-tab active" onclick="toggleRadarModality('superconducting',this)" title="초전도 방식 (IBM/IQM/Rigetti)">SC</button>
-          <button data-mod="ion-trap" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('ion-trap',this)" title="이온트랩 방식 (IonQ/Quantinuum)">Ion</button>
-          <button data-mod="neutral-atom" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('neutral-atom',this)" title="중성원자 방식 (QuEra/Pasqal)">Neutral</button>
-          <button data-mod="photonic" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('photonic',this)" title="광자 방식 (Quandela)">Photonic</button>
+          <button data-mod="superconducting" class="qubit-dist-tab radar-mod-tab active" onclick="toggleRadarModality('superconducting',this)" title="Superconducting (IBM/IQM/Rigetti)">SC</button>
+          <button data-mod="ion-trap" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('ion-trap',this)" title="Ion Trap (IonQ/Quantinuum)">Ion</button>
+          <button data-mod="neutral-atom" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('neutral-atom',this)" title="Neutral Atom (QuEra/Pasqal)">Neutral</button>
+          <button data-mod="photonic" class="qubit-dist-tab radar-mod-tab" onclick="toggleRadarModality('photonic',this)" title="Photonic (Quandela)">Photonic</button>
         </div>
       </div>
       <div class="qpu-analysis-charts">
@@ -429,7 +429,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <text x="133" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Q3</text>
               <text x="178" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Max</text>
             </svg>
-            <span style="font-size:9.5px;color:var(--text3);line-height:1.4">박스 = 중간 50% 큐비트 분포 (Q1~Q3)<br>수염 = 이상치 제외 최솟값·최댓값</span>
+            <span style="font-size:9.5px;color:var(--text3);line-height:1.4">Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers</span>
           </div>
           <div id="chart-boxplot" class="qpu-chart-canvas"></div>
         </div>
@@ -694,7 +694,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <label class="form-label">Semantic Query</label>
               <textarea id="rag-query" class="form-input"
                 style="resize:vertical;min-height:72px;line-height:1.5"
-                placeholder="예: iqm_garnet에서 fidelity 높은 실험&#10;PennyLane 회로 최적화 성공 사례&#10;GPU 벤치마크에서 speedup 높은 결과"></textarea>
+                placeholder="e.g. high fidelity experiment on iqm_garnet&#10;PennyLane circuit optimization success&#10;High speedup result in GPU benchmark"></textarea>
             </div>
           </div>
           <div class="form-group">
@@ -736,20 +736,20 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="form-group">
             <textarea id="semantic-input" class="form-input"
               style="resize:vertical;min-height:80px;line-height:1.5"
-              placeholder="자연어로 검색...&#10;예: ibm_fez에서 게이트 감소율 높은 최적화&#10;PennyLane fidelity 0.9 이상 실험"
+              placeholder="Search in natural language...&#10;e.g. high gate reduction optimization on ibm_fez&#10;PennyLane fidelity above 0.9"
               onkeydown="onSemanticKeydown(event)"></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">Limit</label>
             <select class="form-select" id="semantic-limit">
-              <option value="5">5개</option>
-              <option value="10" selected>10개</option>
-              <option value="20">20개</option>
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="20">20</option>
             </select>
           </div>
           <button class="btn-run" id="btn-semantic" onclick="runSemantic()">SEMANTIC SEARCH</button>
           <div style="font-size:10px;color:var(--text3);margin-top:8px">
-            Enter로 검색 · Shift+Enter 줄바꿈<br>Chroma 벡터 유사도 검색
+            Press Enter to search · Shift+Enter for new line<br>Chroma vector similarity search
           </div>
         </div>
       </div>
@@ -828,7 +828,7 @@ async function connectSSE(url) {
   if(_activeES){_activeES.close();_activeES=null;msgUrl=null;}
   // 이전 세션의 미완료 요청 전부 정리
   for (const id of Object.keys(pendingResolvers)) {
-    pendingResolvers[id]({error: 'session_reset', result: {content: [{text: JSON.stringify({error: '세션이 재연결되어 이전 요청이 취소되었습니다.'})}]}});
+    pendingResolvers[id]({error: 'session_reset', result: {content: [{text: JSON.stringify({error: 'Session reconnected. Previous request was cancelled.'})}]}});
     delete pendingResolvers[id];
   }
   return new Promise((resolve,reject)=>{
@@ -950,7 +950,7 @@ function _renderCacheTimestamp(cache) {
   const ageH = (age / 3600000).toFixed(1);
   const time = new Date(cache.ts).toLocaleString();
   const isStale = age > _QPU_CACHE_TTL;
-  el.innerHTML = `캐시: ${time} (${ageH}h 전)${isStale ? ' <span style="color:var(--warn)">· 갱신 권장</span>' : ''}`;
+  el.innerHTML = `Cache: ${time} (${ageH}h ago)${isStale ? ' <span style="color:var(--warn)">· Refresh recommended</span>' : ''}`;
 }
 
 async function loadQPUDashboard(forceRefresh) {
@@ -967,7 +967,7 @@ async function loadQPUDashboard(forceRefresh) {
     // 12시간 이상 지났으면 백그라운드 갱신
     if (_qpuCacheAge(cache) > _QPU_CACHE_TTL) {
       document.getElementById('qpu-cache-ts') &&
-        (document.getElementById('qpu-cache-ts').innerHTML += ' <span style="color:var(--accent);font-size:10px"><span class="spinner"></span>백그라운드 갱신 중...</span>');
+        (document.getElementById('qpu-cache-ts').innerHTML += ' <span style="color:var(--accent);font-size:10px"><span class="spinner"></span>Refreshing in background...</span>');
       _fetchQPUData('background');
     }
     return;
@@ -976,7 +976,7 @@ async function loadQPUDashboard(forceRefresh) {
   // 캐시 없거나 forceRefresh
   container.innerHTML = '<div class="empty-state"><span class="spinner"></span>Loading QPU status...</div>';
   const tsEl = document.getElementById('qpu-cache-ts');
-  if (tsEl && forceRefresh) tsEl.innerHTML = '<span class="spinner"></span>갱신 중...';
+  if (tsEl && forceRefresh) tsEl.innerHTML = '<span class="spinner"></span>Refreshing...';
   await _fetchQPUData(forceRefresh ? 'refresh' : 'init');
 }
 
@@ -1021,7 +1021,7 @@ async function _fetchQPUData(isBackground) {
     _renderCacheTimestamp(_loadQPUCache());
   } catch(e) {
     if (!isBackground)
-      container.innerHTML = `<div class="error-state">⚠ QPU 목록 로드 실패: ${escHtml(e.message)}</div>`;
+      container.innerHTML = `<div class="error-state">⚠ Failed to load QPU list: ${escHtml(e.message)}</div>`;
   }
 }
 
@@ -1201,7 +1201,7 @@ async function showQPUDetail(qpu, el) {
             <div class="cal-item"><div class="cal-label">g²(0)</div><div class="cal-value ${d.avg_g2 != null ? (d.avg_g2 < 0.05 ? 'good' : 'warn') : 'dim'}" style="font-size:14px">${g2}</div></div>
             <div class="cal-item"><div class="cal-label">Clock</div><div class="cal-value neutral" style="font-size:14px">${clock}</div></div>
           </div>
-          <div style="margin-top:12px;font-size:10px;color:var(--text3)">업데이트: ${updated}</div>
+          <div style="margin-top:12px;font-size:10px;color:var(--text3)">Updated: ${updated}</div>
         </div>`;
       return;
     }
@@ -1751,7 +1751,7 @@ function _renderTopology(containerId, couplingMap, numQubits, qpuName, d) {
   // ── Build UI ──
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-      <div style="font-size:10px;color:#484f58">${nodeCount}큐비트 · ${edges.length}개 연결</div>
+      <div style="font-size:10px;color:#484f58">${nodeCount} qubits · ${edges.length} connections</div>
       <div class="topo-tabs" style="display:flex;gap:3px">
         <button class="topo-tab" data-view="graph" style="background:#161b22;border:1px solid rgba(0,212,255,0.3);border-radius:4px;padding:3px 10px;color:#00d4ff;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;font-weight:600" onclick="_topoViewSwitch(this,'graph','${containerId}')">Graph</button>
         <button class="topo-tab" data-view="table" style="background:none;border:1px solid #21262d;border-radius:4px;padding:3px 10px;color:#8b949e;font-family:'JetBrains Mono',monospace;font-size:10px;cursor:pointer;font-weight:600" onclick="_topoViewSwitch(this,'table','${containerId}')">Table</button>
@@ -2064,7 +2064,7 @@ function renderQPUDetail(container, qpu, d) {
       </div>
       ${hasPerQubit
         ? `<div id="qubit-dist-chart-${safeId}" class="qubit-dist-canvas"></div>`
-        : `<div style="display:flex;align-items:center;justify-content:center;flex:1;min-height:160px;color:var(--text3);font-size:11px">퀀텀비트별 데이터 없음</div>`}
+        : `<div style="display:flex;align-items:center;justify-content:center;flex:1;min-height:160px;color:var(--text3);font-size:11px">No per-qubit data</div>`}
     </div>`;
 
   container.innerHTML = `
@@ -2252,14 +2252,14 @@ function _reRenderBoxplot() {
   if (!el) return;
   if (_activeModalities.size === 0) {
     if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">선택된 모달리티 없음</div>';
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">No modality selected</div>';
     return;
   }
   const qpus = _getBoxplotQpus();
   const relevant = _getRelevantBoxplotMetrics();
   if (relevant.length === 0) {
     if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">선택된 모달리티의 분포 데이터가 없습니다.</div>';
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">No distribution data for selected modality.</div>';
     return;
   }
   if (el.innerHTML.trim() && !_boxplotChart) el.innerHTML = '';
@@ -2281,7 +2281,7 @@ function _reRenderRadar() {
   };
 
   if (_activeModalities.size === 0) {
-    _emptyMsg('선택된 모달리티 없음');
+    _emptyMsg('No modality selected');
     return;
   }
 
@@ -2291,12 +2291,12 @@ function _reRenderRadar() {
   );
 
   if (!hasCalData) {
-    _emptyMsg('캘리브레이션 데이터가 없습니다.');
+    _emptyMsg('No calibration data available.');
     return;
   }
 
   if (qpus.length < 2) {
-    _emptyMsg('레이더 비교에는 QPU가 2개 이상 필요합니다.');
+    _emptyMsg('At least 2 QPUs required for radar comparison.');
     return;
   }
 
@@ -2534,7 +2534,7 @@ function _renderBoxplotChart(qpus, metric) {
       textStyle: { color: '#e6edf3', fontSize: 11 },
       formatter: p => {
         const idx = p.dataIndex;
-        if (dataKind[idx] === 'none') return `${labels[idx]}<br><span style="color:#6e7681;font-style:italic">데이터 없음</span>`;
+        if (dataKind[idx] === 'none') return `${labels[idx]}<br><span style="color:#6e7681;font-style:italic">No data</span>`;
         if (dataKind[idx] === 'avg') return `${labels[idx]}<br>${meta.label}: ${meta.fmt(isTime ? p.value[2] : p.value[2]/100)}<br><span style="opacity:0.5;font-size:10px">avg only</span>`;
         const [lo, q1, q2, q3, hi] = p.value;
         const f = v => isTime ? meta.fmt(v) : meta.fmt(v/100);
@@ -2619,7 +2619,7 @@ function onDrop(e) {
 function onFileChange(e) { const f=e.target.files[0]; if(f) handleFile(f); }
 
 function handleFile(file) {
-  if (!file.name.endsWith('.py')) { alert('Python (.py) 파일만 허용됩니다'); return; }
+  if (!file.name.endsWith('.py')) { alert('Only Python (.py) files are allowed'); return; }
   const fname = document.getElementById('global-fname');
   fname.textContent='⟳ Uploading...'; fname.className='file-name-display ok'; fname.style.display='block';
   const reader = new FileReader();
@@ -2736,19 +2736,19 @@ function _addCacheBadge(step, file, qpu, cached) {
 }
 
 async function _invalidateCache(step, file, qpu) {
-  if (!file) { alert('파일을 먼저 선택하세요'); return; }
+  if (!file) { alert('Please select a file first'); return; }
   try {
     const res = await callTool('uqi_invalidate_cache', { algorithm_file: file, qpu_name: qpu, stage: step });
     const d = JSON.parse(getResultText(res));
     if (d.ok) {
-      alert(`캐시 무효화 완료 (${d.deleted}건 삭제)\n재실행하면 새로운 결과를 가져옵니다.`);
+      alert(`Cache invalidated (${d.deleted} entries deleted)\nRe-run to fetch fresh results.`);
       // 배지 제거
       const _rid = step === 'qpu_submit' ? 'result-qpu' : 'result-'+step;
       document.querySelectorAll('#'+_rid+' div[style*="rgba(240,136,62"]').forEach(e=>e.remove());
     } else {
-      alert('실패: ' + (d.error||'unknown'));
+      alert('Failed: ' + (d.error||'unknown'));
     }
-  } catch(e) { alert('오류: '+e.message); }
+  } catch(e) { alert('Error: '+e.message); }
 }
 function getQPU() { return document.getElementById('global-qpu').value; }
 function elapsed(t0) { return ((Date.now()-t0)/1000).toFixed(2)+'s'; }
@@ -2756,7 +2756,7 @@ function elapsed(t0) { return ((Date.now()-t0)/1000).toFixed(2)+'s'; }
 // ── Analyze ──
 async function runAnalyze() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-analyze','Analyzing...');
   setStepResult('analyze','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
   const t0 = Date.now();
@@ -2834,7 +2834,7 @@ function _downloadQasm(key) {
 // ── Optimize ──
 async function runOptimize() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-optimize','Optimizing...');
   setStepResult('optimize','<div class="empty-state"><span class="spinner"></span>Optimizing...</div>');
   const t0 = Date.now();
@@ -2893,7 +2893,7 @@ function renderOptimize(data, el) {
 // ── Noise ──
 async function runNoise() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-noise','Simulating...');
   setStepResult('noise','<div class="empty-state"><span class="spinner"></span>Simulating...</div>');
   const t0 = Date.now();
@@ -2932,7 +2932,7 @@ function renderNoise(data, el) {
 // ── QEC Analyze ──
 async function runQECAnalyze() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-qeca','Analyzing...');
   setStepResult('qec-analyze','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
   const t0 = Date.now();
@@ -2974,7 +2974,7 @@ function renderQECAnalyze(data, el) {
 // ── QEC Apply ──
 async function runQECApply() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-qecap','Applying...');
   setStepResult('qec-apply','<div class="empty-state"><span class="spinner"></span>Applying QEC...</div>');
   const t0 = Date.now();
@@ -3013,7 +3013,7 @@ function renderQECApply(data, el) {
 // ── GPU Benchmark ──
 async function runGPU() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   setBtnLoading('btn-gpu','Benchmarking...');
   setStepResult('gpu','<div class="empty-state"><span class="spinner"></span>Benchmarking...</div>');
   const t0 = Date.now();
@@ -3048,7 +3048,7 @@ function renderGPU(data, el) {
 let _qpuLastFile = null;
 async function runQPUAnalyze() {
   const f = getSelectedFile();
-  if (!f) { alert('알고리즘 파일을 선택하거나 업로드하세요'); return; }
+  if (!f) { alert('Please select or upload an algorithm file'); return; }
   _qpuLastFile = f;
   setBtnLoading('btn-qpu-analyze','Analyzing...');
   document.getElementById('btn-qpu-confirm').style.display='none';
@@ -3073,7 +3073,7 @@ async function runQPUAnalyze() {
 
 async function runQPUSubmit() {
   if (!_qpuLastFile) return;
-  if (!confirm('실제 QPU에 제출합니다. 비용이 발생할 수 있습니다. 계속하시겠습니까?')) return;
+  if (!confirm('Submitting to a real QPU. This may incur costs. Continue?')) return;
   setBtnLoading('btn-qpu-confirm','Submitting...');
   setStepResult('qpu','<div class="empty-state"><span class="spinner"></span>Submitting to QPU...</div>');
   const t0 = Date.now();
@@ -3125,14 +3125,14 @@ function renderQPUAnalysis(data, el) {
 // Knowledge
 // ─────────────────────────────────────────────────────────
 const _RAG_TYPE_DESC = {
-  'stats':             '전체 지식베이스 레코드 수 및 타입별 통계',
-  'recent':            '최근 저장된 이력 (최신순)',
-  'best_combination':  '큐비트/게이트 수 기준 최적 조합 추천',
-  'pipeline_issues':   'SDK/QPU별 파이프라인 오류 이력 및 해결책',
-  'transpile_patterns':'트랜스파일 성공/실패 패턴 및 우회 방법',
-  'qec_results':       'QEC 실험 결과 (인코딩 전후 Fidelity 비교)',
-  'gpu_benchmark':     'CPU vs GPU 시뮬레이션 벤치마크 결과',
-  'security_block':    '보안 정책 위반 차단 이력 (정적 분석)',
+  'stats':             'Total knowledge base record count and per-type statistics',
+  'recent':            'Recently saved history (latest first)',
+  'best_combination':  'Optimal combination recommendation by qubit/gate count',
+  'pipeline_issues':   'Pipeline error history and solutions per SDK/QPU',
+  'transpile_patterns':'Transpile success/failure patterns and workarounds',
+  'qec_results':       'QEC experiment results (fidelity before/after encoding)',
+  'gpu_benchmark':     'CPU vs GPU simulation benchmark results',
+  'security_block':    'Security policy violation block history (static analysis)',
 };
 
 function onRagTypeChange() {
@@ -3182,7 +3182,7 @@ async function runSemantic() {
   const resultBody    = document.getElementById('semantic-result-body');
   const meta          = document.getElementById('semantic-meta');
 
-  setBtnLoading('btn-semantic', '검색중');
+  setBtnLoading('btn-semantic', 'Searching');
   resultSection.style.display = 'block';
   resultBody.innerHTML = '<div class="empty-state"><span class="spinner"></span>Searching...</div>';
 
@@ -3194,10 +3194,10 @@ async function runSemantic() {
       limit,
     });
     const data = JSON.parse(getResultText(res));
-    meta.textContent = `${((Date.now()-t0)/1000).toFixed(2)}s · ${Array.isArray(data)?data.length:0}건`;
+    meta.textContent = `${((Date.now()-t0)/1000).toFixed(2)}s · ${Array.isArray(data)?data.length:0} results`;
 
     if (!Array.isArray(data) || data.length === 0) {
-      resultBody.innerHTML = '<div class="empty-state">관련 결과 없음</div>';
+      resultBody.innerHTML = '<div class="empty-state">No relevant results</div>';
       return;
     }
 
@@ -3215,7 +3215,7 @@ async function runSemantic() {
             </div>
             <div style="display:flex;align-items:center;gap:6px">
               <span style="font-size:10px;font-weight:600;color:var(--${simCls==='good'?'success':simCls==='warn'?'warn':'text2'})">${simPct}%</span>
-              <span style="font-size:9px;color:var(--text3)">유사도</span>
+              <span style="font-size:9px;color:var(--text3)">Similarity</span>
             </div>
           </div>
           <div class="rag-item-content">${dataSnippet}</div>
@@ -3224,7 +3224,7 @@ async function runSemantic() {
   } catch(e) {
     resultBody.innerHTML = `<div class="error-state">⚠ ${escHtml(e.message)}</div>`;
   } finally {
-    setBtnDone('btn-semantic', '검색');
+    setBtnDone('btn-semantic', 'Search');
   }
 }
 
@@ -3232,17 +3232,17 @@ function _semanticSnippet(type, data) {
   if (!data) return '—';
   const parts = [];
   if (data.qpu_name)      parts.push(`QPU: <strong>${escHtml(data.qpu_name)}</strong>`);
-  if (data.circuit_name)  parts.push(`회로: <strong>${escHtml(data.circuit_name)}</strong>`);
+  if (data.circuit_name)  parts.push(`Circuit: <strong>${escHtml(data.circuit_name)}</strong>`);
   if (data.sdk)           parts.push(`SDK: ${escHtml(data.sdk)}`);
   if (data.framework)     parts.push(`Framework: ${escHtml(data.framework)}`);
-  if (data.combination)   parts.push(`조합: ${escHtml(data.combination)}`);
-  if (data.gate_reduction != null) parts.push(`게이트 감소: <strong>${(data.gate_reduction*100).toFixed(1)}%</strong>`);
+  if (data.combination)   parts.push(`Combination: ${escHtml(data.combination)}`);
+  if (data.gate_reduction != null) parts.push(`Gate reduction: <strong>${(data.gate_reduction*100).toFixed(1)}%</strong>`);
   if (data.fidelity != null)       parts.push(`Fidelity: <strong>${data.fidelity}</strong>`);
-  if (data.fidelity_after != null) parts.push(`Fidelity 후: <strong>${data.fidelity_after}</strong>`);
+  if (data.fidelity_after != null) parts.push(`Fidelity after: <strong>${data.fidelity_after}</strong>`);
   if (data.speedup != null)        parts.push(`Speedup: <strong>${data.speedup}x</strong>`);
-  if (data.ok != null)             parts.push(`결과: <strong>${data.ok ? '✓ 성공' : '✗ 실패'}</strong>`);
-  if (data.issue)         parts.push(`이슈: ${escHtml(String(data.issue).slice(0,60))}`);
-  if (data.verdict)       parts.push(`판정: ${escHtml(data.verdict)}`);
+  if (data.ok != null)             parts.push(`Result: <strong>${data.ok ? '✓ Success' : '✗ Failed'}</strong>`);
+  if (data.issue)         parts.push(`Issue: ${escHtml(String(data.issue).slice(0,60))}`);
+  if (data.verdict)       parts.push(`Verdict: ${escHtml(data.verdict)}`);
   return parts.length ? parts.join(' · ') : escHtml(JSON.stringify(data).slice(0, 100));
 }
 
@@ -3262,7 +3262,7 @@ function renderRAG(body, text, queryType) {
           <div class="rag-item-header">
             <span class="rag-item-type">${item.type||'—'}</span>
             <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
-            <span style="font-size:9px;color:var(--text3);margin-left:auto">클릭하여 상세보기</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:auto">Click for details</span>
           </div>
           <div class="rag-item-content">${escHtml(item.summary||JSON.stringify(item).slice(0,120))}</div>
         </div>`).join('')}</div>`;
@@ -3277,7 +3277,7 @@ function renderRAG(body, text, queryType) {
           <div class="rag-item-header">
             <span class="rag-item-type">${item.type || _qt || '—'}</span>
             <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
-            <span style="font-size:9px;color:var(--text3);margin-left:auto">클릭하여 상세보기</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:auto">Click for details</span>
           </div>
           <div class="rag-item-content">${escHtml((item.stage||item.sdk||item.circuit_name||item.qpu_name) ? 
             [item.stage&&'stage:'+item.stage, item.sdk&&'sdk:'+item.sdk, item.qpu_name&&'qpu:'+item.qpu_name, item.issue&&String(item.issue).slice(0,80)].filter(Boolean).join(' · ') :

@@ -124,7 +124,8 @@ IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
 SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
-                   "ionq_forte1", "ionq_aria1", "rigetti_ankaa3",
+                   "rigetti_ankaa3",
+                   "ionq_forte1", "ionq_aria1",
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    "quera_aquila", "pasqal_fresnel",
                    "qpu:ascella", "qpu:belenos"]

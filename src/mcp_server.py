@@ -1554,27 +1554,33 @@ async def uqi_qpu_submit(
                         })
 
             circuits = qpu_circuits.get(selected_qpu, {})
-            execution_results = {}
+            submission_results = {}
             for name, qc_opt in circuits.items():
                 try:
-                    t_start = time.time()
                     if "ibm" in selected_qpu:
                         from uqi_executor_ibm import UQIExecutorIBM
                         executor = UQIExecutorIBM(converter=converter, shots=shots)
                         executor._token = IBM_TOKEN
-                        result_dict = executor._run_single(
-                            name=name, qir_bitcode=None,
+                        sub = executor._submit_single(
+                            name=name,
                             qasm=converter.qasm_results.get(name),
-                            use_simulator=False, backend_name=selected_qpu,
+                            backend_name=selected_qpu,
                         )
-                        if not result_dict["ok"]:
-                            raise Exception(result_dict["error"])
-                        counts = result_dict["counts"]
+                        if not sub["ok"]:
+                            raise Exception(sub["error"])
+                        submission_results[name] = {
+                            "ok":      True,
+                            "job_id":  sub["job_id"],
+                            "backend": selected_qpu,
+                            "via":     sub.get("via"),
+                        }
                     elif "iqm" in selected_qpu:
+                        # IQM은 동기 실행 유지 (자체 큐 시스템)
                         from uqi_executor_iqm import UQIExecutorIQM
                         executor = UQIExecutorIQM(converter=converter, shots=shots)
                         executor._token = IQM_TOKEN
                         device_name = selected_qpu.split('_')[-1]
+                        t_start = time.time()
                         result_dict = executor._run_single(
                             name=name, qasm=converter.qasm_results.get(name),
                             use_simulator=False,
@@ -1582,13 +1588,24 @@ async def uqi_qpu_submit(
                         )
                         if not result_dict["ok"]:
                             raise Exception(result_dict["error"])
-                        counts = result_dict["counts"]
+                        exec_time = time.time() - t_start
+                        _rag.add_execution(
+                            circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
+                            shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
+                        )
+                        submission_results[name] = {
+                            "ok":       True,
+                            "counts":   result_dict["counts"],
+                            "backend":  selected_qpu,
+                            "exec_time": round(exec_time, 2),
+                        }
                     elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
                         from uqi_executor_perceval import UQIExecutorPerceval
                         token    = os.getenv("QUANDELA_TOKEN")
                         use_sim  = selected_qpu.startswith("sim:")
                         executor = UQIExecutorPerceval(extractor=extractor, shots=shots)
                         executor._token = token
+                        t_start = time.time()
                         result_dict = executor._run_single(
                             name=name,
                             circuit=extractor.perceval_circuits.get(name, (None, None))[0],
@@ -1597,30 +1614,35 @@ async def uqi_qpu_submit(
                         )
                         if not result_dict["ok"]:
                             raise Exception(result_dict["error"])
-                        counts = result_dict["counts"]
+                        exec_time = time.time() - t_start
+                        _rag.add_execution(
+                            circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
+                            shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
+                        )
+                        submission_results[name] = {
+                            "ok":       True,
+                            "counts":   result_dict["counts"],
+                            "backend":  selected_qpu,
+                            "exec_time": round(exec_time, 2),
+                        }
                     else:
                         raise ValueError(f"미지원 QPU: {selected_qpu}")
 
-                    exec_time = time.time() - t_start
-                    _rag.add_execution(
-                        circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
-                        shots=shots, counts=counts, ok=True, exec_time_sec=exec_time,
-                    )
-                    execution_results[name] = {"counts": counts, "ok": True, "exec_time": round(exec_time, 2)}
-
                 except Exception as e:
-                    execution_results[name] = {"ok": False, "error": str(e)}
+                    submission_results[name] = {"ok": False, "error": str(e)}
                     _rag.add_execution(
                         circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
                         shots=shots, counts={}, ok=False, extra={"error": str(e)},
                     )
 
+            # IBM은 비동기(job_id 리턴), 나머지는 결과 즉시 포함
+            has_jobs = any(r.get("job_id") for r in submission_results.values())
             return _safe_json({
-                "status":          "completed",
+                "status":          "submitted" if has_jobs else "completed",
                 "selected_qpu":    selected_qpu,
                 "recommended_qpu": recommended_qpu,
                 "shots":           shots,
-                "results":         execution_results,
+                "results":         submission_results,
             })
 
         except Exception as e:
@@ -1640,6 +1662,42 @@ async def uqi_qpu_submit(
                 }
             )
             return json.dumps({"error": str(e)})
+
+    return await asyncio.to_thread(_run)
+
+
+# ─────────────────────────────────────────────────────────
+# 툴 9: Job 상태 조회 (IBM 비동기 제출 후 폴링용)
+# ─────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def uqi_job_status(
+    job_id:   str,
+    qpu_name: str = "ibm_fez",
+) -> str:
+    """IBM QPU 제출 job 상태 조회. job_id: IBM Runtime job ID"""
+    def _run():
+        try:
+            vendor = job_id.split("-")[0] if "-" in job_id else ""
+
+            if "ibm" in qpu_name or len(job_id) > 20:
+                from uqi_executor_ibm import UQIExecutorIBM
+                result = UQIExecutorIBM.fetch_job_status(job_id, token=IBM_TOKEN)
+                if result.get("done") and result.get("counts"):
+                    _rag.add_execution(
+                        circuit_name="(job_id poll)",
+                        qpu_name=qpu_name,
+                        backend=qpu_name,
+                        shots=sum(result["counts"].values()),
+                        counts=result["counts"],
+                        ok=True,
+                    )
+                return json.dumps(result, ensure_ascii=False)
+            else:
+                return json.dumps({"error": f"미지원 QPU/job_id: {qpu_name} / {job_id}"})
+
+        except Exception as e:
+            return json.dumps({"error": str(e), "traceback": traceback.format_exc()})
 
     return await asyncio.to_thread(_run)
 

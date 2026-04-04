@@ -170,6 +170,129 @@ class UQIExecutorIBM:
         return result
 
     # ─────────────────────────────────────────
+    # 비동기 제출 (job_id만 리턴, 결과 대기 없음)
+    # ─────────────────────────────────────────
+
+    def _submit_single(
+        self,
+        name: str,
+        qasm: Optional[str],
+        backend_name: str,
+    ) -> dict:
+        """
+        실제 IBM QPU에 job을 제출하고 job_id만 즉시 리턴.
+        job.result() 블로킹 없음.
+        """
+        result = {
+            "ok":       False,
+            "job_id":   None,
+            "backend":  backend_name,
+            "via":      None,
+            "error":    None,
+        }
+        try:
+            from qiskit import QuantumCircuit, transpile
+            from qiskit_ibm_runtime import QiskitRuntimeService, SamplerV2
+
+            # 회로 준비
+            original_circuit = self.converter.extractor.circuits.get(name)
+            if original_circuit is not None:
+                circuit = original_circuit.copy()
+                result["via"] = "Qiskit-direct"
+            elif qasm is not None:
+                filtered = "\n".join(
+                    line for line in qasm.splitlines()
+                    if not line.strip().startswith("gphase")
+                )
+                circuit = QuantumCircuit.from_qasm_str(filtered)
+                result["via"] = "QASM"
+            else:
+                result["error"] = "회로 없음 (QASM/원본 모두 없음)"
+                return result
+
+            if not circuit.cregs:
+                circuit.measure_all(add_bits=True)
+
+            # IBM Runtime 연결
+            token = getattr(self, '_token', None)
+            if token:
+                service = QiskitRuntimeService(
+                    channel="ibm_quantum_platform", token=token)
+            else:
+                service = QiskitRuntimeService()
+
+            backend = service.backend(backend_name)
+            print(f"    ✓ IBM QPU 연결: {backend_name}")
+
+            circuit = transpile(circuit, target=backend.target, optimization_level=1)
+            print(f"    ✓ 트랜스파일 완료 ({len(circuit.data)} gates)")
+
+            sampler = SamplerV2(backend)
+            job = sampler.run([circuit], shots=self.shots)
+
+            result["job_id"] = job.job_id()
+            result["ok"]     = True
+            print(f"    ✓ job 제출 완료: job_id={result['job_id']}")
+
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ job 제출 실패: {e}")
+
+        return result
+
+    @staticmethod
+    def fetch_job_status(job_id: str, token: str = None) -> dict:
+        """
+        job_id로 IBM 클라우드 job 상태 및 결과 조회.
+        완료 시 counts/probs 포함, 미완료 시 status만 리턴.
+        """
+        result = {
+            "job_id": job_id,
+            "status": None,
+            "counts": None,
+            "probs":  None,
+            "error":  None,
+            "done":   False,
+        }
+        try:
+            from qiskit_ibm_runtime import QiskitRuntimeService
+
+            if token:
+                service = QiskitRuntimeService(
+                    channel="ibm_quantum_platform", token=token)
+            else:
+                service = QiskitRuntimeService()
+
+            job = service.job(job_id)
+            status = job.status()
+            result["status"] = str(status)
+
+            # DONE 상태일 때만 결과 가져오기
+            done_statuses = {"JobStatus.DONE", "DONE", "done"}
+            if str(status) in done_statuses or status.name == "DONE":
+                pub_result = job.result()[0]
+                # cregs 이름 추정 (첫 번째 creg)
+                creg_name = None
+                for attr in dir(pub_result.data):
+                    if not attr.startswith("_"):
+                        creg_name = attr
+                        break
+                counts = getattr(pub_result.data, creg_name).get_counts()
+                total  = sum(counts.values())
+                result["counts"] = counts
+                result["probs"]  = {k: v / total for k, v in counts.items()}
+                result["done"]   = True
+                print(f"    ✓ job 완료: {job_id}")
+            else:
+                print(f"    … job 진행중: {job_id} ({status})")
+
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ job 조회 실패: {e}")
+
+        return result
+
+    # ─────────────────────────────────────────
     # Estimator 실행 (Observable 기반)
     # ─────────────────────────────────────────
 

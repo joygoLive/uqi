@@ -190,6 +190,28 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .noise-bar-fill { height:100%; border-radius:3px; background:var(--accent); }
 .noise-bar-val { color:var(--text3); min-width:36px; text-align:right; }
 .independent-badge { display:inline-block; font-size:9px; color:var(--text3); background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
+.qpu-cmp-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px; margin-top:8px; }
+.qpu-cmp-card { background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:12px 14px; position:relative; transition:border-color 0.2s; }
+.qpu-cmp-card.is-recommended { border-color:var(--accent); box-shadow:0 0 0 1px rgba(88,166,255,0.15); }
+.qpu-cmp-card.is-selected { border-color:var(--success); box-shadow:0 0 0 1px rgba(63,185,80,0.15); }
+.qpu-cmp-card.is-offline { opacity:0.5; }
+.qpu-cmp-name { font-size:11px; font-weight:600; color:var(--text); margin-bottom:8px; display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.qpu-cmp-tag { font-size:9px; padding:1px 5px; border-radius:4px; font-weight:600; }
+.qpu-cmp-tag.rec  { background:rgba(88,166,255,0.15); color:var(--accent); border:1px solid rgba(88,166,255,0.3); }
+.qpu-cmp-tag.sel  { background:rgba(63,185,80,0.15);  color:var(--success); border:1px solid rgba(63,185,80,0.3); }
+.qpu-cmp-tag.off  { background:rgba(248,81,73,0.12);  color:var(--error);   border:1px solid rgba(248,81,73,0.25); }
+.qpu-cmp-rows { display:flex; flex-direction:column; gap:5px; }
+.qpu-cmp-row { display:flex; align-items:center; justify-content:space-between; }
+.qpu-cmp-rlabel { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.6px; }
+.qpu-cmp-rval { font-size:11px; font-weight:600; font-family:var(--font-mono); }
+.qpu-cmp-fid-bar { margin-top:8px; height:4px; background:var(--surface); border-radius:2px; overflow:hidden; }
+.qpu-cmp-fid-fill { height:100%; border-radius:2px; transition:width 0.4s ease; }
+.qpu-sel-summary { background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.qpu-sel-item { display:flex; flex-direction:column; gap:2px; }
+.qpu-sel-label { font-size:9px; color:var(--text3); text-transform:uppercase; letter-spacing:0.6px; }
+.qpu-sel-value { font-size:12px; font-weight:600; color:var(--text); }
+.qpu-disadv { margin-top:8px; }
+.qpu-disadv-item { display:flex; align-items:flex-start; gap:6px; font-size:10px; color:var(--warn); margin-bottom:4px; line-height:1.5; }
 .step-chevron.open { transform:rotate(180deg); }
 .step-body { display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.15); }
 .step-body.open { display:block; }
@@ -3158,31 +3180,119 @@ async function runQPUSubmit() {
 }
 
 function renderQPUAnalysis(data, el) {
+  const selQpu  = data.selected_qpu    || '—';
+  const recQpu  = data.recommended_qpu || '—';
+  const isSameRec = selQpu === recQpu;
+
+  // ── 상단 선택 요약 ──
   let html = `<div class="result-meta">${el}</div>
-    <div class="stats-row">
-      <div class="stat-chip">Selected: <strong>${data.selected_qpu||'—'}</strong></div>
-      <div class="stat-chip">Recommended: <strong>${data.recommended_qpu||'—'}</strong></div>
-    </div>`;
-  if (data.message) html+=`<div class="warn-banner" style="white-space:pre-wrap;font-size:11px">${escHtml(data.message)}</div>`;
-  if (data.qpu_comparison) {
-    html += `<div class="section-divider">QPU Comparison</div>`;
-    // Mini bar chart for fidelity
-    const entries = Object.entries(data.qpu_comparison).filter(([,v])=>v.avg_fidelity!=null);
-    if (entries.length) {
-      const maxFid = Math.max(...entries.map(([,v])=>v.avg_fidelity));
-      html += '<div class="bar-chart" style="margin-bottom:10px">';
-      for (const [qpu,v] of entries.sort((a,b)=>(b[1].avg_fidelity||0)-(a[1].avg_fidelity||0))) {
-        const pct = Math.max(4,(v.avg_fidelity/maxFid)*100);
-        const cls = v.avg_fidelity > 0.7 ? 'good' : v.avg_fidelity > 0.4 ? 'warn' : 'bad';
-        const rec = v.recommended ? ' ★' : '';
-        html += `<div class="bar-row">
-          <div class="bar-label" title="${qpu}">${qpu}${rec}</div>
-          <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct.toFixed(1)}%">${v.avg_fidelity.toFixed(3)}</div></div>
-        </div>`;
-      }
-      html += '</div>';
+  <div class="qpu-sel-summary">
+    <div class="qpu-sel-item">
+      <span class="qpu-sel-label">Selected QPU</span>
+      <span class="qpu-sel-value" style="color:var(--success)">${escHtml(selQpu)}</span>
+    </div>
+    <div style="width:1px;background:var(--border);align-self:stretch"></div>
+    <div class="qpu-sel-item">
+      <span class="qpu-sel-label">UQI Recommended</span>
+      <span class="qpu-sel-value" style="color:var(--accent)">${escHtml(recQpu)}</span>
+    </div>
+    ${isSameRec
+      ? `<div style="margin-left:auto;font-size:10px;color:var(--success)">✓ Optimal selection</div>`
+      : `<div style="margin-left:auto;font-size:10px;color:var(--warn)">⚠ Not recommended QPU</div>`}
+  </div>`;
+
+  // ── 단점 경고 ──
+  if (data.disadvantages?.length) {
+    html += `<div class="qpu-disadv">`;
+    for (const d of data.disadvantages) {
+      html += `<div class="qpu-disadv-item"><span>▲</span><span>${escHtml(d)}</span></div>`;
     }
+    html += `</div>`;
   }
+
+  // ── circuit_info ──
+  if (data.circuit_info && Object.keys(data.circuit_info).length) {
+    html += `<div class="section-divider">Circuit Info</div>`;
+    html += `<div class="metric-grid">`;
+    for (const [name, c] of Object.entries(data.circuit_info)) {
+      if (!c || typeof c !== 'object') continue;
+      html += `
+        <div class="metric-item">
+          <div class="metric-label">${escHtml(name)}</div>
+          <div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.7">
+            ${c.num_qubits   != null ? `<div>${c.num_qubits}q &nbsp;·&nbsp; ${c.total_gates ?? '—'} gates &nbsp;·&nbsp; depth ${c.depth ?? '—'}</div>` : ''}
+            ${c.combination  ? `<div style="color:var(--accent);font-size:9px">transpile: ${escHtml(c.combination)}</div>` : ''}
+          </div>
+        </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // ── QPU Comparison 카드 그리드 ──
+  if (data.qpu_comparison && Object.keys(data.qpu_comparison).length) {
+    html += `<div class="section-divider">QPU Comparison</div>`;
+    const entries = Object.entries(data.qpu_comparison)
+      .sort((a,b) => (b[1].avg_fidelity||0) - (a[1].avg_fidelity||0));
+    const maxFid = Math.max(...entries.map(([,v]) => v.avg_fidelity || 0)) || 1;
+
+    html += `<div class="qpu-cmp-grid">`;
+    for (const [qpu, v] of entries) {
+      const isRec  = v.recommended;
+      const isSel  = v.selected;
+      const isOff  = !v.online;
+      const fid    = v.avg_fidelity;
+      const fidStr = fid != null ? fid.toFixed(4) : '—';
+      const fidCls = fid == null ? '#6e7681' : fid > 0.8 ? 'var(--success)' : fid > 0.5 ? 'var(--warn)' : 'var(--error)';
+      const q2e    = v.avg_2q_error != null ? (v.avg_2q_error * 100).toFixed(3) + '%' : '—';
+      const t2     = v.avg_t2_ms    != null ? (v.avg_t2_ms * 1000).toFixed(0) + ' μs' : '—';
+      const exec   = v.total_exec_s != null && v.total_exec_s > 0 ? v.total_exec_s + 's' : '—';
+      const queue  = v.pending_jobs != null ? v.pending_jobs + ' pending' : (v.queue_note || '—');
+      const fidBarW = fid != null ? Math.max(4, (fid / maxFid) * 100).toFixed(1) : '0';
+      const cardCls = [
+        'qpu-cmp-card',
+        isRec ? 'is-recommended' : '',
+        isSel ? 'is-selected' : '',
+        isOff ? 'is-offline' : '',
+      ].filter(Boolean).join(' ');
+
+      html += `<div class="${cardCls}">
+        <div class="qpu-cmp-name">
+          <span>${escHtml(qpu)}</span>
+          ${isRec ? '<span class="qpu-cmp-tag rec">★ REC</span>' : ''}
+          ${isSel && !isRec ? '<span class="qpu-cmp-tag sel">✓ SEL</span>' : ''}
+          ${isSel && isRec  ? '<span class="qpu-cmp-tag sel">✓ SEL</span>' : ''}
+          ${isOff ? '<span class="qpu-cmp-tag off">OFFLINE</span>' : ''}
+        </div>
+        <div class="qpu-cmp-rows">
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">Fidelity</span>
+            <span class="qpu-cmp-rval" style="color:${fidCls}">${fidStr}</span>
+          </div>
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">2Q Error</span>
+            <span class="qpu-cmp-rval" style="color:var(--text2)">${q2e}</span>
+          </div>
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">T2</span>
+            <span class="qpu-cmp-rval" style="color:var(--text2)">${t2}</span>
+          </div>
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">Est. Time</span>
+            <span class="qpu-cmp-rval" style="color:var(--text2)">${exec}</span>
+          </div>
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">Queue</span>
+            <span class="qpu-cmp-rval" style="color:var(--text3);font-size:9px">${escHtml(String(queue))}</span>
+          </div>
+        </div>
+        <div class="qpu-cmp-fid-bar">
+          <div class="qpu-cmp-fid-fill" style="width:${fidBarW}%;background:${fidCls}"></div>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
   return html;
 }
 

@@ -60,8 +60,9 @@ CALIBRATION_TTL = {
     "ionq":     timedelta(hours=48),
     "rigetti":  timedelta(hours=24),
     "quera":    timedelta(hours=48),
-    "quandela": timedelta(hours=72),
-    "pasqal":   timedelta(hours=72),
+    "quandela":    timedelta(hours=72),
+    "pasqal":      timedelta(hours=72),
+    "quantinuum":  timedelta(hours=168),  # 정적 번들 데이터 — 주 1회
 }
 
 
@@ -227,6 +228,8 @@ class UQICalibration:
             return 'pasqal'
         elif qpu_name.startswith('qpu:') or qpu_name.startswith('sim:'):
             return 'quandela'
+        elif 'quantinuum' in qpu_name:
+            return 'quantinuum'
         return 'unknown'
 
     # ─────────────────────────────────────────
@@ -268,6 +271,8 @@ class UQICalibration:
                 ok = self._sync_pasqal(qpu_name)
             elif vendor == 'quandela':
                 ok = self._sync_quandela(qpu_name)
+            elif vendor == 'quantinuum':
+                ok = self._sync_quantinuum(qpu_name)
             else:
                 print(f"  [Calibration] 미지원 벤더: {qpu_name}")
                 return False
@@ -874,6 +879,59 @@ class UQICalibration:
             print(f"      ⚠ Quandela sync error: {e}")
             return False
 
+    # Quantinuum QPU 이름 → OFFLINE_MACHINE_LIST 디바이스 이름 매핑
+    _QUANTINUUM_DEVICE_MAP = {
+        'quantinuum_h1_1': 'H1-1',
+        'quantinuum_h2_1': 'H2-1',
+        'quantinuum_h2_2': 'H2-2',
+    }
+
+    def _sync_quantinuum(self, qpu_name: str) -> bool:
+        try:
+            from pytket.extensions.quantinuum.backends.api_wrappers import OFFLINE_MACHINE_LIST
+
+            device_name = self._QUANTINUUM_DEVICE_MAP.get(qpu_name)
+            if not device_name:
+                print(f"      ⚠ Quantinuum: 알 수 없는 QPU 이름 {qpu_name}")
+                return False
+
+            machine = next((m for m in OFFLINE_MACHINE_LIST if m['name'] == device_name), None)
+            if not machine:
+                print(f"      ⚠ Quantinuum: {device_name} 를 OFFLINE_MACHINE_LIST에서 찾을 수 없음")
+                return False
+
+            ns = machine.get('noise_specs', {})
+            if not ns:
+                print(f"      ⚠ Quantinuum: {device_name} noise_specs 없음")
+                return False
+
+            se = ns.get('spam_error', {})
+            # SPAM 에러: p_meas_0(준비→0, 측정→1), p_meas_1(준비→1, 측정→0) 평균
+            ro_error = (se.get('p_meas_0', 0) + se.get('p_meas_1', 0)) / 2
+
+            qv = machine.get('benchmarks', {}).get('qv', {}).get('value')
+
+            self.data[qpu_name] = {
+                "vendor":         "quantinuum",
+                "num_qubits":     machine.get('n_qubits'),
+                "avg_1q_error":   ns.get('1q_gate_error', {}).get('p1'),
+                "avg_2q_error":   ns.get('2q_gate_error', {}).get('p2'),
+                "avg_ro_error":   ro_error,
+                "memory_error":   ns.get('memory_error', {}).get('memory_error'),
+                "quantum_volume": int(qv) if qv else None,
+                "noise_date":     ns.get('date'),
+                "last_updated":   datetime.now().isoformat(),
+            }
+            print(f"      ✓ Quantinuum {device_name}: {machine['n_qubits']}Q, "
+                  f"1Q={ns['1q_gate_error']['p1']:.2e}, "
+                  f"2Q={ns['2q_gate_error']['p2']:.2e}, "
+                  f"RO={ro_error:.2e}, QV={int(qv) if qv else 'N/A'}")
+            return True
+
+        except Exception as e:
+            print(f"      ⚠ Quantinuum sync error: {e}")
+            return False
+
     # ─────────────────────────────────────────
     # 트랜스파일 파라미터 반환
     # ─────────────────────────────────────────
@@ -918,6 +976,9 @@ class UQICalibration:
             "avg_hom":                cal.get("avg_hom"),
             "avg_g2":                 cal.get("avg_g2"),
             "clock_mhz":              cal.get("clock_mhz"),
+            # quantinuum 전용
+            "memory_error":           cal.get("memory_error"),
+            "quantum_volume":         cal.get("quantum_volume"),
         }
 
     # ─────────────────────────────────────────

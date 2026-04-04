@@ -1045,15 +1045,17 @@ function renderQPUGrid(qpus) {
       'ibm':      { label: 'Superconducting', color: 'var(--accent)' },
       'iqm':      { label: 'Superconducting', color: 'var(--accent)' },
       'rigetti':  { label: 'Superconducting', color: 'var(--accent)' },
-      'ionq':     { label: 'Ion Trap',        color: 'var(--warn)' },
-      'quera':    { label: 'Neutral Atom',    color: '#f97316' },
-      'pasqal':   { label: 'Neutral Atom',    color: '#f97316' },
-      'photonic': { label: 'Photonic',        color: 'var(--accent2)' },
+      'ionq':        { label: 'Ion Trap',     color: 'var(--warn)' },
+      'quantinuum':  { label: 'Ion Trap',     color: '#a78bfa' },
+      'quera':       { label: 'Neutral Atom', color: '#f97316' },
+      'pasqal':      { label: 'Neutral Atom', color: '#f97316' },
+      'photonic':    { label: 'Photonic',     color: 'var(--accent2)' },
     };
     const _typeKey = isPhotonic ? 'photonic'
       : qpu.startsWith('ibm') ? 'ibm'
       : qpu.startsWith('iqm') ? 'iqm'
       : qpu.startsWith('ionq') ? 'ionq'
+      : qpu.startsWith('quantinuum') ? 'quantinuum'
       : qpu.startsWith('rigetti') ? 'rigetti'
       : qpu.startsWith('quera') ? 'quera'
       : qpu.startsWith('pasqal') ? 'pasqal'
@@ -1093,6 +1095,17 @@ function renderQPUGrid(qpus) {
           <div class="qpu-metric"><div class="qpu-metric-label">T1</div><div class="qpu-metric-value good">${t1 ? t1.text+t1.unit : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">2Q Error</div><div class="qpu-metric-value ${q2e != null ? (q2e < 0.01 ? 'good' : 'warn') : 'dim'}">${q2e != null ? (q2e*100).toFixed(2)+'%' : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Topology</div><div class="qpu-metric-value neutral" style="font-size:10px">All-to-All</div></div>
+        </div>`;
+    } else if (_typeKey === 'quantinuum') {
+      const q2e = d.avg_2q_error;
+      const qv  = d.quantum_volume;
+      const mem = d.memory_error;
+      metricsHtml = `
+        <div class="qpu-metrics">
+          <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">2Q Error</div><div class="qpu-metric-value ${q2e != null ? (q2e < 0.002 ? 'good' : 'warn') : 'dim'}">${q2e != null ? (q2e*100).toFixed(3)+'%' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Memory Err</div><div class="qpu-metric-value ${mem != null ? (mem < 0.0003 ? 'good' : 'warn') : 'dim'}" style="font-size:11px">${mem != null ? (mem*100).toFixed(4)+'%' : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">QV</div><div class="qpu-metric-value good" style="font-size:11px">${qv != null ? qv.toLocaleString() : '—'}</div></div>
         </div>`;
     } else if (d._loading) {
       metricsHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">${[1,2,3,4].map(()=>`
@@ -1921,6 +1934,7 @@ function renderQPUDetail(container, qpu, d) {
   const _vk = qpu.startsWith('quera') ? 'quera'
     : qpu.startsWith('pasqal') ? 'pasqal'
     : qpu.startsWith('ionq') ? 'ionq'
+    : qpu.startsWith('quantinuum') ? 'quantinuum'
     : qpu.startsWith('rigetti') ? 'rigetti'
     : qpu.startsWith('iqm') ? 'iqm' : 'ibm';
 
@@ -1946,6 +1960,19 @@ function renderQPUDetail(container, qpu, d) {
       <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
       <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
       <div class="cal-item"><div class="cal-label">2Q Gate</div><div class="cal-value neutral">${(r=>r?r.text+'<span class="cal-unit">'+r.unit+'</span>':'—')(fmtNs(d.avg_2q_ns))}</div></div>`;
+  } else if (_vk === 'quantinuum') {
+    const mem = d.memory_error;
+    const qv  = d.quantum_volume;
+    const memCls = mem != null ? (mem < 0.0003 ? 'good' : 'warn') : 'dim';
+    calGridHtml = `
+      <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
+      <div class="cal-item"><div class="cal-label">1Q Error</div><div class="cal-value ${q1e.cls}">${q1e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
+      <div class="cal-item"><div class="cal-label">RO Error</div><div class="cal-value ${roe.cls}">${roe.text}</div></div>
+      <div class="cal-item"><div class="cal-label">Memory Err</div><div class="cal-value ${memCls}">${mem != null ? (mem*100).toFixed(4)+'%' : '—'}</div></div>
+      <div class="cal-item"><div class="cal-label">Quantum Volume</div><div class="cal-value good" style="font-size:13px">${qv != null ? qv.toLocaleString() : '—'}</div></div>
+      <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:11px">All-to-All</div></div>
+      ${d.noise_date ? `<div class="cal-item"><div class="cal-label">Cal. Date</div><div class="cal-value neutral" style="font-size:11px">${d.noise_date}</div></div>` : ''}`;
   } else {
     calGridHtml = `
       <div class="cal-item"><div class="cal-label">Qubits</div><div class="cal-value neutral">${d.num_qubits??'—'}</div></div>
@@ -2183,7 +2210,7 @@ let _boxplotChart = null;
 
 const _modalityDefs = [
   { id: 'superconducting', label: 'Superconducting', match: q => q.startsWith('ibm') || q.startsWith('iqm') || q.startsWith('rigetti') },
-  { id: 'ion-trap',        label: 'Ion-trap',        match: q => q.startsWith('ionq') },
+  { id: 'ion-trap',        label: 'Ion-trap',        match: q => q.startsWith('ionq') || q.startsWith('quantinuum') },
   { id: 'neutral-atom',   label: 'Neutral Atom',    match: q => q.startsWith('quera') || q.startsWith('pasqal') },
   { id: 'photonic',       label: 'Photonic',        match: q => q.startsWith('qpu:') },
 ];

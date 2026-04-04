@@ -125,6 +125,7 @@ IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "ionq_forte1", "ionq_aria1", "rigetti_ankaa3",
+                   "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    "quera_aquila", "pasqal_fresnel",
                    "qpu:ascella", "qpu:belenos"]
 
@@ -985,6 +986,10 @@ async def uqi_calibration_info(
                 "avg_hom":               calibration.get("avg_hom"),
                 "avg_g2":                calibration.get("avg_g2"),
                 "clock_mhz":             calibration.get("clock_mhz"),
+                # quantinuum 전용
+                "memory_error":          calibration.get("memory_error"),
+                "quantum_volume":        calibration.get("quantum_volume"),
+                "noise_date":            calibration.get("noise_date"),
             })
         except Exception as e:
             return json.dumps({"error": str(e)})

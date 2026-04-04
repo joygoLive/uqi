@@ -533,7 +533,7 @@ async def uqi_noise_simulate(
     def _run():
         from qiskit import QuantumCircuit
         try:
-            _cache_key = f"noise:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
+            _cache_key = f"noise_v2:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
             _cached = _rag.get_cache(_cache_key)
             if _cached:
                 print(f"  [Cache] noise 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
@@ -551,7 +551,29 @@ async def uqi_noise_simulate(
             for name, qasm in converter.qasm_results.items():
                 try:
                     qc = QuantumCircuit.from_qasm_str(qasm)
-                    r  = noise.run_comparison(qc, shots=shots)
+
+                    # A안: auto best-combination transpile 먼저 수행
+                    # optimize(auto)와 동일한 전략으로 물리 회로로 변환 후 noise 적용
+                    qc_for_noise = qc
+                    combination_used = None
+                    try:
+                        optimizer   = UQIOptimizer(calibration=calibration)
+                        opt_result  = optimizer.optimize(
+                            qc, qpu_name, combination="auto", verify=False)
+                        if opt_result.get("ok") and opt_result.get("circuit") is not None:
+                            qc_for_noise     = opt_result["circuit"]
+                            combination_used = opt_result.get("combination")
+                            print(f"  [Noise] pre-optimize 완료: {combination_used} "
+                                  f"gate_reduction={opt_result.get('gate_reduction', 0):.3f}",
+                                  file=sys.stderr)
+                        else:
+                            print(f"  [Noise] pre-optimize 실패, 원본 회로 사용",
+                                  file=sys.stderr)
+                    except Exception as oe:
+                        print(f"  [Noise] pre-optimize 예외, 원본 회로 사용: {oe}",
+                              file=sys.stderr)
+
+                    r  = noise.run_comparison(qc_for_noise, shots=shots)
                     _rag.add_execution(
                         circuit_name=name, qpu_name=qpu_name,
                         backend=f"noise_sim_{sdk}", shots=shots,
@@ -559,10 +581,11 @@ async def uqi_noise_simulate(
                         extra={"comparison": r["comparison"]}
                     )
                     results[name] = {
-                        "ideal_counts": r["ideal_counts"],
-                        "noise_counts": r["noise_counts"],
-                        "tvd":          r["comparison"]["tvd"],
-                        "fidelity":     r["comparison"]["fidelity"],
+                        "ideal_counts":    r["ideal_counts"],
+                        "noise_counts":    r["noise_counts"],
+                        "tvd":             r["comparison"]["tvd"],
+                        "fidelity":        r["comparison"]["fidelity"],
+                        "combination":     combination_used,
                     }
                 except Exception as e:
                     results[name] = {"error": str(e)}

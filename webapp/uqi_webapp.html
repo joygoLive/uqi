@@ -549,7 +549,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-noise">
             <div class="step-options">
               <div class="form-group">
-                <label class="form-label">SDK</label>
+                <label class="form-label">Simulation Engine</label>
                 <select class="form-select" id="noise-sdk">
                   <option value="qiskit">Qiskit</option>
                   <option value="pennylane">PennyLane</option>
@@ -2919,6 +2919,7 @@ function renderNoise(data, el) {
     if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
     html += `
       <div class="section-divider">${name}</div>
+      ${r.combination ? `<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Transpile: <span style="color:var(--accent)">${escHtml(r.combination)}</span></div>` : ''}
       <div class="metric-grid">
         <div class="metric-item"><div class="metric-label">Fidelity</div><div class="metric-value ${r.fidelity>0.9?'good':r.fidelity>0.7?'warn':'bad'}">${r.fidelity!=null?r.fidelity.toFixed(4):'—'}</div></div>
         <div class="metric-item"><div class="metric-label">TVD</div><div class="metric-value ${r.tvd<0.05?'good':r.tvd<0.2?'warn':'bad'}">${r.tvd!=null?r.tvd.toFixed(4):'—'}</div></div>

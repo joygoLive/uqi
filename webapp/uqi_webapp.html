@@ -3210,14 +3210,19 @@ function renderQPUSubmitResult(data, el, qpuName) {
           <div style="font-size:10px;color:var(--text3);margin-bottom:4px">Job ID</div>
           <div style="font-family:var(--font-mono);font-size:11px;color:var(--accent);word-break:break-all;margin-bottom:12px;user-select:all">${escHtml(jobId)}</div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button onclick="_pollJobStatus('${escHtml(jobId)}','${escHtml(qpuName)}','${cardId}')"
+            <button onclick="_pollJobStatus('${escHtml(jobId)}','${cardId}')"
               id="poll-btn-${cardId}"
               style="font-size:10px;padding:4px 12px;background:var(--surface);border:1px solid var(--accent);border-radius:5px;color:var(--accent);cursor:pointer">
               ↻ Check Status
             </button>
+            <button onclick="_cancelJob('${escHtml(jobId)}','${cardId}')"
+              id="cancel-btn-${cardId}"
+              style="font-size:10px;padding:4px 12px;background:var(--surface);border:1px solid rgba(248,81,73,0.4);border-radius:5px;color:var(--error);cursor:pointer">
+              ✕ Cancel Job
+            </button>
             <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3);cursor:pointer">
               <input type="checkbox" id="auto-poll-${cardId}"
-                onchange="_toggleAutoPoll('${escHtml(jobId)}','${escHtml(qpuName)}','${cardId}',this.checked)"
+                onchange="_toggleAutoPoll('${escHtml(jobId)}','${cardId}',this.checked)"
                 style="cursor:pointer">
               Auto-poll every 30s
             </label>
@@ -3249,14 +3254,14 @@ function renderQPUSubmitResult(data, el, qpuName) {
   return html;
 }
 
-async function _pollJobStatus(jobId, qpuName, cardId) {
+async function _pollJobStatus(jobId, cardId) {
   const btn = document.getElementById(`poll-btn-${cardId}`);
   const ts  = document.getElementById(`poll-ts-${cardId}`);
   const res_el = document.getElementById(`poll-result-${cardId}`);
   const badge  = document.getElementById(`status-badge-${cardId}`);
   if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
   try {
-    const res  = await callTool('uqi_job_status', { job_id: jobId, qpu_name: qpuName });
+    const res  = await callTool('uqi_job_status', { job_id: jobId });
     const data = JSON.parse(getResultText(res));
     const now  = new Date().toLocaleTimeString();
     if (ts) ts.textContent = `Last checked: ${now}`;
@@ -3268,11 +3273,23 @@ async function _pollJobStatus(jobId, qpuName, cardId) {
     }
 
     const statusRaw = (data.status||'').replace('JobStatus.','');
+    if (data.status === 'cancelled') {
+      _stopAutoPoll(jobId);
+      const autoCb = document.getElementById(`auto-poll-${cardId}`);
+      if (autoCb) autoCb.checked = false;
+      if (badge) { badge.innerHTML='CANCELLED'; badge.style.background='rgba(110,118,129,0.2)'; badge.style.borderColor='rgba(110,118,129,0.4)'; badge.style.color='var(--text3)'; }
+      const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
+      if (cancelBtn) cancelBtn.style.display='none';
+      if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3)">Job was cancelled.</div>`;
+      return;
+    }
     if (data.done && data.counts) {
       // 완료 — 자동 폴링 중지 + 결과 표시
       _stopAutoPoll(jobId);
       const autoCb = document.getElementById(`auto-poll-${cardId}`);
       if (autoCb) autoCb.checked = false;
+      const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
+      if (cancelBtn) cancelBtn.style.display='none';
       if (badge) badge.innerHTML = `<span style="color:var(--success)">✓ DONE</span>`;
       badge.style.background='rgba(63,185,80,0.15)';
       badge.style.borderColor='rgba(63,185,80,0.3)';
@@ -3304,12 +3321,39 @@ async function _pollJobStatus(jobId, qpuName, cardId) {
   }
 }
 
-function _toggleAutoPoll(jobId, qpuName, cardId, enabled) {
+function _toggleAutoPoll(jobId, cardId, enabled) {
   if (enabled) {
-    _pollJobStatus(jobId, qpuName, cardId);
-    _jobPollers[jobId] = setInterval(() => _pollJobStatus(jobId, qpuName, cardId), 30000);
+    _pollJobStatus(jobId, cardId);
+    _jobPollers[jobId] = setInterval(() => _pollJobStatus(jobId, cardId), 30000);
   } else {
     _stopAutoPoll(jobId);
+  }
+}
+
+async function _cancelJob(jobId, cardId) {
+  const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
+  const badge     = document.getElementById(`status-badge-${cardId}`);
+  const res_el    = document.getElementById(`poll-result-${cardId}`);
+  if (!confirm(`Cancel job ${jobId}?\n\nCloud cancellation will be attempted. If unsupported, the job will be cancelled locally.`)) return;
+  if (cancelBtn) { cancelBtn.disabled=true; cancelBtn.textContent='Cancelling...'; }
+  try {
+    const res  = await callTool('uqi_job_cancel', { job_id: jobId });
+    const data = JSON.parse(getResultText(res));
+    _stopAutoPoll(jobId);
+    const autoCb = document.getElementById(`auto-poll-${cardId}`);
+    if (autoCb) autoCb.checked = false;
+    if (data.ok) {
+      if (badge) { badge.innerHTML='CANCELLED'; badge.style.background='rgba(110,118,129,0.2)'; badge.style.borderColor='rgba(110,118,129,0.4)'; badge.style.color='var(--text3)'; }
+      if (cancelBtn) cancelBtn.style.display='none';
+      const cloudNote = data.cloud_cancel?.ok ? '✓ Cloud cancel successful' : `⚠ Cloud cancel failed — local only (${data.cloud_cancel?.error||''})`;
+      if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3);line-height:1.6">Job cancelled.<br>${cloudNote}</div>`;
+    } else {
+      if (res_el) res_el.innerHTML=`<div class="error-state" style="margin-top:0">⚠ Cancel failed: ${escHtml(data.error||'unknown')}</div>`;
+      if (cancelBtn) { cancelBtn.disabled=false; cancelBtn.textContent='✕ Cancel Job'; }
+    }
+  } catch(e) {
+    if (cancelBtn) { cancelBtn.disabled=false; cancelBtn.textContent='✕ Cancel Job'; }
+    if (res_el) res_el.innerHTML=`<div class="error-state" style="margin-top:0">⚠ ${escHtml(e.message)}</div>`;
   }
 }
 

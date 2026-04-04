@@ -19,6 +19,7 @@ from uqi_optimizer   import UQIOptimizer
 from uqi_noise       import UQINoise
 from uqi_qec         import UQIQEC
 from uqi_rag         import UQIRAG
+import uqi_job_store as _job_store
 
 import builtins
 import os
@@ -1555,7 +1556,7 @@ async def uqi_qpu_submit(
 
             circuits = qpu_circuits.get(selected_qpu, {})
             submission_results = {}
-            for name, qc_opt in circuits.items():
+            for name in (circuits.keys() or converter.qasm_results.keys()):
                 try:
                     if "ibm" in selected_qpu:
                         from uqi_executor_ibm import UQIExecutorIBM
@@ -1568,38 +1569,41 @@ async def uqi_qpu_submit(
                         )
                         if not sub["ok"]:
                             raise Exception(sub["error"])
+                        _job_store.save_job(
+                            job_id=sub["job_id"], vendor="ibm",
+                            qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                            extra={"via": sub.get("via"), "backend": selected_qpu},
+                        )
                         submission_results[name] = {
-                            "ok":      True,
-                            "job_id":  sub["job_id"],
-                            "backend": selected_qpu,
-                            "via":     sub.get("via"),
+                            "ok": True, "job_id": sub["job_id"],
+                            "backend": selected_qpu, "via": sub.get("via"),
                         }
+
                     elif "iqm" in selected_qpu:
-                        # IQM은 동기 실행 유지 (자체 큐 시스템)
                         from uqi_executor_iqm import UQIExecutorIQM
                         executor = UQIExecutorIQM(converter=converter, shots=shots)
                         executor._token = IQM_TOKEN
                         device_name = selected_qpu.split('_')[-1]
-                        t_start = time.time()
-                        result_dict = executor._run_single(
-                            name=name, qasm=converter.qasm_results.get(name),
-                            use_simulator=False,
-                            backend_url=f"https://resonance.meetiqm.com/computers/{device_name}",
+                        backend_url = f"https://resonance.meetiqm.com/computers/{device_name}"
+                        sub = executor._submit_single(
+                            name=name,
+                            qasm=converter.qasm_results.get(name),
+                            backend_url=backend_url,
                         )
-                        if not result_dict["ok"]:
-                            raise Exception(result_dict["error"])
-                        exec_time = time.time() - t_start
-                        _rag.add_execution(
-                            circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
-                            shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
+                        if not sub["ok"]:
+                            raise Exception(sub["error"])
+                        _job_store.save_job(
+                            job_id=sub["job_id"], vendor="iqm",
+                            qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                            extra={"backend_url": backend_url},
                         )
                         submission_results[name] = {
-                            "ok":       True,
-                            "counts":   result_dict["counts"],
-                            "backend":  selected_qpu,
-                            "exec_time": round(exec_time, 2),
+                            "ok": True, "job_id": sub["job_id"],
+                            "backend": backend_url,
                         }
+
                     elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
+                        # Perceval은 비동기 미지원 — 동기 실행 유지
                         from uqi_executor_perceval import UQIExecutorPerceval
                         token    = os.getenv("QUANDELA_TOKEN")
                         use_sim  = selected_qpu.startswith("sim:")
@@ -1620,10 +1624,8 @@ async def uqi_qpu_submit(
                             shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
                         )
                         submission_results[name] = {
-                            "ok":       True,
-                            "counts":   result_dict["counts"],
-                            "backend":  selected_qpu,
-                            "exec_time": round(exec_time, 2),
+                            "ok": True, "counts": result_dict["counts"],
+                            "backend": selected_qpu, "exec_time": round(exec_time, 2),
                         }
                     else:
                         raise ValueError(f"미지원 QPU: {selected_qpu}")
@@ -1635,7 +1637,6 @@ async def uqi_qpu_submit(
                         shots=shots, counts={}, ok=False, extra={"error": str(e)},
                     )
 
-            # IBM은 비동기(job_id 리턴), 나머지는 결과 즉시 포함
             has_jobs = any(r.get("job_id") for r in submission_results.values())
             return _safe_json({
                 "status":          "submitted" if has_jobs else "completed",
@@ -1667,37 +1668,123 @@ async def uqi_qpu_submit(
 
 
 # ─────────────────────────────────────────────────────────
-# 툴 9: Job 상태 조회 (IBM 비동기 제출 후 폴링용)
+# 툴 9: Job 상태 조회
 # ─────────────────────────────────────────────────────────
 
 @mcp.tool()
-async def uqi_job_status(
-    job_id:   str,
-    qpu_name: str = "ibm_fez",
-) -> str:
-    """IBM QPU 제출 job 상태 조회. job_id: IBM Runtime job ID"""
+async def uqi_job_status(job_id: str) -> str:
+    """QPU 비동기 제출 job 상태 조회 (IBM/IQM 공통). job_id: 제출 시 받은 ID"""
     def _run():
         try:
-            vendor = job_id.split("-")[0] if "-" in job_id else ""
+            # 1) job store에서 캐시 확인
+            stored = _job_store.get_job(job_id)
+            if stored is None:
+                return json.dumps({"error": f"job_id를 찾을 수 없습니다: {job_id}"})
 
-            if "ibm" in qpu_name or len(job_id) > 20:
+            # 이미 완료/취소/에러 상태면 클라우드 재조회 없이 즉시 리턴
+            if stored["status"] in ("done", "error", "cancelled"):
+                return json.dumps({
+                    "job_id":  job_id,
+                    "vendor":  stored["vendor"],
+                    "qpu":     stored["qpu_name"],
+                    "status":  stored["status"],
+                    "counts":  stored["counts"],
+                    "error":   stored["error"],
+                    "done":    stored["status"] == "done",
+                    "submitted_at": stored["submitted_at"],
+                    "updated_at":   stored["updated_at"],
+                }, ensure_ascii=False)
+
+            # 2) 클라우드 API 폴링
+            vendor = stored["vendor"]
+            qpu_name = stored["qpu_name"]
+
+            if vendor == "ibm":
                 from uqi_executor_ibm import UQIExecutorIBM
                 result = UQIExecutorIBM.fetch_job_status(job_id, token=IBM_TOKEN)
-                if result.get("done") and result.get("counts"):
-                    _rag.add_execution(
-                        circuit_name="(job_id poll)",
-                        qpu_name=qpu_name,
-                        backend=qpu_name,
-                        shots=sum(result["counts"].values()),
-                        counts=result["counts"],
-                        ok=True,
-                    )
-                return json.dumps(result, ensure_ascii=False)
+            elif vendor == "iqm":
+                from uqi_executor_iqm import UQIExecutorIQM
+                backend_url = stored["extra"].get("backend_url", "")
+                result = UQIExecutorIQM.fetch_job_status(
+                    job_id, token=IQM_TOKEN, backend_url=backend_url)
             else:
-                return json.dumps({"error": f"미지원 QPU/job_id: {qpu_name} / {job_id}"})
+                return json.dumps({"error": f"미지원 vendor: {vendor}"})
+
+            # 3) job store 업데이트
+            if result.get("done") and result.get("counts"):
+                _job_store.update_job(job_id, status="done", counts=result["counts"])
+                _rag.add_execution(
+                    circuit_name=stored.get("circuit_name", ""),
+                    qpu_name=qpu_name, backend=qpu_name,
+                    shots=sum(result["counts"].values()),
+                    counts=result["counts"], ok=True,
+                )
+            elif result.get("error"):
+                _job_store.update_job(job_id, status="error", error=result["error"])
+            else:
+                _job_store.update_job(job_id, status="running")
+
+            result["vendor"]       = vendor
+            result["qpu"]          = qpu_name
+            result["submitted_at"] = stored["submitted_at"]
+            return json.dumps(result, ensure_ascii=False)
 
         except Exception as e:
             return json.dumps({"error": str(e), "traceback": traceback.format_exc()})
+
+    return await asyncio.to_thread(_run)
+
+
+# ─────────────────────────────────────────────────────────
+# 툴 10: Job 취소
+# ─────────────────────────────────────────────────────────
+
+@mcp.tool()
+async def uqi_job_cancel(job_id: str) -> str:
+    """QPU job 취소. 클라우드 취소 실패해도 로컬 job store에서 cancelled 처리."""
+    def _run():
+        try:
+            stored = _job_store.get_job(job_id)
+            if stored is None:
+                return json.dumps({"ok": False, "error": f"job_id 없음: {job_id}"})
+
+            if stored["status"] in ("done", "error", "cancelled"):
+                return json.dumps({
+                    "ok": False,
+                    "error": f"이미 {stored['status']} 상태 — 취소 불가",
+                    "status": stored["status"],
+                })
+
+            vendor = stored["vendor"]
+            cloud_result = {"ok": False, "error": "클라우드 취소 미지원"}
+
+            # 클라우드 취소 시도 (실패해도 로컬 취소는 진행)
+            try:
+                if vendor == "ibm":
+                    from uqi_executor_ibm import UQIExecutorIBM
+                    cloud_result = UQIExecutorIBM.cancel_job(job_id, token=IBM_TOKEN)
+                elif vendor == "iqm":
+                    from uqi_executor_iqm import UQIExecutorIQM
+                    backend_url = stored["extra"].get("backend_url", "")
+                    cloud_result = UQIExecutorIQM.cancel_job(
+                        job_id, token=IQM_TOKEN, backend_url=backend_url)
+            except Exception as ce:
+                cloud_result = {"ok": False, "error": str(ce)}
+
+            # 로컬 job store는 무조건 cancelled 처리
+            _job_store.cancel_job(job_id)
+
+            return json.dumps({
+                "ok":           True,
+                "job_id":       job_id,
+                "vendor":       vendor,
+                "cloud_cancel": cloud_result,
+                "note": "Job cancelled locally. Cloud cancellation: "
+                        + ("success" if cloud_result.get("ok") else f"failed ({cloud_result.get('error','unknown')}) — local cancel applied"),
+            }, ensure_ascii=False)
+
+        except Exception as e:
+            return json.dumps({"ok": False, "error": str(e)})
 
     return await asyncio.to_thread(_run)
 

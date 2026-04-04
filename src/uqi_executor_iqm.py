@@ -385,6 +385,166 @@ class UQIExecutorIQM:
             return set()
         
     # ─────────────────────────────────────────
+    # 비동기 제출 (job_id만 리턴, wait 없음)
+    # ─────────────────────────────────────────
+
+    def _submit_single(
+        self,
+        name:        str,
+        qasm:        str,
+        backend_url: str,
+    ) -> dict:
+        """
+        IQM QPU에 job 제출 후 job_id 즉시 리턴.
+        wait_for_completion() 블로킹 없음.
+        """
+        result = {
+            "ok":          False,
+            "job_id":      None,
+            "backend_url": backend_url,
+            "error":       None,
+        }
+        try:
+            from qiskit import QuantumCircuit, transpile
+            from qiskit.transpiler import CouplingMap
+
+            circuit = QuantumCircuit.from_qasm_str(qasm)
+            device_n_qubits = len(getattr(self, '_qubit_index_map', {})) or 20
+            if circuit.num_qubits < device_n_qubits:
+                from qiskit import QuantumRegister
+                qr = QuantumRegister(device_n_qubits, 'q')
+                qc_pad = QuantumCircuit(qr)
+                qc_pad.compose(circuit, qubits=list(range(circuit.num_qubits)), inplace=True)
+                circuit = qc_pad
+
+            basis_gates = ["rx", "ry", "rz", "cz", "measure", "reset"]
+            cz_loci = self._get_cz_loci(backend_url)
+            if cz_loci:
+                qubit_map = getattr(self, '_qubit_index_map', {})
+                edges = [(qubit_map[a], qubit_map[b]) for a, b in cz_loci
+                         if a in qubit_map and b in qubit_map]
+                if not edges:
+                    n = len(qubit_map) if qubit_map else 20
+                    edges = [(i, j) for i in range(n) for j in range(n) if i != j]
+                edges_sym = list(set(edges + [(b, a) for a, b in edges]))
+                coupling_map = CouplingMap(edges_sym)
+            else:
+                garnet_edges = [(int(a[2:])-1, int(b[2:])-1) for a, b in self.GARNET_CZ_LOCI_QB]
+                garnet_edges += [(b, a) for a, b in garnet_edges]
+                coupling_map = CouplingMap(garnet_edges)
+
+            transpiled = transpile(circuit, basis_gates=basis_gates,
+                                   coupling_map=coupling_map, optimization_level=1)
+            iqm_circuit = self._to_iqm_circuit(name, transpiled)
+            if iqm_circuit is None:
+                result["error"] = "IQM Circuit 변환 실패"
+                return result
+
+            from iqm.iqm_client import IQMClient
+            import os
+            token = getattr(self, '_token', None) or os.getenv("IQM_QUANTUM_TOKEN")
+            if not token:
+                result["error"] = "IQM_QUANTUM_TOKEN 없음"
+                return result
+
+            device_name = backend_url.rstrip("/").split("/")[-1]
+            client = IQMClient(
+                "https://resonance.meetiqm.com",
+                quantum_computer=device_name,
+                token=token,
+            )
+            job = client.submit_circuits(circuits=[iqm_circuit], shots=self.shots)
+            result["job_id"] = str(job.job_id)
+            result["ok"]     = True
+            print(f"    ✓ IQM job 제출 완료: {result['job_id']}")
+
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ IQM job 제출 실패: {e}")
+
+        return result
+
+    @staticmethod
+    def fetch_job_status(job_id: str, token: str = None, backend_url: str = None) -> dict:
+        """
+        IQM job 상태 및 결과 조회.
+        완료 시 counts 포함, 미완료 시 status만 리턴.
+        """
+        result = {
+            "job_id": job_id,
+            "status": None,
+            "counts": None,
+            "error":  None,
+            "done":   False,
+        }
+        try:
+            from iqm.iqm_client import IQMClient
+            import os
+
+            token = token or os.getenv("IQM_QUANTUM_TOKEN")
+            if not token:
+                result["error"] = "IQM_QUANTUM_TOKEN 없음"
+                return result
+
+            device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
+            client = IQMClient(
+                "https://resonance.meetiqm.com",
+                quantum_computer=device_name,
+                token=token,
+            )
+
+            import uuid
+            status = client.get_job_status(uuid.UUID(job_id))
+            result["status"] = str(status)
+
+            done_statuses = {"JobStatus.READY", "READY", "ready"}
+            if str(status) in done_statuses or (hasattr(status, 'name') and status.name == "READY"):
+                job_result = client.get_job_result(uuid.UUID(job_id))
+                if job_result:
+                    meas = job_result[0]
+                    counts = {}
+                    for key, shots_data in meas.items():
+                        for shot in shots_data:
+                            bitstr = "".join(str(b) for b in shot)
+                            counts[bitstr] = counts.get(bitstr, 0) + 1
+                    result["counts"] = counts
+                    result["done"]   = True
+                    print(f"    ✓ IQM job 완료: {job_id}")
+            else:
+                print(f"    … IQM job 진행중: {job_id} ({status})")
+
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ IQM job 조회 실패: {e}")
+
+        return result
+
+    @staticmethod
+    def cancel_job(job_id: str, token: str = None, backend_url: str = None) -> dict:
+        """IQM job 취소 요청"""
+        try:
+            from iqm.iqm_client import IQMClient
+            import os, uuid
+
+            token = token or os.getenv("IQM_QUANTUM_TOKEN")
+            if not token:
+                return {"ok": False, "error": "IQM_QUANTUM_TOKEN 없음"}
+
+            device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
+            client = IQMClient(
+                "https://resonance.meetiqm.com",
+                quantum_computer=device_name,
+                token=token,
+            )
+            client.abort_job(uuid.UUID(job_id))
+            print(f"    ✓ IQM job 취소 요청: {job_id}")
+            return {"ok": True}
+
+        except Exception as e:
+            print(f"    ✗ IQM job 취소 실패: {e}")
+            return {"ok": False, "error": str(e)}
+
+    # ─────────────────────────────────────────
     # Utility
     # ─────────────────────────────────────────
 

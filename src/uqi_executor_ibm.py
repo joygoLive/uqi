@@ -292,6 +292,27 @@ class UQIExecutorIBM:
 
         return result
 
+    @staticmethod
+    def cancel_job(job_id: str, token: str = None) -> dict:
+        """IBM Runtime job 취소 요청"""
+        try:
+            from qiskit_ibm_runtime import QiskitRuntimeService
+
+            if token:
+                service = QiskitRuntimeService(
+                    channel="ibm_quantum_platform", token=token)
+            else:
+                service = QiskitRuntimeService()
+
+            job = service.job(job_id)
+            job.cancel()
+            print(f"    ✓ IBM job 취소 요청: {job_id}")
+            return {"ok": True}
+
+        except Exception as e:
+            print(f"    ✗ IBM job 취소 실패: {e}")
+            return {"ok": False, "error": str(e)}
+
     # ─────────────────────────────────────────
     # Estimator 실행 (Observable 기반)
     # ─────────────────────────────────────────

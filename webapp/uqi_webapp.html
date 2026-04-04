@@ -172,15 +172,24 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 /* Pipeline Steps */
 .pipeline-steps { display:flex; flex-direction:column; gap:10px; }
 .step-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.step-card.step-danger { border-color:rgba(248,81,73,0.35); }
 .step-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; cursor:pointer; transition:background 0.2s; user-select:none; }
 .step-header:hover { background:rgba(255,255,255,0.02); }
 .step-header-left { display:flex; align-items:center; gap:10px; }
+.step-header-title { display:flex; flex-direction:column; gap:2px; }
 .step-icon { font-size:14px; }
 .step-name { font-size:12px; font-weight:600; color:var(--text2); }
+.step-desc { font-size:10px; color:var(--text3); line-height:1.4; }
 .step-badge { font-size:10px; padding:2px 8px; border-radius:10px; }
 .step-badge.done { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
 .step-badge.error { background:rgba(248,81,73,0.15); color:var(--error); border:1px solid rgba(248,81,73,0.3); }
 .step-chevron { font-size:10px; color:var(--text3); transition:transform 0.2s; }
+.noise-bar-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; font-size:10px; font-family:var(--font-mono); }
+.noise-bar-label { color:var(--text2); min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.noise-bar-track { flex:1; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+.noise-bar-fill { height:100%; border-radius:3px; background:var(--accent); }
+.noise-bar-val { color:var(--text3); min-width:36px; text-align:right; }
+.independent-badge { display:inline-block; font-size:9px; color:var(--text3); background:var(--surface2); border:1px solid var(--border); border-radius:4px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
 .step-chevron.open { transform:rotate(180deg); }
 .step-body { display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.15); }
 .step-body.open { display:block; }
@@ -484,14 +493,22 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
 
       <!-- Pipeline Steps -->
       <div class="pipeline-steps">
+        <div style="font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:4px;line-height:1.6">
+          Each step runs <strong style="color:var(--text2)">independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.
+        </div>
 
         <!-- Analyze -->
         <div class="step-card" id="step-analyze">
           <div class="step-header" onclick="toggleStep('analyze')">
             <div class="step-header-left">
               <span class="step-icon">🔬</span>
-              <span class="step-name">Circuit Analysis</span>
-              <span class="step-badge" id="badge-analyze" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">Circuit Analysis</span>
+                  <span class="step-badge" id="badge-analyze" style="display:none"></span>
+                </div>
+                <span class="step-desc">Logical complexity — qubits, gates, depth, T-gate ratio</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-analyze">▼</span>
           </div>
@@ -506,8 +523,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-header" onclick="toggleStep('optimize')">
             <div class="step-header-left">
               <span class="step-icon">⚙️</span>
-              <span class="step-name">Optimization</span>
-              <span class="step-badge" id="badge-optimize" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">Optimization</span>
+                  <span class="step-badge" id="badge-optimize" style="display:none"></span>
+                </div>
+                <span class="step-desc">Physical mapping to target QPU — gate/depth reduction via auto transpile</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-optimize">▼</span>
           </div>
@@ -541,8 +563,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-header" onclick="toggleStep('noise')">
             <div class="step-header-left">
               <span class="step-icon">📡</span>
-              <span class="step-name">Noise Simulation</span>
-              <span class="step-badge" id="badge-noise" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">Noise Simulation</span>
+                  <span class="step-badge" id="badge-noise" style="display:none"></span>
+                </div>
+                <span class="step-desc">QPU-realistic fidelity — calibration-based noise model on optimized circuit</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-noise">▼</span>
           </div>
@@ -570,8 +597,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-header" onclick="toggleStep('qec-analyze')">
             <div class="step-header-left">
               <span class="step-icon">🛡</span>
-              <span class="step-name">QEC Analysis</span>
-              <span class="step-badge" id="badge-qec-analyze" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">QEC Analysis</span>
+                  <span class="step-badge" id="badge-qec-analyze" style="display:none"></span>
+                </div>
+                <span class="step-desc">Error correction necessity — T2 ratio, fidelity, recommended codes</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-qec-analyze">▼</span>
           </div>
@@ -592,8 +624,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-header" onclick="toggleStep('qec-apply')">
             <div class="step-header-left">
               <span class="step-icon">🔧</span>
-              <span class="step-name">QEC Apply</span>
-              <span class="step-badge" id="badge-qec-apply" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">QEC Apply</span>
+                  <span class="step-badge" id="badge-qec-apply" style="display:none"></span>
+                </div>
+                <span class="step-desc">Encode circuit with QEC code — compare fidelity before/after</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-qec-apply">▼</span>
           </div>
@@ -621,8 +658,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-header" onclick="toggleStep('gpu')">
             <div class="step-header-left">
               <span class="step-icon">🚀</span>
-              <span class="step-name">GPU Benchmark</span>
-              <span class="step-badge" id="badge-gpu" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">GPU Benchmark</span>
+                  <span class="step-badge" id="badge-gpu" style="display:none"></span>
+                </div>
+                <span class="step-desc">CPU vs GPU simulation speed — statevector throughput comparison</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-gpu">▼</span>
           </div>
@@ -633,17 +675,23 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         </div>
 
         <!-- QPU Submit -->
-        <div class="step-card" id="step-qpu">
+        <div class="step-card step-danger" id="step-qpu">
           <div class="step-header" onclick="toggleStep('qpu')">
             <div class="step-header-left">
               <span class="step-icon">🌐</span>
-              <span class="step-name">QPU Submit</span>
-              <span class="step-badge" id="badge-qpu" style="display:none"></span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">QPU Submit</span>
+                  <span class="step-badge" id="badge-qpu" style="display:none"></span>
+                  <span style="font-size:9px;background:rgba(248,81,73,0.15);color:var(--error);border:1px solid rgba(248,81,73,0.3);border-radius:4px;padding:1px 5px">REAL HARDWARE</span>
+                </div>
+                <span class="step-desc">Submit to real quantum hardware — transpiles &amp; executes on actual QPU</span>
+              </div>
             </div>
             <span class="step-chevron" id="chevron-qpu">▼</span>
           </div>
           <div class="step-body" id="body-qpu">
-            <div class="warn-banner">⚠ Real QPU submission incurs cost. Review analysis before confirming.</div>
+            <div class="warn-banner">⚠ This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use "Analyze (No Submit)" first to preview the transpiled circuit before confirming.</div>
             <div class="step-options">
               <div class="form-group">
                 <label class="form-label">Target QPU</label>
@@ -2924,8 +2972,24 @@ function renderNoise(data, el) {
         <div class="metric-item"><div class="metric-label">Fidelity</div><div class="metric-value ${r.fidelity>0.9?'good':r.fidelity>0.7?'warn':'bad'}">${r.fidelity!=null?r.fidelity.toFixed(4):'—'}</div></div>
         <div class="metric-item"><div class="metric-label">TVD</div><div class="metric-value ${r.tvd<0.05?'good':r.tvd<0.2?'warn':'bad'}">${r.tvd!=null?r.tvd.toFixed(4):'—'}</div></div>
       </div>
-      <div class="section-divider" style="margin-top:6px">Noise Counts (top 8)</div>
-      <div class="gates-list">${Object.entries(r.noise_counts||{}).slice(0,8).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`;
+      ${(()=>{
+        const counts = r.noise_counts || {};
+        const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        const total  = Object.values(counts).reduce((s,v)=>s+v, 0);
+        const maxV   = sorted.length ? sorted[0][1] : 1;
+        if (!sorted.length) return '';
+        return `<div class="section-divider" style="margin-top:6px">Noise Counts (top 8 of ${Object.keys(counts).length} states)</div>
+        <div style="margin-top:6px">${sorted.map(([k,v])=>{
+          const pct = total>0 ? (v/total*100).toFixed(1) : '0.0';
+          const barW = (v/maxV*100).toFixed(1);
+          const label = k.length > 12 ? k.slice(0,5)+'…'+k.slice(-5) : k;
+          return `<div class="noise-bar-row">
+            <span class="noise-bar-label" title="${k}">${label}</span>
+            <div class="noise-bar-track"><div class="noise-bar-fill" style="width:${barW}%"></div></div>
+            <span class="noise-bar-val">${pct}%</span>
+          </div>`;
+        }).join('')}</div>`;
+      })()}`;
   }
   return html;
 }

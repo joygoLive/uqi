@@ -1157,7 +1157,12 @@ async function _fetchQPUData(isBackground) {
       renderQPUGrid(qpus);
     }
 
-    // Step3: 각 QPU 병렬로 캘리브레이션 조회 → 도착하는 순서대로 카드 업데이트
+    // Step3: 각 QPU 순차 처리 (SSE 스트림 interleaving 방지)
+    // 서버가 즉시 응답하므로 순차여도 16개 총 1~2초 이내
+    const _withTimeout = (promise, ms) => Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('fetch timeout')), ms))
+    ]);
     const fetchOne = async (qpu) => {
       // 시뮬레이터는 캘리브레이션 불필요 (카드에 표시하지 않음)
       if (qpu.startsWith('sim:')) {
@@ -1165,7 +1170,10 @@ async function _fetchQPUData(isBackground) {
         return;
       }
       try {
-        const cr = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: doRefresh });
+        const cr = await _withTimeout(
+          callTool('uqi_calibration_info', { qpu_name: qpu, refresh: doRefresh }),
+          10000
+        );
         const cd = JSON.parse(getResultText(cr));
         _qpuData[qpu] = cd.error ? { qpu_name: qpu, error: cd.error } : { ...cd };
       } catch(e) {
@@ -1175,11 +1183,35 @@ async function _fetchQPUData(isBackground) {
       renderQPUDeepAnalysis();
     };
 
-    // 전부 병렬 실행
-    await Promise.all(qpus.map(fetchOne));
+    // 순차 실행 (SSE 동시 응답 interleaving 완전 차단)
+    for (const qpu of qpus) {
+      await fetchOne(qpu);
+    }
 
     _saveQPUCache(qpus, _qpuData);
     _renderCacheTimestamp(_loadQPUCache());
+
+    // 그리드 로드 완료 후 background로 per-qubit 상세 데이터 로드 (Deep Analysis용)
+    // detail=true 시 응답이 크므로(~22KB) 1개씩 순차 처리
+    (async () => {
+      const fetchDetail = async (qpu) => {
+        if (qpu.startsWith('sim:') || qpu.startsWith('qpu:')) return;
+        const existing = _qpuData[qpu];
+        if (!existing || existing.error || existing._loading) return;
+        try {
+          const cr = await _withTimeout(
+            callTool('uqi_calibration_info', { qpu_name: qpu, refresh: false, detail: true }),
+            15000
+          );
+          const cd = JSON.parse(getResultText(cr));
+          if (!cd.error) _qpuData[qpu] = { ..._qpuData[qpu], ...cd };
+        } catch(e) {}
+      };
+      for (const qpu of qpus) {
+        await fetchDetail(qpu);
+      }
+      renderQPUDeepAnalysis();
+    })();
   } catch(e) {
     if (!isBackground)
       container.innerHTML = `<div class="error-state">⚠ Failed to load QPU list: ${escHtml(e.message)}</div>`;
@@ -1366,7 +1398,7 @@ async function showQPUDetail(qpu, el) {
         </div>`;
       return;
     }
-    const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: false });
+    const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: false, detail: true });
     const d = JSON.parse(getResultText(r));
     if (d.error) {
       container.innerHTML = `<div class="qpu-detail"><div class="error-state">⚠ ${escHtml(d.error)}</div></div>`;
@@ -2257,7 +2289,7 @@ function renderQPUDetail(container, qpu, d) {
 async function refreshQPUDetail(qpu) {
   const container = document.getElementById('qpu-detail-container');
   container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Refreshing...</div></div>`;
-  const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: true });
+  const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: true, detail: true });
   const d = JSON.parse(getResultText(r));
   const _vendor = qpu.startsWith('iqm') ? 'iqm'
     : qpu.startsWith('ionq') ? 'ionq'

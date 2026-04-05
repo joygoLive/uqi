@@ -123,7 +123,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 IBM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
 IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
-SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
+SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "rigetti_ankaa3",
                    "ionq_forte1", "ionq_aria1",
@@ -133,8 +133,12 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_torino", "ibm_marrakesh", "ibm_kingston",
 
 _pending_submissions = {}
 
-_qpu_status_cache = {"data": None, "ts": 0.0}
-_QPU_STATUS_TTL   = 300  # 5분
+# 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)
+_submission_progress: dict = {}   # {sid: {status, total, done, results, selected_qpu, shots}}
+
+_qpu_status_cache     = {"data": None, "ts": 0.0}
+_qpu_status_info_cache = {"data": None, "ts": 0.0}
+_QPU_STATUS_TTL       = 300  # 5분
 
 def _get_available_qpus_cached():
     import time as _time
@@ -150,6 +154,22 @@ def _get_available_qpus_cached():
         except Exception:
             pass
     return _qpu_status_cache["data"] or SUPPORTED_QPUS
+
+def _get_qpu_status_cached() -> dict:
+    """_cal.get_qpu_status() 결과를 5분 캐싱 (매 분석마다 전 장비 재조회 방지)"""
+    import time as _time
+    import contextlib
+    now = _time.time()
+    if _qpu_status_info_cache["data"] is None or now - _qpu_status_info_cache["ts"] > _QPU_STATUS_TTL:
+        try:
+            with contextlib.redirect_stdout(sys.stderr):
+                status = _cal.get_qpu_status()
+            if status:
+                _qpu_status_info_cache["data"] = status
+                _qpu_status_info_cache["ts"]   = now
+        except Exception:
+            pass
+    return _qpu_status_info_cache["data"] or {}
 
 # ─────────────────────────────────────────────────────────
 # 보안: 정적 분석 + 파일 유효성 체크
@@ -972,50 +992,83 @@ async def uqi_calibration_info(
     refresh:  bool = False,
 ) -> str:
     """QPU 캘리브레이션 조회. qpu_name: ibm_fez|iqm_garnet, refresh: 갱신 여부"""
+    def _build_response(calibration: dict) -> str:
+        if cal_bg := calibration.get('basis_gates'):
+            if isinstance(cal_bg, list):
+                calibration = dict(calibration)
+                calibration['basis_gates'] = [g for g in cal_bg if g in _QISKIT_STD_GATES]
+        return _safe_json({
+            "qpu_name":        qpu_name,
+            "num_qubits":      calibration.get("num_qubits"),
+            "basis_gates":     calibration.get("basis_gates"),
+            "coupling_map":    calibration.get("coupling_map"),
+            "avg_t1_ms":       calibration.get("avg_t1_ms"),
+            "avg_t2_ms":       calibration.get("avg_t2_ms"),
+            "avg_1q_ns":       calibration.get("avg_1q_ns"),
+            "avg_2q_ns":       calibration.get("avg_2q_ns"),
+            "avg_1q_error":    calibration.get("avg_1q_error"),
+            "avg_2q_error":    calibration.get("avg_2q_error"),
+            "avg_ro_error":    calibration.get("avg_ro_error"),
+            "last_updated":    calibration.get("last_updated"),
+            "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
+            "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
+            "qubit_ro_error":  calibration.get("qubit_ro_error"),
+            "qubit_1q_error":        calibration.get("qubit_1q_error"),
+            "edge_2q_error":         calibration.get("edge_2q_error"),
+            "qubit_positions":       calibration.get("qubit_positions"),
+            # neutral atom 전용
+            "rabi_freq_max_mhz":     calibration.get("rabi_freq_max_mhz"),
+            "rydberg_level":         calibration.get("rydberg_level"),
+            "min_atom_distance_um":  calibration.get("min_atom_distance_um"),
+            "max_radial_distance_um":calibration.get("max_radial_distance_um"),
+            "c6_coefficient":        calibration.get("c6_coefficient"),
+            # photonic 전용
+            "max_mode_count":        calibration.get("max_mode_count"),
+            "max_photon_count":      calibration.get("max_photon_count"),
+            "avg_transmittance":     calibration.get("avg_transmittance"),
+            "avg_hom":               calibration.get("avg_hom"),
+            "avg_g2":                calibration.get("avg_g2"),
+            "clock_mhz":             calibration.get("clock_mhz"),
+            # quantinuum 전용
+            "memory_error":          calibration.get("memory_error"),
+            "quantum_volume":        calibration.get("quantum_volume"),
+            "noise_date":            calibration.get("noise_date"),
+        })
+
     def _run():
+        import concurrent.futures as _cf
+
+        def _do_sync():
+            _cal.sync(qpu_name)
+
         try:
             if refresh:
-                _cal.sync(qpu_name)
-            calibration = _get_calibration(qpu_name)
+                # refresh=True: 명시적 동기화 요청 (25s 타임아웃)
+                print(f"  [CalInfo] {qpu_name} 명시적 동기화 요청 (max 25s)")
+                with _cf.ThreadPoolExecutor(max_workers=1) as _exe:
+                    _f = _exe.submit(_do_sync)
+                    try:
+                        _f.result(timeout=25)
+                    except _cf.TimeoutError:
+                        print(f"  [CalInfo] {qpu_name} sync timeout (25s) — 기존 캐시 사용")
+                calibration = _cal.data.get(qpu_name, {})
+            else:
+                # refresh=False: 캐시 데이터 직접 반환 (auto-sync 없음, API hang 방지)
+                calibration = _cal.data.get(qpu_name, {})
+                if not calibration:
+                    # DB에 데이터 자체가 없는 경우에만 1회 동기화 (25s 타임아웃)
+                    print(f"  [CalInfo] {qpu_name} 캐시 없음 — 최초 동기화 시도 (max 25s)")
+                    with _cf.ThreadPoolExecutor(max_workers=1) as _exe:
+                        _f = _exe.submit(_do_sync)
+                        try:
+                            _f.result(timeout=25)
+                        except _cf.TimeoutError:
+                            print(f"  [CalInfo] {qpu_name} sync timeout (25s)")
+                    calibration = _cal.data.get(qpu_name, {})
+
             if not calibration:
                 return json.dumps({"error": f"캘리브레이션 없음: {qpu_name}"})
-            return _safe_json({
-                "qpu_name":        qpu_name,
-                "num_qubits":      calibration.get("num_qubits"),
-                "basis_gates":     calibration.get("basis_gates"),
-                "coupling_map":    calibration.get("coupling_map"),
-                "avg_t1_ms":       calibration.get("avg_t1_ms"),
-                "avg_t2_ms":       calibration.get("avg_t2_ms"),
-                "avg_1q_ns":       calibration.get("avg_1q_ns"),
-                "avg_2q_ns":       calibration.get("avg_2q_ns"),
-                "avg_1q_error":    calibration.get("avg_1q_error"),
-                "avg_2q_error":    calibration.get("avg_2q_error"),
-                "avg_ro_error":    calibration.get("avg_ro_error"),
-                "last_updated":    calibration.get("last_updated"),
-                "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
-                "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
-                "qubit_ro_error":  calibration.get("qubit_ro_error"),
-                "qubit_1q_error":        calibration.get("qubit_1q_error"),
-                "edge_2q_error":         calibration.get("edge_2q_error"),
-                "qubit_positions":       calibration.get("qubit_positions"),
-                # neutral atom 전용
-                "rabi_freq_max_mhz":     calibration.get("rabi_freq_max_mhz"),
-                "rydberg_level":         calibration.get("rydberg_level"),
-                "min_atom_distance_um":  calibration.get("min_atom_distance_um"),
-                "max_radial_distance_um":calibration.get("max_radial_distance_um"),
-                "c6_coefficient":        calibration.get("c6_coefficient"),
-                # photonic 전용
-                "max_mode_count":        calibration.get("max_mode_count"),
-                "max_photon_count":      calibration.get("max_photon_count"),
-                "avg_transmittance":     calibration.get("avg_transmittance"),
-                "avg_hom":               calibration.get("avg_hom"),
-                "avg_g2":                calibration.get("avg_g2"),
-                "clock_mhz":             calibration.get("clock_mhz"),
-                # quantinuum 전용
-                "memory_error":          calibration.get("memory_error"),
-                "quantum_volume":        calibration.get("quantum_volume"),
-                "noise_date":            calibration.get("noise_date"),
-            })
+            return _build_response(calibration)
         except Exception as e:
             return json.dumps({"error": str(e)})
 
@@ -1071,6 +1124,15 @@ async def uqi_all_calibrations() -> str:
         return _safe_json({'qpus': SUPPORTED_QPUS, 'calibrations': results})
 
     return await asyncio.to_thread(_run)
+
+@mcp.tool()
+async def uqi_submit_progress(submission_id: str) -> str:
+    """백그라운드 QPU 제출 진행상황 조회. submission_id는 uqi_qpu_submit(confirmed=True) 반환값."""
+    prog = _submission_progress.get(submission_id)
+    if prog is None:
+        return json.dumps({"error": "submission_id not found", "submission_id": submission_id})
+    return json.dumps(prog, ensure_ascii=False)
+
 
 @mcp.tool()
 async def uqi_list_qpus() -> str:
@@ -1223,31 +1285,58 @@ async def uqi_qpu_submit(
         import contextlib
         from qiskit import QuantumCircuit
         try:
-            # ── 캐시 히트 시 즉시 반환 (장비 접속 없음) ──
-            if not confirmed:
-                _submit_cache_key = f"qpu_submit:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
-                _cached = _rag.get_cache(_submit_cache_key)
-                if _cached:
-                    print(f"  [Cache] qpu_submit analyze 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
-                    try:
-                        _cached_obj = json.loads(_cached)
+            _submit_cache_key = f"qpu_submit:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
+
+            # ── analyze 캐시 확인 (confirmed=False: 즉시 리턴, confirmed=True: 분석 skip 후 제출) ──
+            _cached = _rag.get_cache(_submit_cache_key)
+            if _cached:
+                try:
+                    _cached_obj = json.loads(_cached)
+                    if not confirmed:
+                        print(f"  [Cache] qpu_submit analyze 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
                         _cached_obj["_cached"] = True
                         return json.dumps(_cached_obj, ensure_ascii=False)
-                    except Exception:
-                        return _cached
+                    else:
+                        # confirmed=True: 캐시에서 selected_qpu 복원 후 분석 skip → 바로 제출
+                        print(f"  [Cache] qpu_submit 분석 캐시 재사용, 제출 진행: {Path(algorithm_file).name}", file=sys.stderr)
+                        _cached_selected_qpu = _cached_obj.get("selected_qpu", qpu_name)
+                        # 제출에 필요한 converter만 준비
+                        extractor, converter, framework = _extract_and_convert(algorithm_file)
+                        selected_qpu    = _cached_selected_qpu if qpu_name == "auto" else qpu_name
+                        recommended_qpu = _cached_obj.get("recommended_qpu", selected_qpu)
+                        # qpu_circuits는 QASM에서 재빌드 (캐시에 circuit 객체 없음)
+                        qpu_analysis  = {}
+                        qpu_circuits  = {selected_qpu: {n: None for n in converter.qasm_results}}
+                        # 제출 단계로 바로 점프
+                        goto_submit = True
+                except Exception:
+                    goto_submit = False
+            else:
+                goto_submit = False
 
-            extractor, converter, framework = _extract_and_convert(algorithm_file)
+            if not goto_submit:
+                extractor, converter, framework = _extract_and_convert(algorithm_file)
 
-            available_qpus = _get_available_qpus_cached()
+                available_qpus = _get_available_qpus_cached()
 
-            if qpu_name != "auto":
-                qpu_status = _cal.get_qpu_status()
-                s = qpu_status.get(qpu_name, {})
-                if not s.get("available", True):
-                    return json.dumps({
-                        "error": f"{qpu_name} 현재 offline 상태입니다.",
-                        "queue_note": s.get("note", ""),
-                    })
+                if qpu_name != "auto":
+                    qpu_status = _get_qpu_status_cached()
+                    s = qpu_status.get(qpu_name, {})
+                    if not s.get("available", True):
+                        return json.dumps({
+                            "error": f"{qpu_name} 현재 offline 상태입니다.",
+                            "queue_note": s.get("note", ""),
+                        })
+            else:
+                # goto_submit=True: 캐시 기반 offline 체크만 (API 호출 없음)
+                if qpu_name != "auto":
+                    qpu_status = _get_qpu_status_cached()
+                    s = qpu_status.get(qpu_name, {})
+                    if s and not s.get("available", True):
+                        return json.dumps({
+                            "error": f"{qpu_name} 현재 offline 상태입니다 (캐시).",
+                            "queue_note": s.get("note", ""),
+                        })
 
             PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos"]
             if qpu_name in PERCEVAL_QPUS:
@@ -1279,270 +1368,286 @@ async def uqi_qpu_submit(
                     "shots": shots, "results": execution_results,
                 })
 
-            # analyze 단계 캐시 키 (confirmed=True일 때 저장용)
-            _submit_cache_key = f"qpu_submit:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
-
-            qpu_analysis = {}
-            qpu_circuits = {}
-
-            stage1_results = {}
-            base_optimizer = UQIOptimizer(calibration={})
-            for name, qasm in converter.qasm_results.items():
-                try:
-                    qc = QuantumCircuit.from_qasm_str(qasm)
-                    stage1_results[name] = {"qc": qc, "stage1": base_optimizer.optimize_stage1(qc)}
-                except Exception as e:
-                    stage1_results[name] = {"error": str(e)}
-
-            # ── Phase 1: 모든 QPU에 대해 캘리브레이션 기반 분석 (노이즈 시뮬 없음) ──
-            # 아날로그, 포토닉, Braket 전용 장비는 Qiskit 트랜스파일 불가 → 스킵
-            _SKIP_SUBMIT_QPUS = {'quera_aquila', 'ionq_forte1', 'rigetti_ankaa3'}
-            for qpu in available_qpus:
-                if qpu.startswith("sim:") or qpu.startswith("qpu:"):
-                    continue
-                if qpu in _SKIP_SUBMIT_QPUS:
-                    sys.stderr.write(f"  [Submit] {qpu} 스킵: 아날로그 장비 (Qiskit 트랜스파일 불가)\n")
-                    continue
-                calibration = _get_calibration(qpu)
-                if not calibration:
-                    continue
-
-                # 회로 큐비트 수가 QPU 최대 큐비트 수 초과 시 스킵
-                device_qubits = calibration.get("num_qubits", 0)
-                max_circuit_qubits = max(
-                    (s1["qc"].num_qubits for s1 in stage1_results.values() if "qc" in s1),
-                    default=0
-                )
-                if device_qubits and max_circuit_qubits > device_qubits:
-                    sys.stderr.write(f"  [Submit] {qpu} 스킵: 회로 {max_circuit_qubits}q > 장비 {device_qubits}q\n")
-                    continue
-
-                optimizer = UQIOptimizer(calibration=calibration)
-                qpu_circuits[qpu] = {}
-                qpu_analysis[qpu] = {
-                    "circuits": {}, "total_cost": 0.0, "avg_fidelity": None,
-                    "calibration": {
-                        "avg_2q_error": calibration.get("avg_2q_error"),
-                        "avg_t2_ms":    calibration.get("avg_t2_ms"),
-                        "avg_2q_ns":    calibration.get("avg_2q_ns"),
-                    }
-                }
-
-                for name, s1 in stage1_results.items():
-                    if "error" in s1:
-                        qpu_analysis[qpu]["circuits"][name] = {"error": s1["error"]}
-                        continue
+            if not goto_submit:
+                # analyze 단계 캐시 키 (confirmed=True일 때 저장용)
+                _submit_cache_key = f"qpu_submit:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
+    
+                qpu_analysis = {}
+                qpu_circuits = {}
+    
+                stage1_results = {}
+                base_optimizer = UQIOptimizer(calibration={})
+                for name, qasm in converter.qasm_results.items():
                     try:
-                        qc     = s1["qc"]
-                        result = optimizer.optimize_stage2(
-                            s1["stage1"]["circuit"], qpu,
-                            stage1_result=s1["stage1"], combination="auto", verify=False)
-                        qc_opt = result.get("circuit", qc)
-
-                        ops      = qc_opt.count_ops()
-                        n_1q     = sum(v for k, v in ops.items() if k not in ['cx','cz','ecr','measure','reset','barrier','delay'])
-                        n_2q     = sum(v for k, v in ops.items() if k in ['cx','cz','ecr'])
-                        n_qubits = qc_opt.num_qubits
-                        q1_ns    = calibration.get("avg_1q_ns") or 0
-                        q2_ns_c  = calibration.get("avg_2q_ns") or 0
-                        ro_ms    = calibration.get("avg_ro_ms") or 0
-                        single_shot_ns = n_1q * q1_ns + n_2q * q2_ns_c + n_qubits * ro_ms * 1e6
-                        total_exec_ms  = round(single_shot_ns * shots / 1e6, 2)
-
-                        t2_ms    = calibration.get("avg_t2_ms")
-                        q2_ns    = calibration.get("avg_2q_ns")
-                        t2_ratio = None
-                        if t2_ms and q2_ns:
-                            t2_ns    = t2_ms * 1e6
-                            est_ns   = q2_ns * qc_opt.depth()
-                            t2_ratio = round(est_ns / t2_ns, 2)
-
-                        # 캘리브레이션 기반 예상 fidelity (1Q + 2Q + Readout 통합)
-                        q1_error = calibration.get("avg_1q_error") or 0
-                        q2_error = calibration.get("avg_2q_error") or 0
-                        ro_error = calibration.get("avg_ro_error") or 0
-
-                        ops = s1["qc"].count_ops()
-                        _2Q_GATES = {'cx','cz','ecr','swap','iswap','cp','crz','crx','cry','cu','cu3','mcx'}
-                        _1Q_GATES = {'x','y','z','h','s','sdg','t','tdg','sx','sxdg','rx','ry','rz','u','u1','u2','u3','r','p'}
-                        _MEAS     = {'measure'}
-
-                        orig_n_2q  = sum(v for k,v in ops.items() if k in _2Q_GATES)
-                        orig_n_1q  = sum(v for k,v in ops.items() if k in _1Q_GATES)
-                        orig_n_meas= sum(v for k,v in ops.items() if k in _MEAS)
-                        # readout 횟수가 없으면 큐비트 수 기준으로 추정
-                        if orig_n_meas == 0:
-                            orig_n_meas = s1["qc"].num_qubits
-
-                        import math
-                        # T2 디코히어런스 항: exp(-t_circuit / T2)
-                        # t_circuit = depth * avg_2q_ns (2Q 게이트가 지배적)
-                        t2_ms  = calibration.get("avg_t2_ms")
-                        q2_ns  = calibration.get("avg_2q_ns") or 0
-                        depth  = s1["qc"].depth()
-                        t2_decay = 1.0
-                        if t2_ms and q2_ns and depth:
-                            t_circuit_ms = (depth * q2_ns) / 1e6  # ns → ms
-                            t2_decay = math.exp(-t_circuit_ms / t2_ms)
-
-                        est_fidelity = max(0.0, round(
-                            (1.0 - q1_error) ** orig_n_1q *
-                            (1.0 - q2_error) ** orig_n_2q *
-                            (1.0 - ro_error) ** orig_n_meas *
-                            t2_decay,
-                            4
-                        ))
-
-                        qpu_analysis[qpu]["circuits"][name] = {
-                            "num_qubits":     qc_opt.num_qubits,
-                            "total_gates":    sum(qc_opt.count_ops().values()),
-                            "depth":          qc_opt.depth(),
-                            "two_q_gates":    n_2q,
-                            "exec_time_ms":   total_exec_ms,
-                            "exec_time_s":    round(total_exec_ms / 1000, 3),
-                            "single_shot_ns": round(single_shot_ns, 1),
-                            "fidelity":       est_fidelity,
-                            "t2_ratio":       t2_ratio,
-                            "t2_warning":     (t2_ratio or 0) > 1,
-                        }
-                        qpu_analysis[qpu]["total_cost"] += total_exec_ms
-                        qpu_circuits[qpu][name] = qc_opt
-
+                        qc = QuantumCircuit.from_qasm_str(qasm)
+                        stage1_results[name] = {"qc": qc, "stage1": base_optimizer.optimize_stage1(qc)}
                     except Exception as e:
-                        err_msg = str(e)
-                        qpu_analysis[qpu]["circuits"][name] = {"error": err_msg}
-                        if "non-standard gates" in err_msg or "basis_gates" in err_msg:
-                            sys.stderr.write(f"  [Submit] {qpu} 스킵: {err_msg[:80]}\n")
-                            qpu_analysis[qpu]["_skip"] = True
-                            break
-
-                fidelities = [
-                    v["fidelity"] for v in qpu_analysis[qpu]["circuits"].values()
-                    if isinstance(v, dict) and v.get("fidelity") is not None
-                ]
-                qpu_analysis[qpu]["avg_fidelity"] = (
-                    round(sum(fidelities) / len(fidelities), 4) if fidelities else None
-                )
-
-            # ── Phase 2: 추천 QPU 결정 (캘리브레이션 기반) ──
-            recommended_qpu = max(
-                (q for q in qpu_analysis
-                 if qpu_analysis[q]["avg_fidelity"] and not qpu_analysis[q].get("_skip")),
-                key=lambda q: qpu_analysis[q]["avg_fidelity"] or 0,
-                default=SUPPORTED_QPUS[0]
-            )
-
-            # Phase 3 제거 — 모든 QPU Fidelity를 캘리브레이션 기반으로 일관성 있게 계산
-            # 노이즈 시뮬은 별도 Pipeline > Noise Simulation 스텝에서 확인
-
-            if qpu_name == "auto":
-                selected_qpu   = recommended_qpu
-                selection_note = f"UQI 추천: {recommended_qpu} (최고 Fidelity)"
-                disadvantages  = []
-            else:
-                selected_qpu = qpu_name
-                if selected_qpu not in available_qpus:
-                    qpu_status = _cal.get_qpu_status()
-                    s = qpu_status.get(selected_qpu, {})
-                    if s and not s.get("available", True):
-                        return json.dumps({"error": f"{selected_qpu} 현재 offline 상태입니다."})
-                    return json.dumps({"error": f"미지원 또는 가용하지 않은 QPU: {selected_qpu}"})
-
-                disadvantages = []
-                sel     = qpu_analysis.get(selected_qpu, {})
-                rec     = qpu_analysis.get(recommended_qpu, {})
-                sel_cal = sel.get("calibration", {})
-                rec_cal = rec.get("calibration", {})
-
-                if selected_qpu != recommended_qpu:
-                    sel_fid = sel.get("avg_fidelity") or 0
-                    rec_fid = rec.get("avg_fidelity") or 0
-                    if rec_fid > sel_fid:
-                        diff = round((rec_fid - sel_fid) * 100, 2)
-                        disadvantages.append(f"예상 Fidelity {diff}% 낮음 ({sel_fid:.4f} vs {rec_fid:.4f} for {recommended_qpu})")
-                    sel_err = sel_cal.get("avg_2q_error") or 0
-                    rec_err = rec_cal.get("avg_2q_error") or 0
-                    if sel_err > rec_err and rec_err > 0:
-                        ratio = round(sel_err / rec_err, 1)
-                        disadvantages.append(f"2Q 에러율 {ratio}배 높음 ({sel_err:.4f} vs {rec_err:.4f} for {recommended_qpu})")
-                    sel_t2 = sel_cal.get("avg_t2_ms") or 0
-                    rec_t2 = rec_cal.get("avg_t2_ms") or 0
-                    if sel_t2 < rec_t2 and rec_t2 > 0:
-                        ratio = round(rec_t2 / sel_t2, 1)
-                        disadvantages.append(f"T2 코히어런스 {ratio}배 짧음 ({sel_t2*1000:.1f}μs vs {rec_t2*1000:.1f}μs for {recommended_qpu})")
-                    selection_note = f"사용자 선택: {selected_qpu} (UQI 추천: {recommended_qpu})"
-                else:
-                    selection_note = f"사용자 선택 = UQI 추천: {selected_qpu} ✓"
-
-            if not confirmed:
-                sel_info = qpu_analysis.get(selected_qpu, {})
-                t2_warnings = [
-                    f"{name}: T2 비율 {v['t2_ratio']}x"
-                    for name, v in sel_info.get("circuits", {}).items()
-                    if v.get("t2_warning")
-                ]
-                qubit_warnings = []
-                for name, v in sel_info.get("circuits", {}).items():
-                    if isinstance(v, dict) and "num_qubits" in v:
-                        cal = _get_calibration(selected_qpu)
-                        device_qubits  = cal.get("num_qubits", 0)
-                        circuit_qubits = v["num_qubits"]
-                        if device_qubits and circuit_qubits > device_qubits:
-                            qubit_warnings.append(f"{name}: 회로 {circuit_qubits}q > 장비 {device_qubits}q → 제출 불가")
-
-                msg_lines = [
-                    "⚠️  QPU 제출 확인 필요", "",
-                    f"선택 QPU:    {selected_qpu}",
-                    f"추천 QPU:    {recommended_qpu}",
-                    f"예상 Fidelity: {sel_info.get('avg_fidelity')}",
-                    f"예상 실행시간: {sel_info.get('total_cost')}ms ({round(sel_info.get('total_cost', 0)/1000, 2)}s) × {shots} shots",
-                    f"※ QPU 큐 대기시간 별도",
-                    f"shots:       {shots}",
-                ]
-                if qubit_warnings:
-                    msg_lines += ["", "⚠️  큐비트 수 초과 (제출 불가):"]
-                    for w in qubit_warnings:
-                        msg_lines.append(f"  • {w}")
-                if disadvantages:
-                    msg_lines += ["", "⚠️  선택 QPU의 예상 불리한 점:"]
-                    for d in disadvantages:
-                        msg_lines.append(f"  • {d}")
-                if t2_warnings:
-                    msg_lines += ["", "⚠️  T2 코히어런스 경고:"]
-                    for w in t2_warnings:
-                        msg_lines.append(f"  • {w}")
-                msg_lines += ["", "제출하려면 confirmed=True로 다시 호출하세요."]
-
-                qpu_status_info = _cal.get_qpu_status()
-                qpu_summary = {}
+                        stage1_results[name] = {"error": str(e)}
+    
+                # ── Phase 1: 모든 QPU에 대해 캘리브레이션 기반 분석 (노이즈 시뮬 없음) ──
+                # 아날로그, 포토닉, Braket 전용 장비는 Qiskit 트랜스파일 불가 → 스킵
+                # IBM/IQM만 비동기 submit 지원. 나머지는 분석은 하되 실제 submit 불가.
+                _SKIP_SUBMIT_QPUS = {
+                    'quera_aquila', 'pasqal_fresnel',
+                    'ionq_forte1', 'ionq_aria1',
+                    'rigetti_ankaa3',
+                    'quantinuum_h2_1', 'quantinuum_h2_2', 'quantinuum_h1_1',
+                }
                 for qpu in available_qpus:
-                    a = qpu_analysis.get(qpu, {})
-                    s = qpu_status_info.get(qpu, {})
-                    qpu_summary[qpu] = {
-                        "avg_fidelity":  a.get("avg_fidelity"),
-                        "total_exec_ms": a.get("total_cost"),
-                        "total_exec_s":  round((a.get("total_cost") or 0) / 1000, 2),
-                        "avg_2q_error":  a.get("calibration", {}).get("avg_2q_error"),
-                        "avg_t2_ms":     a.get("calibration", {}).get("avg_t2_ms"),
-                        "recommended":   qpu == recommended_qpu,
-                        "selected":      qpu == selected_qpu,
-                        "online":        s.get("available", True),
-                        "pending_jobs":  s.get("pending_jobs"),
-                        "queue_note":    s.get("note", ""),
+                    if qpu.startswith("sim:") or qpu.startswith("qpu:"):
+                        continue
+                    if qpu in _SKIP_SUBMIT_QPUS:
+                        sys.stderr.write(f"  [Submit] {qpu} 스킵: 아날로그 장비 (Qiskit 트랜스파일 불가)\n")
+                        continue
+                    calibration = _get_calibration(qpu)
+                    if not calibration:
+                        continue
+    
+                    # 회로 큐비트 수가 QPU 최대 큐비트 수 초과 시 스킵
+                    device_qubits = calibration.get("num_qubits", 0)
+                    max_circuit_qubits = max(
+                        (s1["qc"].num_qubits for s1 in stage1_results.values() if "qc" in s1),
+                        default=0
+                    )
+                    if device_qubits and max_circuit_qubits > device_qubits:
+                        sys.stderr.write(f"  [Submit] {qpu} 스킵: 회로 {max_circuit_qubits}q > 장비 {device_qubits}q\n")
+                        continue
+    
+                    optimizer = UQIOptimizer(calibration=calibration)
+                    qpu_circuits[qpu] = {}
+                    qpu_analysis[qpu] = {
+                        "circuits": {}, "total_cost": 0.0, "avg_fidelity": None,
+                        "calibration": {
+                            "avg_2q_error": calibration.get("avg_2q_error"),
+                            "avg_t2_ms":    calibration.get("avg_t2_ms"),
+                            "avg_2q_ns":    calibration.get("avg_2q_ns"),
+                        }
                     }
-
-                _result = _safe_json({
-                    "status":          "awaiting_confirmation",
-                    "message":         "\n".join(msg_lines),
-                    "selected_qpu":    selected_qpu,
-                    "recommended_qpu": recommended_qpu,
-                    "selection_note":  selection_note,
-                    "disadvantages":   disadvantages,
-                    "qpu_comparison":  qpu_summary,
-                    "circuit_info":    sel_info.get("circuits", {}),
-                })
-                _rag.set_cache(_submit_cache_key, _result)
-                return _result
+    
+                    for name, s1 in stage1_results.items():
+                        if "error" in s1:
+                            qpu_analysis[qpu]["circuits"][name] = {"error": s1["error"]}
+                            continue
+                        try:
+                            qc     = s1["qc"]
+                            result = optimizer.optimize_stage2(
+                                s1["stage1"]["circuit"], qpu,
+                                stage1_result=s1["stage1"], combination="auto", verify=False)
+                            qc_opt = result.get("circuit", qc)
+    
+                            ops      = qc_opt.count_ops()
+                            n_1q     = sum(v for k, v in ops.items() if k not in ['cx','cz','ecr','measure','reset','barrier','delay'])
+                            n_2q     = sum(v for k, v in ops.items() if k in ['cx','cz','ecr'])
+                            n_qubits = qc_opt.num_qubits
+                            q1_ns    = calibration.get("avg_1q_ns") or 0
+                            q2_ns_c  = calibration.get("avg_2q_ns") or 0
+                            ro_ms    = calibration.get("avg_ro_ms") or 0
+                            single_shot_ns = n_1q * q1_ns + n_2q * q2_ns_c + n_qubits * ro_ms * 1e6
+                            total_exec_ms  = round(single_shot_ns * shots / 1e6, 2)
+    
+                            t2_ms    = calibration.get("avg_t2_ms")
+                            q2_ns    = calibration.get("avg_2q_ns")
+                            t2_ratio = None
+                            if t2_ms and q2_ns:
+                                t2_ns    = t2_ms * 1e6
+                                est_ns   = q2_ns * qc_opt.depth()
+                                t2_ratio = round(est_ns / t2_ns, 2)
+    
+                            # 캘리브레이션 기반 예상 fidelity (1Q + 2Q + Readout 통합)
+                            q1_error = calibration.get("avg_1q_error") or 0
+                            q2_error = calibration.get("avg_2q_error") or 0
+                            ro_error = calibration.get("avg_ro_error") or 0
+    
+                            ops = s1["qc"].count_ops()
+                            _2Q_GATES = {'cx','cz','ecr','swap','iswap','cp','crz','crx','cry','cu','cu3','mcx'}
+                            _1Q_GATES = {'x','y','z','h','s','sdg','t','tdg','sx','sxdg','rx','ry','rz','u','u1','u2','u3','r','p'}
+                            _MEAS     = {'measure'}
+    
+                            orig_n_2q  = sum(v for k,v in ops.items() if k in _2Q_GATES)
+                            orig_n_1q  = sum(v for k,v in ops.items() if k in _1Q_GATES)
+                            orig_n_meas= sum(v for k,v in ops.items() if k in _MEAS)
+                            # readout 횟수가 없으면 큐비트 수 기준으로 추정
+                            if orig_n_meas == 0:
+                                orig_n_meas = s1["qc"].num_qubits
+    
+                            import math
+                            # T2 디코히어런스 항: exp(-t_circuit / T2)
+                            # t_circuit = depth * avg_2q_ns (2Q 게이트가 지배적)
+                            t2_ms  = calibration.get("avg_t2_ms")
+                            q2_ns  = calibration.get("avg_2q_ns") or 0
+                            depth  = s1["qc"].depth()
+                            t2_decay = 1.0
+                            if t2_ms and q2_ns and depth:
+                                t_circuit_ms = (depth * q2_ns) / 1e6  # ns → ms
+                                t2_decay = math.exp(-t_circuit_ms / t2_ms)
+    
+                            est_fidelity = max(0.0, round(
+                                (1.0 - q1_error) ** orig_n_1q *
+                                (1.0 - q2_error) ** orig_n_2q *
+                                (1.0 - ro_error) ** orig_n_meas *
+                                t2_decay,
+                                4
+                            ))
+    
+                            qpu_analysis[qpu]["circuits"][name] = {
+                                "num_qubits":     qc_opt.num_qubits,
+                                "total_gates":    sum(qc_opt.count_ops().values()),
+                                "depth":          qc_opt.depth(),
+                                "two_q_gates":    n_2q,
+                                "exec_time_ms":   total_exec_ms,
+                                "exec_time_s":    round(total_exec_ms / 1000, 3),
+                                "single_shot_ns": round(single_shot_ns, 1),
+                                "fidelity":       est_fidelity,
+                                "t2_ratio":       t2_ratio,
+                                "t2_warning":     (t2_ratio or 0) > 1,
+                            }
+                            qpu_analysis[qpu]["total_cost"] += total_exec_ms
+                            qpu_circuits[qpu][name] = qc_opt
+    
+                        except Exception as e:
+                            err_msg = str(e)
+                            qpu_analysis[qpu]["circuits"][name] = {"error": err_msg}
+                            if "non-standard gates" in err_msg or "basis_gates" in err_msg:
+                                sys.stderr.write(f"  [Submit] {qpu} 스킵: {err_msg[:80]}\n")
+                                qpu_analysis[qpu]["_skip"] = True
+                                break
+    
+                    fidelities = [
+                        v["fidelity"] for v in qpu_analysis[qpu]["circuits"].values()
+                        if isinstance(v, dict) and v.get("fidelity") is not None
+                    ]
+                    qpu_analysis[qpu]["avg_fidelity"] = (
+                        round(sum(fidelities) / len(fidelities), 4) if fidelities else None
+                    )
+    
+                # ── Phase 2: 추천 QPU 결정 (캘리브레이션 기반) ──
+                recommended_qpu = max(
+                    (q for q in qpu_analysis
+                     if qpu_analysis[q]["avg_fidelity"] and not qpu_analysis[q].get("_skip")),
+                    key=lambda q: qpu_analysis[q]["avg_fidelity"] or 0,
+                    default=SUPPORTED_QPUS[0]
+                )
+    
+                # Phase 3 제거 — 모든 QPU Fidelity를 캘리브레이션 기반으로 일관성 있게 계산
+                # 노이즈 시뮬은 별도 Pipeline > Noise Simulation 스텝에서 확인
+    
+                if qpu_name == "auto":
+                    selected_qpu   = recommended_qpu
+                    selection_note = f"UQI 추천: {recommended_qpu} (최고 Fidelity)"
+                    disadvantages  = []
+                else:
+                    selected_qpu = qpu_name
+                    if selected_qpu not in available_qpus:
+                        qpu_status = _get_qpu_status_cached()
+                        s = qpu_status.get(selected_qpu, {})
+                        if s and not s.get("available", True):
+                            return json.dumps({"error": f"{selected_qpu} 현재 offline 상태입니다."})
+                        return json.dumps({"error": f"미지원 또는 가용하지 않은 QPU: {selected_qpu}"})
+    
+                    disadvantages = []
+                    sel     = qpu_analysis.get(selected_qpu, {})
+                    rec     = qpu_analysis.get(recommended_qpu, {})
+                    sel_cal = sel.get("calibration", {})
+                    rec_cal = rec.get("calibration", {})
+    
+                    if selected_qpu != recommended_qpu:
+                        sel_fid = sel.get("avg_fidelity") or 0
+                        rec_fid = rec.get("avg_fidelity") or 0
+                        if rec_fid > sel_fid:
+                            diff = round((rec_fid - sel_fid) * 100, 2)
+                            disadvantages.append(f"예상 Fidelity {diff}% 낮음 ({sel_fid:.4f} vs {rec_fid:.4f} for {recommended_qpu})")
+                        sel_err = sel_cal.get("avg_2q_error") or 0
+                        rec_err = rec_cal.get("avg_2q_error") or 0
+                        if sel_err > rec_err and rec_err > 0:
+                            ratio = round(sel_err / rec_err, 1)
+                            disadvantages.append(f"2Q 에러율 {ratio}배 높음 ({sel_err:.4f} vs {rec_err:.4f} for {recommended_qpu})")
+                        sel_t2 = sel_cal.get("avg_t2_ms") or 0
+                        rec_t2 = rec_cal.get("avg_t2_ms") or 0
+                        if sel_t2 < rec_t2 and rec_t2 > 0:
+                            ratio = round(rec_t2 / sel_t2, 1)
+                            disadvantages.append(f"T2 코히어런스 {ratio}배 짧음 ({sel_t2*1000:.1f}μs vs {rec_t2*1000:.1f}μs for {recommended_qpu})")
+                        selection_note = f"사용자 선택: {selected_qpu} (UQI 추천: {recommended_qpu})"
+                    else:
+                        selection_note = f"사용자 선택 = UQI 추천: {selected_qpu} ✓"
+    
+                if not confirmed:
+                    sel_info = qpu_analysis.get(selected_qpu, {})
+                    t2_warnings = [
+                        f"{name}: T2 비율 {v['t2_ratio']}x"
+                        for name, v in sel_info.get("circuits", {}).items()
+                        if v.get("t2_warning")
+                    ]
+                    qubit_warnings = []
+                    for name, v in sel_info.get("circuits", {}).items():
+                        if isinstance(v, dict) and "num_qubits" in v:
+                            cal = _get_calibration(selected_qpu)
+                            device_qubits  = cal.get("num_qubits", 0)
+                            circuit_qubits = v["num_qubits"]
+                            if device_qubits and circuit_qubits > device_qubits:
+                                qubit_warnings.append(f"{name}: 회로 {circuit_qubits}q > 장비 {device_qubits}q → 제출 불가")
+    
+                    msg_lines = [
+                        "⚠️  QPU 제출 확인 필요", "",
+                        f"선택 QPU:    {selected_qpu}",
+                        f"추천 QPU:    {recommended_qpu}",
+                        f"예상 Fidelity: {sel_info.get('avg_fidelity')}",
+                        f"예상 실행시간: {sel_info.get('total_cost')}ms ({round(sel_info.get('total_cost', 0)/1000, 2)}s) × {shots} shots",
+                        f"※ QPU 큐 대기시간 별도",
+                        f"shots:       {shots}",
+                    ]
+                    if qubit_warnings:
+                        msg_lines += ["", "⚠️  큐비트 수 초과 (제출 불가):"]
+                        for w in qubit_warnings:
+                            msg_lines.append(f"  • {w}")
+                    if disadvantages:
+                        msg_lines += ["", "⚠️  선택 QPU의 예상 불리한 점:"]
+                        for d in disadvantages:
+                            msg_lines.append(f"  • {d}")
+                    if t2_warnings:
+                        msg_lines += ["", "⚠️  T2 코히어런스 경고:"]
+                        for w in t2_warnings:
+                            msg_lines.append(f"  • {w}")
+                    msg_lines += ["", "제출하려면 confirmed=True로 다시 호출하세요."]
+    
+                    qpu_status_info = _get_qpu_status_cached()
+                    qpu_summary = {}
+                    for qpu in available_qpus:
+                        a = qpu_analysis.get(qpu, {})
+                        s = qpu_status_info.get(qpu, {})
+                        qpu_summary[qpu] = {
+                            "avg_fidelity":  a.get("avg_fidelity"),
+                            "total_exec_ms": a.get("total_cost"),
+                            "total_exec_s":  round((a.get("total_cost") or 0) / 1000, 2),
+                            "avg_2q_error":  a.get("calibration", {}).get("avg_2q_error"),
+                            "avg_t2_ms":     a.get("calibration", {}).get("avg_t2_ms"),
+                            "recommended":   qpu == recommended_qpu,
+                            "selected":      qpu == selected_qpu,
+                            "online":        s.get("available", True),
+                            "pending_jobs":  s.get("pending_jobs"),
+                            "queue_note":    s.get("note", ""),
+                        }
+    
+                    _result = _safe_json({
+                        "status":          "awaiting_confirmation",
+                        "message":         "\n".join(msg_lines),
+                        "selected_qpu":    selected_qpu,
+                        "recommended_qpu": recommended_qpu,
+                        "selection_note":  selection_note,
+                        "disadvantages":   disadvantages,
+                        "qpu_comparison":  qpu_summary,
+                        "circuit_info":    sel_info.get("circuits", {}),
+                    })
+                    _rag.set_cache(_submit_cache_key, _result)
+                    return _result
+                else:
+                    # confirmed=True인데 캐시가 없어서 분석 재실행된 경우
+                    # → 분석 결과를 캐시에 저장하고 사용자에게 재확인 요청
+                    return json.dumps({
+                        "error": "분석 캐시가 만료되었습니다. confirmed=False로 다시 분석 후 제출해주세요.",
+                        "recommended_qpu": recommended_qpu,
+                        "selected_qpu": selected_qpu,
+                        "status": "cache_expired",
+                    }, ensure_ascii=False)
 
             # confirmed=True → 실제 제출
             cal = _get_calibration(selected_qpu)
@@ -1555,95 +1660,129 @@ async def uqi_qpu_submit(
                         })
 
             circuits = qpu_circuits.get(selected_qpu, {})
-            submission_results = {}
-            for name in (circuits.keys() or converter.qasm_results.keys()):
-                try:
-                    if "ibm" in selected_qpu:
-                        from uqi_executor_ibm import UQIExecutorIBM
-                        executor = UQIExecutorIBM(converter=converter, shots=shots)
-                        executor._token = IBM_TOKEN
-                        sub = executor._submit_single(
-                            name=name,
-                            qasm=converter.qasm_results.get(name),
-                            backend_name=selected_qpu,
-                        )
-                        if not sub["ok"]:
-                            raise Exception(sub["error"])
-                        _job_store.save_job(
-                            job_id=sub["job_id"], vendor="ibm",
-                            qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                            extra={"via": sub.get("via"), "backend": selected_qpu},
-                        )
-                        submission_results[name] = {
-                            "ok": True, "job_id": sub["job_id"],
-                            "backend": selected_qpu, "via": sub.get("via"),
-                        }
+            circuit_names_to_submit = list(circuits.keys() or converter.qasm_results.keys())
 
-                    elif "iqm" in selected_qpu:
-                        from uqi_executor_iqm import UQIExecutorIQM
-                        executor = UQIExecutorIQM(converter=converter, shots=shots)
-                        executor._token = IQM_TOKEN
-                        device_name = selected_qpu.split('_')[-1]
-                        backend_url = f"https://resonance.meetiqm.com/computers/{device_name}"
-                        sub = executor._submit_single(
-                            name=name,
-                            qasm=converter.qasm_results.get(name),
-                            backend_url=backend_url,
-                        )
-                        if not sub["ok"]:
-                            raise Exception(sub["error"])
-                        _job_store.save_job(
-                            job_id=sub["job_id"], vendor="iqm",
-                            qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                            extra={"backend_url": backend_url},
-                        )
-                        submission_results[name] = {
-                            "ok": True, "job_id": sub["job_id"],
-                            "backend": backend_url,
-                        }
+            # ── 백그라운드 제출: 즉시 submission_id 반환, 회로별 진행상황 폴링 가능 ──
+            import uuid as _uuid, threading as _threading
 
-                    elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
-                        # Perceval은 비동기 미지원 — 동기 실행 유지
-                        from uqi_executor_perceval import UQIExecutorPerceval
-                        token    = os.getenv("QUANDELA_TOKEN")
-                        use_sim  = selected_qpu.startswith("sim:")
-                        executor = UQIExecutorPerceval(extractor=extractor, shots=shots)
-                        executor._token = token
-                        t_start = time.time()
-                        result_dict = executor._run_single(
-                            name=name,
-                            circuit=extractor.perceval_circuits.get(name, (None, None))[0],
-                            input_state=extractor.perceval_circuits.get(name, (None, None))[1],
-                            use_simulator=use_sim,
-                        )
-                        if not result_dict["ok"]:
-                            raise Exception(result_dict["error"])
-                        exec_time = time.time() - t_start
-                        _rag.add_execution(
-                            circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
-                            shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
-                        )
-                        submission_results[name] = {
-                            "ok": True, "counts": result_dict["counts"],
-                            "backend": selected_qpu, "exec_time": round(exec_time, 2),
-                        }
-                    else:
-                        raise ValueError(f"미지원 QPU: {selected_qpu}")
-
-                except Exception as e:
-                    submission_results[name] = {"ok": False, "error": str(e)}
-                    _rag.add_execution(
-                        circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
-                        shots=shots, counts={}, ok=False, extra={"error": str(e)},
-                    )
-
-            has_jobs = any(r.get("job_id") for r in submission_results.values())
-            return _safe_json({
-                "status":          "submitted" if has_jobs else "completed",
+            sid = _uuid.uuid4().hex[:10]
+            _submission_progress[sid] = {
+                "status":          "submitting",
+                "total":           len(circuit_names_to_submit),
+                "done":            0,
                 "selected_qpu":    selected_qpu,
                 "recommended_qpu": recommended_qpu,
                 "shots":           shots,
-                "results":         submission_results,
+                "results":         {},
+            }
+
+            def _bg_submit(sid=sid):
+                prog = _submission_progress[sid]
+
+                # executor 1회 생성 (backend 재사용)
+                _ibm_exec = _iqm_exec = None
+                if "ibm" in selected_qpu:
+                    from uqi_executor_ibm import UQIExecutorIBM
+                    _ibm_exec = UQIExecutorIBM(converter=converter, shots=shots)
+                    _ibm_exec._token = IBM_TOKEN
+                elif "iqm" in selected_qpu:
+                    from uqi_executor_iqm import UQIExecutorIQM
+                    _iqm_exec = UQIExecutorIQM(converter=converter, shots=shots)
+                    _iqm_exec._token = IQM_TOKEN
+
+                for name in circuit_names_to_submit:
+                    try:
+                        if "ibm" in selected_qpu:
+                            sub = _ibm_exec._submit_single(
+                                name=name,
+                                qasm=converter.qasm_results.get(name),
+                                backend_name=selected_qpu,
+                            )
+                            if not sub["ok"]:
+                                raise Exception(sub["error"])
+                            _job_store.save_job(
+                                job_id=sub["job_id"], vendor="ibm",
+                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "job_id": sub["job_id"],
+                                "backend": selected_qpu, "via": sub.get("via"),
+                            }
+
+                        elif "iqm" in selected_qpu:
+                            device_name = selected_qpu.split('_')[-1]
+                            backend_url = f"https://resonance.meetiqm.com/computers/{device_name}"
+                            sub = _iqm_exec._submit_single(
+                                name=name,
+                                qasm=converter.qasm_results.get(name),
+                                backend_url=backend_url,
+                            )
+                            if not sub["ok"]:
+                                raise Exception(sub["error"])
+                            _job_store.save_job(
+                                job_id=sub["job_id"], vendor="iqm",
+                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                extra={"backend_url": backend_url},
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "job_id": sub["job_id"],
+                                "backend": backend_url,
+                            }
+
+                        elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
+                            from uqi_executor_perceval import UQIExecutorPerceval
+                            _ptoken  = os.getenv("QUANDELA_TOKEN")
+                            use_sim  = selected_qpu.startswith("sim:")
+                            _pexec   = UQIExecutorPerceval(extractor=extractor, shots=shots)
+                            _pexec._token = _ptoken
+                            t_start = time.time()
+                            result_dict = _pexec._run_single(
+                                name=name,
+                                circuit=extractor.perceval_circuits.get(name, (None, None))[0],
+                                input_state=extractor.perceval_circuits.get(name, (None, None))[1],
+                                use_simulator=use_sim,
+                            )
+                            if not result_dict["ok"]:
+                                raise Exception(result_dict["error"])
+                            exec_time = time.time() - t_start
+                            _rag.add_execution(
+                                circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
+                                shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "counts": result_dict["counts"],
+                                "backend": selected_qpu, "exec_time": round(exec_time, 2),
+                            }
+                        else:
+                            raise ValueError(
+                                f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM만 지원)."
+                            )
+
+                    except Exception as e:
+                        prog["results"][name] = {"ok": False, "error": str(e)}
+                        _rag.add_execution(
+                            circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
+                            shots=shots, counts={}, ok=False, extra={"error": str(e)},
+                        )
+
+                    prog["done"] += 1
+
+                prog["status"] = "completed"
+                # 오래된 progress 항목 정리 (최대 50개 유지)
+                if len(_submission_progress) > 50:
+                    oldest = sorted(_submission_progress.keys())[0]
+                    _submission_progress.pop(oldest, None)
+
+            _threading.Thread(target=_bg_submit, daemon=True).start()
+
+            return _safe_json({
+                "status":          "submitting",
+                "submission_id":   sid,
+                "total":           len(circuit_names_to_submit),
+                "selected_qpu":    selected_qpu,
+                "recommended_qpu": recommended_qpu,
+                "shots":           shots,
             })
 
         except Exception as e:
@@ -1681,8 +1820,10 @@ async def uqi_job_status(job_id: str) -> str:
             if stored is None:
                 return json.dumps({"error": f"job_id를 찾을 수 없습니다: {job_id}"})
 
-            # 이미 완료/취소/에러 상태면 클라우드 재조회 없이 즉시 리턴
-            if stored["status"] in ("done", "error", "cancelled"):
+            # 완료/취소/확정실패 상태면 클라우드 재조회 없이 즉시 리턴
+            # error는 polling 버그로 인한 오기록일 수 있으므로 클라우드 재조회 허용
+            # failed는 IQM 장비 확정 실패 — 재시도 불필요
+            if stored["status"] in ("done", "cancelled", "failed"):
                 return json.dumps({
                     "job_id":  job_id,
                     "vendor":  stored["vendor"],
@@ -1719,8 +1860,18 @@ async def uqi_job_status(job_id: str) -> str:
                     shots=sum(result["counts"].values()),
                     counts=result["counts"], ok=True,
                 )
+            elif result.get("cancelled"):
+                _job_store.update_job(job_id, status="cancelled")
+            elif result.get("cloud_failed"):
+                # cloud 확정 실패 (IBM ERROR / IQM FAILED) → "failed" 저장, 이후 재시도 없음
+                _job_store.update_job(job_id, status="failed", error=result["error"])
             elif result.get("error"):
-                _job_store.update_job(job_id, status="error", error=result["error"])
+                error_msg = result["error"]
+                if "rate limit" in error_msg.lower() or "quota exceeded" in error_msg.lower():
+                    # 일시적 rate limit → 상태 변경 없이 running 유지 (다음 폴링 때 재시도)
+                    _job_store.update_job(job_id, status="running")
+                else:
+                    _job_store.update_job(job_id, status="error", error=error_msg)
             else:
                 _job_store.update_job(job_id, status="running")
 
@@ -1748,12 +1899,13 @@ async def uqi_job_cancel(job_id: str) -> str:
             if stored is None:
                 return json.dumps({"ok": False, "error": f"job_id 없음: {job_id}"})
 
-            if stored["status"] in ("done", "error", "cancelled"):
+            if stored["status"] in ("done", "cancelled"):
                 return json.dumps({
                     "ok": False,
                     "error": f"이미 {stored['status']} 상태 — 취소 불가",
                     "status": stored["status"],
                 })
+            # error 상태는 로컬 버그 오기록일 수 있으므로 클라우드 취소 시도 허용
 
             vendor = stored["vendor"]
             cloud_result = {"ok": False, "error": "클라우드 취소 미지원"}
@@ -1786,6 +1938,63 @@ async def uqi_job_cancel(job_id: str) -> str:
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
 
+    return await asyncio.to_thread(_run)
+
+
+@mcp.tool()
+async def uqi_job_list(
+    limit:  int = 50,
+    status: str = "",    # "" = 전체, "active" = submitted+running, "done", "cancelled", "error"
+    days:   int = 0,     # 0 = 전체, N = 최근 N일
+) -> str:
+    """QPU job 이력 조회. limit: 건수, status: 상태 필터, days: 기간 필터(일)"""
+    def _run():
+        try:
+            import sqlite3 as _sq
+            from datetime import datetime, timezone, timedelta
+            from pathlib import Path
+
+            db_path = Path(__file__).parent.parent / "data" / "uqi_jobs.db"
+            conn = _sq.connect(str(db_path), timeout=10)
+            conn.row_factory = _sq.Row
+
+            conditions = []
+            params: list = []
+
+            if status == "active":
+                conditions.append("status IN ('submitted','running')")
+            elif status in ("done", "cancelled", "error"):
+                conditions.append("status = ?")
+                params.append(status)
+
+            if days and days > 0:
+                cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+                conditions.append("submitted_at >= ?")
+                params.append(cutoff)
+
+            where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+            params.append(limit)
+
+            rows = conn.execute(
+                f"SELECT * FROM jobs {where} ORDER BY submitted_at DESC LIMIT ?",
+                params
+            ).fetchall()
+            conn.close()
+
+            import json as _json
+            result = []
+            for row in rows:
+                d = dict(row)
+                d["counts"] = _json.loads(d["counts"]) if d.get("counts") else None
+                d["extra"]  = _json.loads(d["extra"])  if d.get("extra")  else {}
+                result.append(d)
+
+            return _json.dumps({
+                "ok": True, "jobs": result, "count": len(result),
+                "filter": {"status": status or "all", "days": days, "limit": limit},
+            }, ensure_ascii=False, default=str)
+        except Exception as e:
+            return json.dumps({"ok": False, "error": str(e)})
     return await asyncio.to_thread(_run)
 
 

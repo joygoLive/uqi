@@ -20,6 +20,18 @@ _mock_fastmcp.FastMCP.return_value = _mock_mcp
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
+# patch.dict("sys.modules", ...) 는 블록 진입 시 sys.modules 스냅샷을 저장하고
+# 블록 종료 시 복원한다. mcp_server import 중 로드된 qiskit 모듈들이 블록 종료 후
+# sys.modules 에서 제거되면, 이후 테스트에서 qiskit 이 재로드되어 새로운 클래스
+# 객체가 만들어진다. 이때 Singleton 게이트 인스턴스는 기존 클래스를 참조하므로
+# isinstance(old_singleton, new_Operation) 가 False → issubclass TypeError 발생.
+# → 해결: 스냅샷 이전에 qiskit/qiskit_aer 를 미리 임포트해 두면 복원 대상에서 제외됨.
+try:
+    import qiskit          # noqa: F401
+    import qiskit_aer      # noqa: F401
+except ImportError:
+    pass
+
 with patch.dict("sys.modules", {
     "fastmcp": _mock_fastmcp,
     "dotenv":  MagicMock(),
@@ -39,6 +51,11 @@ patch("uqi_rag.UQIRAG", return_value=_mock_rag):
         _MAX_QUBITS,
         _MAX_GATES,
     )
+
+# mcp_server.py는 import 시점에 builtins.print를 stderr 리다이렉트 버전으로 교체함.
+# 다른 테스트 파일의 capsys 캡처가 깨지지 않도록, 원본 print를 복원한다.
+import builtins as _builtins
+_builtins.print = mcp_server._original_print
 
 
 # ─────────────────────────────────────────────────────────────
@@ -407,6 +424,14 @@ class TestConstants:
         for item in _BLOCKED_PATTERNS:
             assert isinstance(item, tuple)
             assert len(item) == 2
+
+    def test_TC056_ibm_torino_not_in_supported(self):
+        """ibm_torino 은 지원 QPU 목록에서 제외됨"""
+        assert "ibm_torino" not in SUPPORTED_QPUS
+
+    def test_TC057_rigetti_ankaa3_in_supported(self):
+        """rigetti_ankaa3 는 지원 QPU 목록에 포함됨"""
+        assert "rigetti_ankaa3" in SUPPORTED_QPUS
 
     def test_TC056_subprocess_in_blocked_patterns(self):
         patterns = [p for p, _ in _BLOCKED_PATTERNS]

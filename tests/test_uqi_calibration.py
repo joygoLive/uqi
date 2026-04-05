@@ -282,10 +282,12 @@ class TestSync:
     @pytest.fixture(autouse=True)
     def setup(self):
         UQICalibration._SYNC_CACHE.clear()
+        UQICalibration._SYNC_FAIL_CACHE.clear()
         self.cal, self.tmp = _make_cal()
         yield
         os.unlink(self.tmp)
         UQICalibration._SYNC_CACHE.clear()
+        UQICalibration._SYNC_FAIL_CACHE.clear()
 
     def test_TC061_unknown_vendor_returns_false(self):
         result = self.cal.sync("unknown_device_xyz")
@@ -350,6 +352,38 @@ class TestSync:
         with patch.object(self.cal, "_sync_ibm", side_effect=Exception("fail")):
             result = self.cal.sync("ibm_fez")
             assert result is False
+
+    def test_TC06B_fail_cache_prevents_retry_within_5min(self):
+        """실패 후 5분 이내 재시도는 바로 False 반환 (벤더 sync 호출 없음)"""
+        with patch.object(self.cal, "_sync_ibm", return_value=False) as m:
+            self.cal.sync("ibm_fez")  # 첫 번째: 실패 → _SYNC_FAIL_CACHE 등록
+            result = self.cal.sync("ibm_fez")  # 두 번째: 5분 이내 → 바로 False
+            assert result is False
+            m.assert_called_once()  # 두 번째 sync 에서는 호출 안 됨
+
+    def test_TC06C_fail_cache_set_on_failed_sync(self):
+        """sync 실패 시 _SYNC_FAIL_CACHE 에 현재 시각 기록"""
+        with patch.object(self.cal, "_sync_ibm", return_value=False):
+            self.cal.sync("ibm_fez")
+            assert "ibm_fez" in UQICalibration._SYNC_FAIL_CACHE
+
+    def test_TC06D_fail_cache_cleared_on_success(self):
+        """sync 성공 시 _SYNC_FAIL_CACHE 항목 제거"""
+        with patch.object(self.cal, "_sync_ibm", return_value=False):
+            self.cal.sync("ibm_fez")
+            assert "ibm_fez" in UQICalibration._SYNC_FAIL_CACHE
+
+        with patch.object(self.cal, "_sync_ibm", return_value=True), \
+             patch.object(self.cal, "_append_history"), \
+             patch.object(self.cal, "_save"):
+            # _SYNC_FAIL_CACHE 에 등록된 상태지만 5분이 충분히 지났다고 가정
+            from datetime import datetime, timezone, timedelta
+            UQICalibration._SYNC_FAIL_CACHE["ibm_fez"] = (
+                datetime.now(timezone.utc) - timedelta(minutes=10)
+            )
+            result = self.cal.sync("ibm_fez")
+            assert result is True
+            assert "ibm_fez" not in UQICalibration._SYNC_FAIL_CACHE
 
 
 # ─────────────────────────────────────────────────────────────

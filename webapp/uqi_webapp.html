@@ -183,6 +183,7 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .step-badge { font-size:10px; padding:2px 8px; border-radius:10px; }
 .step-badge.done { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
 .step-badge.error { background:rgba(248,81,73,0.15); color:var(--error); border:1px solid rgba(248,81,73,0.3); }
+.step-badge.running { background:rgba(240,136,62,0.15); color:var(--warn); border:1px solid rgba(240,136,62,0.3); }
 .step-chevron { font-size:10px; color:var(--text3); transition:transform 0.2s; }
 .noise-bar-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; font-size:10px; font-family:var(--font-mono); }
 .noise-bar-label { color:var(--text2); min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -213,6 +214,18 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .qpu-disadv { margin-top:8px; }
 .qpu-disadv-item { display:flex; align-items:flex-start; gap:6px; font-size:10px; color:var(--warn); margin-bottom:4px; line-height:1.5; }
 .step-chevron.open { transform:rotate(180deg); }
+.job-table { width:100%; border-collapse:collapse; font-size:10px; }
+.job-table th { color:var(--text3); font-weight:500; padding:5px 8px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
+.job-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); vertical-align:middle; color:var(--text2); }
+.job-table tr:hover td { background:rgba(255,255,255,0.02); }
+.job-status-badge { display:inline-block; font-size:8px; padding:2px 6px; border-radius:8px; font-weight:600; white-space:nowrap; }
+.job-status-submitted,.job-status-running { background:rgba(240,136,62,0.15); color:var(--warn); border:1px solid rgba(240,136,62,0.3); }
+.job-status-done { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
+.job-status-error { background:rgba(248,81,73,0.15); color:var(--error); border:1px solid rgba(248,81,73,0.3); }
+.job-status-cancelled { background:rgba(110,118,129,0.15); color:var(--text3); border:1px solid rgba(110,118,129,0.3); }
+.job-id-cell { font-family:var(--font-mono); font-size:9px; color:var(--accent); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; }
+.job-action-btn { font-size:9px; padding:2px 8px; border-radius:4px; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text2); }
+.job-action-btn:hover { border-color:var(--accent); color:var(--accent); }
 .step-body { display:none; padding:16px; border-top:1px solid var(--border); background:rgba(0,0,0,0.15); }
 .step-body.open { display:block; }
 .step-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
@@ -736,6 +749,60 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           </div>
         </div>
 
+        <!-- QPU Job Manager -->
+        <div class="step-card" id="step-job-history">
+          <div class="step-header" onclick="toggleStep('job-history')">
+            <div class="step-header-left">
+              <span class="step-icon">🖥️</span>
+              <div class="step-header-title">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="step-name">QPU Job Manager</span>
+                  <span class="step-badge" id="badge-job-history" style="display:none"></span>
+                </div>
+                <span class="step-desc">Monitor &amp; manage submitted QPU jobs — check status, view results, cancel jobs</span>
+              </div>
+            </div>
+            <span class="step-chevron" id="chevron-job-history">▼</span>
+          </div>
+          <div class="step-body" id="body-job-history">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--text3)">Status</span>
+                <select id="jh-status" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
+                  onchange="loadJobHistory()">
+                  <option value="">All</option>
+                  <option value="active">Active</option>
+                  <option value="done">Done</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="error">Error</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--text3)">Period</span>
+                <select id="jh-days" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
+                  onchange="loadJobHistory()">
+                  <option value="0">All time</option>
+                  <option value="1" selected>Today</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                </select>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:10px;color:var(--text3)">Show</span>
+                <select id="jh-limit" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
+                  onchange="loadJobHistory()">
+                  <option value="20">20</option>
+                  <option value="50" selected>50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <button class="btn-run" id="btn-job-refresh" onclick="loadJobHistory()"
+                style="padding:4px 14px;font-size:10px;min-width:0;margin-left:auto">↻ Refresh</button>
+            </div>
+            <div class="step-result" id="result-job-history"><div class="empty-state">Click Refresh to load jobs</div></div>
+          </div>
+        </div>
+
       </div><!-- /pipeline-steps -->
     </div><!-- /pipeline-layout -->
   </div>
@@ -989,7 +1056,7 @@ function switchMain(name,el) {
 // ─────────────────────────────────────────────────────────
 let _qpuData = {};
 
-const _QPU_CACHE_KEY = 'uqi_qpu_cache_v8';
+const _QPU_CACHE_KEY = 'uqi_qpu_cache_v9';
 const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
 
 function _loadQPUCache() {
@@ -1050,6 +1117,28 @@ async function loadQPUDashboard(forceRefresh) {
   await _fetchQPUData(forceRefresh ? 'refresh' : 'init');
 }
 
+// Pipeline 단계 완료 후 특정 QPU 캘리브레이션 캐시만 백그라운드 갱신
+async function _refreshSingleQPUCache(qpuName) {
+  if (!qpuName || qpuName === 'auto' || qpuName.startsWith('sim:') || qpuName.startsWith('qpu:')) return;
+  try {
+    const cr = await callTool('uqi_calibration_info', { qpu_name: qpuName, refresh: false });
+    const cd = JSON.parse(getResultText(cr));
+    if (cd.error) return;
+    // 메모리 갱신
+    _qpuData[qpuName] = { ...cd };
+    // localStorage 갱신 (기존 캐시에 해당 QPU 데이터만 교체)
+    const cache = _loadQPUCache();
+    if (cache && cache.data) {
+      cache.data[qpuName] = cd;
+      cache.ts = Date.now();
+      _saveQPUCache(cache.qpus, cache.data);
+      _renderCacheTimestamp(_loadQPUCache());
+      renderQPUGrid(cache.qpus);
+      renderQPUDeepAnalysis();
+    }
+  } catch(e) { /* 백그라운드 갱신 실패 무시 */ }
+}
+
 async function _fetchQPUData(isBackground) {
   const container = document.getElementById('qpu-grid-container');
   const doRefresh = isBackground === 'refresh';
@@ -1059,12 +1148,14 @@ async function _fetchQPUData(isBackground) {
     const listData = JSON.parse(getResultText(listRes));
     const qpus = listData.qpus || [];
 
-    // Step2: 스켈레톤 먼저 렌더링 (로딩 중 표시)
-    _qpuData = {};
-    for (const qpu of qpus) {
-      _qpuData[qpu] = { qpu_name: qpu, _loading: true };
+    // Step2: 스켈레톤 렌더링 (background 모드에서는 기존 데이터 보존 — hang QPU 카드 보호)
+    if (isBackground !== 'background') {
+      _qpuData = {};
+      for (const qpu of qpus) {
+        _qpuData[qpu] = { qpu_name: qpu, _loading: true };
+      }
+      renderQPUGrid(qpus);
     }
-    renderQPUGrid(qpus);
 
     // Step3: 각 QPU 병렬로 캘리브레이션 조회 → 도착하는 순서대로 카드 업데이트
     const fetchOne = async (qpu) => {
@@ -2763,6 +2854,8 @@ function toggleStep(name) {
     _openSteps.add(name);
     body.classList.add('open');
     chev.classList.add('open');
+    // Auto-load job history when opening that panel
+    if (name === 'job-history') loadJobHistory();
   }
 }
 // Open analyze by default
@@ -2919,6 +3012,7 @@ async function runOptimize() {
     setStepResult('optimize', renderOptimize(data, elapsed(t0)));
     _addCacheBadge('optimize', f, getQPU(), data._cached);
     setBadge('optimize','done');
+    _refreshSingleQPUCache(getQPU());
   } catch(e) { setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('optimize','error'); }
   finally { setBtnDone('btn-optimize','RUN OPTIMIZATION'); }
 }
@@ -2978,6 +3072,7 @@ async function runNoise() {
     setStepResult('noise', renderNoise(data, elapsed(t0)));
     _addCacheBadge('noise', f, getQPU(), data._cached);
     setBadge('noise','done');
+    _refreshSingleQPUCache(getQPU());
   } catch(e) { setStepResult('noise',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('noise','error'); }
   finally { setBtnDone('btn-noise','RUN NOISE SIMULATION'); }
 }
@@ -3154,6 +3249,7 @@ async function runQPUAnalyze() {
     if (data.status==='awaiting_confirmation') document.getElementById('btn-qpu-confirm').style.display='block';
     _addCacheBadge('qpu_submit', f, document.getElementById('qpu-qpu').value, data._cached);
     setBadge('qpu','done');
+    _refreshSingleQPUCache(document.getElementById('qpu-qpu').value);
   } catch(e) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); setBadge('qpu','error'); }
   finally { setBtnDone('btn-qpu-analyze','ANALYZE (NO SUBMIT)'); }
 }
@@ -3175,10 +3271,103 @@ async function runQPUSubmit() {
     const data = JSON.parse(getResultText(res));
     if (data.error) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); return; }
     document.getElementById('btn-qpu-confirm').style.display='none';
-    setStepResult('qpu', renderQPUSubmitResult(data, elapsed(t0), qpuName));
-    setBadge('qpu','done');
+
+    if (data.status === 'submitting' && data.submission_id) {
+      // 백그라운드 제출 중 — 진행상황 폴링
+      await _pollSubmitProgress(data, qpuName, t0);
+    } else {
+      // 즉시 완료 (Perceval 등)
+      _onSubmitComplete(data, qpuName, t0);
+    }
   } catch(e) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(e.message)}</div>`); }
   finally { setBtnDone('btn-qpu-confirm','⚡ CONFIRM & SUBMIT TO QPU'); }
+}
+
+async function _pollSubmitProgress(initData, qpuName, t0) {
+  const sid    = initData.submission_id;
+  const total  = initData.total;
+  const shots  = initData.shots;
+  const _seenJobs = new Set();
+
+  // 초기 상태 렌더 (0/N)
+  setStepResult('qpu', _renderSubmitProgress({done:0, results:{}, status:'submitting'}, qpuName, total, shots, elapsed(t0)));
+
+  while (true) {
+    await new Promise(r => setTimeout(r, 1500));
+
+    let p;
+    try {
+      const r = await callTool('uqi_submit_progress', { submission_id: sid });
+      p = JSON.parse(getResultText(r));
+    } catch(e) { break; }
+
+    if (p.error) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(p.error)}</div>`); break; }
+
+    // 폴링 결과로 UI 업데이트
+    setStepResult('qpu', _renderSubmitProgress(p, qpuName, total, shots, elapsed(t0)));
+
+    // 새로 나타난 job_id → job history 갱신
+    for (const [, r] of Object.entries(p.results || {})) {
+      if (r.job_id && !_seenJobs.has(r.job_id)) {
+        _seenJobs.add(r.job_id);
+        if (_openSteps.has('job-history')) loadJobHistory();
+      }
+    }
+
+    if (p.status === 'completed') {
+      _onSubmitComplete(p, qpuName, t0);
+      break;
+    }
+  }
+}
+
+function _renderSubmitProgress(prog, qpuName, total, shots, el) {
+  const done    = prog.done || 0;
+  const results = prog.results || {};
+  const pct     = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  let html = `<div class="result-meta">${el} · QPU: ${escHtml(qpuName)} · ${shots||'—'} shots</div>`;
+  html += `<div style="margin:10px 0 6px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span style="font-size:11px;color:var(--text2)">Submitting circuits…</span>
+      <span style="font-size:11px;color:var(--accent);font-weight:600">${done}/${total}</span>
+      ${prog.status==='completed' ? '<span style="color:var(--success);font-size:11px">✓ Done</span>' : '<span class="spinner"></span>'}
+    </div>
+    <div style="background:var(--surface2);border-radius:4px;height:6px;overflow:hidden">
+      <div style="height:100%;width:${pct}%;background:var(--accent);transition:width 0.4s ease;border-radius:4px"></div>
+    </div>
+  </div>`;
+
+  if (Object.keys(results).length > 0) {
+    html += `<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">`;
+    for (const [name, r] of Object.entries(results)) {
+      if (r.ok) {
+        html += `<div style="font-size:10px;color:var(--success);background:var(--surface2);border-radius:4px;padding:4px 8px">
+          ✓ <strong>${escHtml(name)}</strong> — job_id: <code style="font-size:10px">${escHtml(r.job_id||'')}</code>
+        </div>`;
+      } else {
+        html += `<div style="font-size:10px;color:var(--error);background:var(--surface2);border-radius:4px;padding:4px 8px">
+          ✗ <strong>${escHtml(name)}</strong> — ${escHtml(r.error||'unknown error')}
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+function _onSubmitComplete(data, qpuName, t0) {
+  setStepResult('qpu', renderQPUSubmitResult(data, elapsed(t0), qpuName));
+  setBadge('qpu','done');
+  for (const [, r] of Object.entries(data.results || {})) {
+    if (r.job_id) {
+      const cardId = `job-card-${r.job_id.replace(/[^a-z0-9]/gi,'_')}`;
+      const cb = document.getElementById(`auto-poll-${cardId}`);
+      if (cb) cb.checked = true;
+      _toggleAutoPoll(r.job_id, cardId, true);
+    }
+  }
+  if (_openSteps.has('job-history')) loadJobHistory();
 }
 
 // job_id 폴링 상태 관리
@@ -3281,6 +3470,7 @@ async function _pollJobStatus(jobId, cardId) {
       const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
       if (cancelBtn) cancelBtn.style.display='none';
       if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3)">Job was cancelled.</div>`;
+      if (_openSteps.has('job-history')) loadJobHistory();
       return;
     }
     if (data.done && data.counts) {
@@ -3290,6 +3480,7 @@ async function _pollJobStatus(jobId, cardId) {
       if (autoCb) autoCb.checked = false;
       const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
       if (cancelBtn) cancelBtn.style.display='none';
+      if (_openSteps.has('job-history')) loadJobHistory();
       if (badge) badge.innerHTML = `<span style="color:var(--success)">✓ DONE</span>`;
       badge.style.background='rgba(63,185,80,0.15)';
       badge.style.borderColor='rgba(63,185,80,0.3)';
@@ -3362,6 +3553,285 @@ function _stopAutoPoll(jobId) {
     clearInterval(_jobPollers[jobId]);
     delete _jobPollers[jobId];
   }
+}
+
+// ─── QPU Job Manager ───────────────────────────────────
+let _jobHistoryBusy = false;
+let _jobHistoryLastHtml = null; // 마지막 정상 렌더링 결과 캐시
+async function loadJobHistory(skipCloudPoll = false) {
+  if (_jobHistoryBusy) return; // 이미 로딩 중이면 중복 실행 무시
+  const el  = document.getElementById('result-job-history');
+  const btn = document.getElementById('btn-job-refresh');
+  if (!el) return;
+  _jobHistoryBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+  const statusFilter = document.getElementById('jh-status')?.value || '';
+  const daysFilter   = parseInt(document.getElementById('jh-days')?.value  || '0');
+  const limitVal     = parseInt(document.getElementById('jh-limit')?.value || '50');
+
+  try {
+    const res  = await callTool('uqi_job_list', { limit: limitVal, status: statusFilter, days: daysFilter });
+    const data = JSON.parse(getResultText(res));
+    if (!data.ok) { el.innerHTML = `<div class="error-state">⚠ ${escHtml(data.error||'조회 실패')}</div>`; return; }
+
+    const jobs = data.jobs || [];
+
+    // 활성 job cloud 상태 자동 동기화 (필터 무관하게 all time 기준으로 active만 따로 조회)
+    if (!skipCloudPoll) {
+      // 현재 목록 중 active인 것만 (필터가 done/cancelled면 0개)
+      const activeJobs = jobs.filter(j => ['submitted','running','error'].includes(j.status));
+      // 필터가 all/active일 땐 DB 전체에서 active 추가 조회
+      const needFullScan = !statusFilter || statusFilter === 'active';
+      let allActiveIds = new Set(activeJobs.map(j => j.job_id));
+
+      if (needFullScan && activeJobs.length === 0) {
+        // 필터 때문에 안 보일 수 있는 active job 확인
+        try {
+          const allRes  = await callTool('uqi_job_list', { limit: 200, status: 'active', days: 0 });
+          const allData = JSON.parse(getResultText(allRes));
+          (allData.jobs || []).forEach(j => allActiveIds.add(j.job_id));
+        } catch {}
+      }
+
+      if (allActiveIds.size > 0) {
+        if (btn) btn.textContent = `Checking ${allActiveIds.size} active…`;
+        await Promise.all([...allActiveIds].map(id =>
+          callTool('uqi_job_status', { job_id: id }).catch(() => null)
+        ));
+        // 재귀 전 busy 해제 필수
+        _jobHistoryBusy = false;
+        return await loadJobHistory(true);
+      }
+    }
+
+    const rendered = renderJobHistory(jobs, data.filter);
+    _jobHistoryLastHtml = rendered; // 정상 결과 캐시
+    el.innerHTML = rendered;
+    const active = jobs.filter(j => ['submitted','running','error'].includes(j.status)).length;
+    // setBadge 대신 직접 조작 (setBadge는 done/error 이진 상태만 지원)
+    const badge = document.getElementById('badge-job-history');
+    if (badge) {
+      if (!jobs.length) {
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = 'inline';
+        badge.className = 'step-badge ' + (active > 0 ? 'running' : 'done');
+        badge.textContent = active > 0 ? `${active} active` : `${jobs.length} jobs`;
+      }
+    }
+  } catch(e) {
+    // 에러 시 마지막 정상 결과 유지, 없으면 에러 표시
+    if (_jobHistoryLastHtml) {
+      el.innerHTML = _jobHistoryLastHtml;
+    } else {
+      el.innerHTML = `<div class="error-state">⚠ ${escHtml(e.message)}</div>`;
+    }
+  } finally {
+    _jobHistoryBusy = false;
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+  }
+}
+
+function renderJobHistory(jobs, filter = {}) {
+  const filterDesc = [
+    filter.status && filter.status !== 'all' ? `Status: ${filter.status}` : 'All statuses',
+    filter.days   && filter.days > 0 ? `Last ${filter.days}d` : 'All time',
+    `${filter.limit || jobs.length} max`,
+  ].join(' · ');
+  if (!jobs.length) return `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc}</div><div class="empty-state">No jobs found</div>`;
+  const summary = `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${jobs.length} job${jobs.length!==1?'s':''}</div>`;
+
+  const statusBadge = (s) => {
+    const cls = `job-status-${s}`;
+    const icon = s === 'done' ? '✓ ' : s === 'error' ? '✗ ' : s === 'cancelled' ? '✕ ' : '<span class="spinner"></span>';
+    return `<span class="job-status-badge ${cls}">${icon}${s.toUpperCase()}</span>`;
+  };
+
+  const fmtTime = (iso) => {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    } catch { return iso.slice(0,16); }
+  };
+
+  const activeCount = jobs.filter(j => ['submitted','running','error'].includes(j.status)).length;
+  // 선택 취소 액션 바 (active job 있을 때만)
+  const actionBar = activeCount > 0 ? `
+    <div id="jh-action-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px">
+      <label style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="jh-select-all" onchange="toggleSelectAll(this.checked)" style="cursor:pointer">
+        Select all active
+      </label>
+      <span style="font-size:10px;color:var(--text3)" id="jh-sel-count">0 selected</span>
+      <button class="job-action-btn" style="color:var(--error);padding:3px 12px" id="btn-cancel-selected"
+        onclick="cancelSelected()" disabled>✕ Cancel Selected</button>
+    </div>` : '';
+
+  const rows = jobs.flatMap(j => {
+    const safeId = j.job_id.replace(/[^a-z0-9]/gi,'_');
+    const shortId = j.job_id.length > 20 ? j.job_id.slice(0,10)+'…'+j.job_id.slice(-8) : j.job_id;
+    const isActive = j.status === 'submitted' || j.status === 'running' || j.status === 'error';
+    const checkbox = isActive
+      ? `<input type="checkbox" class="jh-row-check" data-jobid="${escHtml(j.job_id)}" onchange="updateSelCount()" style="cursor:pointer;margin-right:2px">` : '<span style="display:inline-block;width:16px"></span>';
+    const refreshBtn = isActive
+      ? `<button class="job-action-btn" onclick="checkJobInline('${escHtml(j.job_id)}','${safeId}',this)">↻</button>` : '';
+    const cancelBtn = isActive
+      ? `<button class="job-action-btn" style="color:var(--error)" onclick="cancelJobInline('${escHtml(j.job_id)}','${safeId}',this)">✕</button>` : '';
+    const countsBtn = j.status === 'done' && j.counts
+      ? `<button class="job-action-btn" onclick="toggleJobCounts('${safeId}',this)">${_expandedRows.has(safeId)?'▲ Hide':'▼ Results'}</button>` : '';
+    const mainRow = `<tr>
+      <td style="width:20px">${checkbox}</td>
+      <td><span class="job-id-cell" title="Click to copy Job ID" onclick="copyJobId(this,'${escHtml(j.job_id)}')">📋 ${escHtml(shortId)}</span></td>
+      <td>${escHtml(j.vendor||'—')}</td>
+      <td style="font-size:9px">${escHtml(j.qpu_name||'—')}</td>
+      <td style="font-size:9px;max-width:100px;overflow:hidden;text-overflow:ellipsis">${escHtml(j.circuit_name||'—')}</td>
+      <td>${j.shots||'—'}</td>
+      <td>${statusBadge(j.status||'unknown')}</td>
+      <td style="font-size:9px;color:var(--text3)">${fmtTime(j.submitted_at)}</td>
+      <td style="white-space:nowrap;display:flex;gap:4px">${refreshBtn}${cancelBtn}${countsBtn}</td>
+    </tr>`;
+    if (j.status === 'done' && j.counts && _expandedRows.has(safeId)) {
+      const counts = j.counts;
+      const sorted = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10);
+      const total  = Object.values(counts).reduce((s,v)=>s+v,0);
+      const maxV   = sorted.length ? sorted[0][1] : 1;
+      const bars   = sorted.map(([k,v])=>{
+        const pct=(v/total*100).toFixed(1);
+        const barW=(v/maxV*100).toFixed(1);
+        return `<div class="noise-bar-row"><span class="noise-bar-label" title="${k}">${k}</span><div class="noise-bar-track"><div class="noise-bar-fill" style="width:${barW}%"></div></div><span class="noise-bar-val">${pct}%<span style="color:var(--text3);margin-left:4px">(${v})</span></span></div>`;
+      }).join('');
+      const detailRow = `<tr id="detail-${safeId}"><td colspan="9" style="padding:10px 14px;background:rgba(0,0,0,0.2)">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Total shots: ${total} · Unique states: ${Object.keys(counts).length}</div>
+        ${bars}
+      </td></tr>`;
+      return [mainRow, detailRow];
+    }
+    return [mainRow];
+  }).join('');
+
+  return summary + actionBar + `<div style="overflow-x:auto">
+    <table class="job-table">
+      <thead><tr>
+        <th></th><th>Job ID</th><th>Vendor</th><th>QPU</th><th>Circuit</th><th>Shots</th><th>Status</th><th>Submitted</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+const _expandedRows = new Set();
+
+async function checkJobInline(jobId, safeId, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await callTool('uqi_job_status', { job_id: jobId });
+    await loadJobHistory(true); // 이미 조회했으므로 cloud poll 중복 skip
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '↻'; }
+  }
+}
+
+async function cancelJobInline(jobId, safeId, btn) {
+  if (!confirm(`Cancel job?\n${jobId}`)) return;
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const res  = await callTool('uqi_job_cancel', { job_id: jobId });
+    const data = JSON.parse(getResultText(res));
+    if (!data.ok) {
+      alert(`Cancel failed: ${data.error||'unknown'}`);
+      if (btn) { btn.disabled = false; btn.textContent = '✕'; }
+      return;
+    }
+    // cloud cancel 결과 알림 (실패해도 local은 cancelled 처리됨)
+    if (data.cloud_cancel && !data.cloud_cancel.ok) {
+      alert(`Local cancelled.\nCloud cancel note: ${data.cloud_cancel.error||'failed'}\n(IBM Cloud에서 직접 확인 필요)`);
+    }
+    await loadJobHistory();
+  } catch(e) {
+    alert(`Error: ${e.message}`);
+    if (btn) { btn.disabled = false; btn.textContent = '✕'; }
+  }
+}
+
+function updateSelCount() {
+  const checks  = [...document.querySelectorAll('.jh-row-check')];
+  const checked = checks.filter(c => c.checked);
+  const countEl = document.getElementById('jh-sel-count');
+  const cancelBtn = document.getElementById('btn-cancel-selected');
+  const selectAll = document.getElementById('jh-select-all');
+  if (countEl)   countEl.textContent = `${checked.length} selected`;
+  if (cancelBtn) cancelBtn.disabled = checked.length === 0;
+  if (selectAll) selectAll.indeterminate = checked.length > 0 && checked.length < checks.length;
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll('.jh-row-check').forEach(c => c.checked = checked);
+  updateSelCount();
+}
+
+async function cancelSelected() {
+  const checked = [...document.querySelectorAll('.jh-row-check:checked')];
+  if (!checked.length) return;
+  const jobIds = checked.map(c => c.dataset.jobid);
+  if (!confirm(`Cancel ${jobIds.length} selected job(s)?`)) return;
+  await _doCancelJobs(jobIds, document.getElementById('btn-cancel-selected'));
+}
+
+async function cancelAllActive() {
+  let activeJobs = [];
+  try {
+    const res  = await callTool('uqi_job_list', { limit: 200, status: 'active', days: 0 });
+    const data = JSON.parse(getResultText(res));
+    activeJobs = (data.jobs || []).filter(j => ['submitted','running','error'].includes(j.status));
+  } catch(e) { alert(`Failed to fetch active jobs: ${e.message}`); return; }
+  if (!activeJobs.length) { alert('No active jobs to cancel.'); return; }
+  if (!confirm(`Cancel all ${activeJobs.length} active job(s)?`)) return;
+  await _doCancelJobs(activeJobs.map(j => j.job_id));
+}
+
+async function _doCancelJobs(jobIds, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = `Cancelling ${jobIds.length}…`; }
+  const results = await Promise.all(
+    jobIds.map(id =>
+      callTool('uqi_job_cancel', { job_id: id })
+        .then(r => ({ id, data: JSON.parse(getResultText(r)) }))
+        .catch(e => ({ id, data: { ok: false, error: e.message } }))
+    )
+  );
+  const ok        = results.filter(r => r.data.ok).length;
+  const failed    = results.length - ok;
+  const cloudFail = results.filter(r => r.data.ok && r.data.cloud_cancel && !r.data.cloud_cancel.ok).length;
+  let msg = `Cancelled: ${ok}/${results.length} job(s).`;
+  if (cloudFail > 0) msg += `\nCloud cancel failed for ${cloudFail} — check IBM/IQM console.`;
+  if (failed    > 0) msg += `\n${failed} job(s) could not be cancelled.`;
+  alert(msg);
+  if (btn) { btn.disabled = false; btn.textContent = btn.id === 'btn-cancel-selected' ? '✕ Cancel Selected' : '✕ Cancel All Active'; }
+  await loadJobHistory(true);
+}
+
+function copyJobId(el, jobId) {
+  navigator.clipboard.writeText(jobId).then(() => {
+    const orig = el.textContent;
+    el.textContent = '✓ Copied!';
+    el.style.color = 'var(--success)';
+    setTimeout(() => {
+      el.textContent = orig;
+      el.style.color = '';
+    }, 1500);
+  });
+}
+
+function toggleJobCounts(safeId, btn) {
+  if (_expandedRows.has(safeId)) {
+    _expandedRows.delete(safeId);
+    if (btn) btn.textContent = '▼ Results';
+  } else {
+    _expandedRows.add(safeId);
+    if (btn) btn.textContent = '▲ Hide';
+  }
+  loadJobHistory();
 }
 
 function renderQPUAnalysis(data, el) {

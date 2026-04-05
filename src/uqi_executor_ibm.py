@@ -30,7 +30,17 @@ class UQIExecutorIBM:
             print("  [IBM] 실행할 회로 없음")
             return {}
 
+        _backend_inaccessible = False  # "No backend matches criteria" 발생 시 조기 종료
+
         for name in circuit_names:
+            if _backend_inaccessible:
+                self.results[name] = {
+                    "ok": False, "counts": None, "probs": None,
+                    "backend": backend_name, "via": None,
+                    "error": "백엔드 접근 불가 (이전 회로 동일 오류) — 스킵",
+                }
+                continue
+
             print(f"  [IBM] 실행: {name}")
             qir  = self.converter.qir_results.get(name)
             qasm = self.converter.qasm_results.get(name)
@@ -45,6 +55,12 @@ class UQIExecutorIBM:
                 self.results[name] = self._run_single(
                     name, qir, qasm, use_simulator, backend_name
                 )
+
+            # 백엔드 접근 불가 오류 감지 → 나머지 회로 스킵
+            r = self.results[name]
+            if not r["ok"] and "No backend matches" in (r.get("error") or ""):
+                print(f"  [IBM] ✗ 백엔드 접근 불가 ({backend_name}) → 나머지 {len(circuit_names) - circuit_names.index(name) - 1}개 회로 스킵")
+                _backend_inaccessible = True
 
         ok = [n for n, r in self.results.items() if r["ok"]]
         print(f"  [IBM] 완료: {len(ok)}/{len(self.results)} 실행 성공")
@@ -213,16 +229,22 @@ class UQIExecutorIBM:
             if not circuit.cregs:
                 circuit.measure_all(add_bits=True)
 
-            # IBM Runtime 연결
-            token = getattr(self, '_token', None)
-            if token:
-                service = QiskitRuntimeService(
-                    channel="ibm_quantum_platform", token=token)
+            # IBM Runtime 연결 (같은 executor 인스턴스 내에서 backend 재사용)
+            if not getattr(self, '_shared_backend', None) or \
+               getattr(self, '_shared_backend_name', None) != backend_name:
+                token = getattr(self, '_token', None)
+                if token:
+                    service = QiskitRuntimeService(
+                        channel="ibm_quantum_platform", token=token)
+                else:
+                    service = QiskitRuntimeService()
+                self._shared_backend      = service.backend(backend_name)
+                self._shared_backend_name = backend_name
+                print(f"    ✓ IBM QPU 연결: {backend_name} (최초 인증)")
             else:
-                service = QiskitRuntimeService()
+                print(f"    ✓ IBM QPU 재사용: {backend_name}")
 
-            backend = service.backend(backend_name)
-            print(f"    ✓ IBM QPU 연결: {backend_name}")
+            backend = self._shared_backend
 
             circuit = transpile(circuit, target=backend.target, optimization_level=1)
             print(f"    ✓ 트랜스파일 완료 ({len(circuit.data)} gates)")
@@ -267,11 +289,15 @@ class UQIExecutorIBM:
             status = job.status()
             result["status"] = str(status)
 
-            # DONE 상태일 때만 결과 가져오기
-            done_statuses = {"JobStatus.DONE", "DONE", "done"}
-            if str(status) in done_statuses or status.name == "DONE":
+            status_str = str(status).upper().replace("JOBSTATUS.", "")
+            result["status"] = status_str
+
+            done_statuses      = {"DONE"}
+            cancelled_statuses = {"CANCELLED", "CANCELED"}
+            failed_statuses    = {"ERROR", "FAILED"}
+
+            if status_str in done_statuses or (hasattr(status, 'name') and status.name == "DONE"):
                 pub_result = job.result()[0]
-                # cregs 이름 추정 (첫 번째 creg)
                 creg_name = None
                 for attr in dir(pub_result.data):
                     if not attr.startswith("_"):
@@ -279,12 +305,24 @@ class UQIExecutorIBM:
                         break
                 counts = getattr(pub_result.data, creg_name).get_counts()
                 total  = sum(counts.values())
-                result["counts"] = counts
-                result["probs"]  = {k: v / total for k, v in counts.items()}
-                result["done"]   = True
+                result["counts"]    = counts
+                result["probs"]     = {k: v / total for k, v in counts.items()}
+                result["done"]      = True
                 print(f"    ✓ job 완료: {job_id}")
+            elif status_str in cancelled_statuses:
+                result["cancelled"] = True
+                print(f"    ✕ job 취소됨: {job_id} ({status_str})")
+            elif status_str in failed_statuses:
+                # IBM cloud 확정 실패 → 실패 이유 수집
+                try:
+                    error_msg = str(job.error_message()) if callable(getattr(job, 'error_message', None)) else status_str
+                except Exception:
+                    error_msg = status_str
+                result["error"]       = f"[IBM] {error_msg}"
+                result["cloud_failed"] = True
+                print(f"    ✗ job 실패: {job_id} — {error_msg}")
             else:
-                print(f"    … job 진행중: {job_id} ({status})")
+                print(f"    … job 진행중: {job_id} ({status_str})")
 
         except Exception as e:
             result["error"] = str(e)

@@ -152,11 +152,12 @@ def list_jobs(limit: int = 20) -> list[dict]:
 
 
 def cancel_job(job_id: str) -> bool:
-    """job을 cancelled 상태로 마킹. 이미 done/error면 False 반환"""
+    """job을 cancelled 상태로 마킹. 이미 done/cancelled면 False 반환.
+    error 상태는 로컬 버그 오기록일 수 있으므로 취소 허용."""
     job = get_job(job_id)
     if job is None:
         return False
-    if job["status"] in ("done", "error", "cancelled"):
+    if job["status"] in ("done", "cancelled"):
         return False
     update_job(job_id, status="cancelled")
     return True

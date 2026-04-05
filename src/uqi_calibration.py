@@ -75,7 +75,8 @@ class UQICalibration:
     - 트랜스파일 전 자동 호출 인터페이스
     """
 
-    _SYNC_CACHE = {}
+    _SYNC_CACHE = {}        # {qpu_name: datetime}  성공
+    _SYNC_FAIL_CACHE = {}   # {qpu_name: datetime}  실패 (5분 재시도 방지)
 
     def __init__(self, calibration_file: str = CALIBRATION_DB):
         self.calibration_file = calibration_file
@@ -247,13 +248,17 @@ class UQICalibration:
         return self.data.get(qpu_name, {})
 
     def sync(self, qpu_name: str) -> bool:
-        """단일 QPU 캘리브레이션 동기화 (1시간 캐시)"""
+        """단일 QPU 캘리브레이션 동기화 (성공: 1시간 캐시 / 실패: 5분 재시도 방지)"""
         from datetime import datetime, timezone, timedelta
         now = datetime.now(timezone.utc)
         last = UQICalibration._SYNC_CACHE.get(qpu_name)
         if last and (now - last) < timedelta(hours=1):
             print(f"  [Calibration] {qpu_name} 캐시 유효 ({int((now-last).seconds/60)}분 전 동기화), 스킵")
             return True
+        last_fail = UQICalibration._SYNC_FAIL_CACHE.get(qpu_name)
+        if last_fail and (now - last_fail) < timedelta(minutes=5):
+            print(f"  [Calibration] {qpu_name} 최근 실패 기록 있음, 재시도 스킵 (5분 대기)")
+            return False
 
         vendor = self._detect_vendor(qpu_name)
         try:
@@ -281,13 +286,16 @@ class UQICalibration:
                 self._append_history(qpu_name)
                 self._save()
                 UQICalibration._SYNC_CACHE[qpu_name] = now
+                UQICalibration._SYNC_FAIL_CACHE.pop(qpu_name, None)
                 print(f"  [Calibration] ✓ {qpu_name} 동기화 완료")
             else:
-                print(f"  [Calibration] ⚠ {qpu_name} 동기화 실패 → 캐시 사용")
+                UQICalibration._SYNC_FAIL_CACHE[qpu_name] = now
+                print(f"  [Calibration] ⚠ {qpu_name} 동기화 실패 → 캐시 사용 (5분간 재시도 없음)")
             return ok
 
         except Exception as e:
-            print(f"  [Calibration] ✗ {qpu_name} 오류: {e}")
+            UQICalibration._SYNC_FAIL_CACHE[qpu_name] = now
+            print(f"  [Calibration] ✗ {qpu_name} 오류: {e} (5분간 재시도 없음)")
             return False
 
     def sync_all(self, qpu_names: list):

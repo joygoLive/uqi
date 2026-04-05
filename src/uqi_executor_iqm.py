@@ -107,9 +107,16 @@ class UQIExecutorIQM:
         try:
             # ── Step 1: QASM → Qiskit circuit ──
             from qiskit import QuantumCircuit, transpile
+            from qiskit.transpiler import CouplingMap
             circuit = QuantumCircuit.from_qasm_str(qasm)
+
+            # ── Step 2: 실시간 토폴로지 조회 (패딩 전에 먼저 실행)
+            basis_gates = ["rx", "ry", "rz", "cz", "measure", "reset"]
+            cz_loci = self._get_cz_loci(backend_url)
+            qubit_map = getattr(self, '_qubit_index_map', {})
+            device_n_qubits = len(qubit_map) or 20
+
             # 장비 큐비트 수에 맞게 패딩
-            device_n_qubits = len(getattr(self, '_qubit_index_map', {})) or 20
             if circuit.num_qubits < device_n_qubits:
                 from qiskit import QuantumRegister
                 qr = QuantumRegister(device_n_qubits, 'q')
@@ -118,30 +125,24 @@ class UQIExecutorIQM:
                 circuit = qc_pad
             print(f"    ✓ QASM → Qiskit circuit ({circuit.num_qubits}q)")
 
-            # ── Step 2: IQM 네이티브 게이트셋으로 트랜스파일 ──
-            basis_gates = ["rx", "ry", "rz", "cz", "measure", "reset"]
-            from qiskit.transpiler import CouplingMap
-
-            # 실시간 토폴로지 조회
-            cz_loci = self._get_cz_loci(backend_url)
             if cz_loci:
-                qubit_map = getattr(self, '_qubit_index_map', {})
-                edges = []
-                for a, b in cz_loci:
-                    if a in qubit_map and b in qubit_map:
-                        edges.append((qubit_map[a], qubit_map[b]))
-                # COMPR1 등 특수 큐비트로 인해 edges가 비면
-                # QB 간 all-to-all로 fallback
+                edges = [(qubit_map[a], qubit_map[b]) for a, b in cz_loci
+                         if a in qubit_map and b in qubit_map]
                 if not edges:
-                    n = len(qubit_map) if qubit_map else 20
+                    n = device_n_qubits
                     edges = [(i, j) for i in range(n) for j in range(n) if i != j]
                 edges_sym = list(set(edges + [(b, a) for a, b in edges]))
                 coupling_map = CouplingMap(edges_sym)
             else:
-                # fallback: garnet 기본 토폴로지
-                garnet_edges = [(int(a[2:])-1, int(b[2:])-1) for a, b in self.GARNET_CZ_LOCI_QB]
-                garnet_edges += [(b, a) for a, b in garnet_edges]
-                coupling_map = CouplingMap(garnet_edges)
+                n = device_n_qubits
+                if qubit_map:
+                    print(f"    ⚠ CZ 토폴로지 없음 → {n}큐비트 all-to-all fallback")
+                    all_edges = [(i, j) for i in range(n) for j in range(n) if i != j]
+                    coupling_map = CouplingMap(all_edges)
+                else:
+                    garnet_edges = [(int(a[2:])-1, int(b[2:])-1) for a, b in self.GARNET_CZ_LOCI_QB]
+                    garnet_edges += [(b, a) for a, b in garnet_edges]
+                    coupling_map = CouplingMap(garnet_edges)
 
             transpiled = transpile(
                 circuit,
@@ -199,7 +200,9 @@ class UQIExecutorIQM:
             from iqm.iqm_client.models import Circuit
             from iqm.pulse.circuit_operations import CircuitOperation
 
-            qubit_names = [f"QB{i+1}" for i in range(circuit.num_qubits)]
+            # _index_to_qubit_map은 _get_cz_loci()에서 실제 장비 QB 이름으로 채워짐
+            index_to_qb = getattr(self, '_index_to_qubit_map', {})
+            qubit_names = [index_to_qb.get(i, f"QB{i+1}") for i in range(circuit.num_qubits)]
             instructions = []
 
             for inst in circuit.data:
@@ -220,6 +223,22 @@ class UQIExecutorIQM:
                     ))
 
                 elif gate_name == "cz":
+                    # IQM CZ loci는 방향성이 있을 수 있음
+                    # → _cz_loci_cache에서 허용된 방향으로 교정
+                    cz_loci = getattr(self, '_cz_loci_cache', set())
+                    if cz_loci:
+                        a, b = qubits
+                        if (a, b) in cz_loci:
+                            pass  # 정방향 OK
+                        elif (b, a) in cz_loci:
+                            qubits = (b, a)  # 역방향으로 교정
+                        else:
+                            # 허용 토폴로지에 없는 쌍 → 변환 실패로 처리
+                            raise ValueError(
+                                f"CZ({a}, {b}) 는 {len(cz_loci)}개 허용 loci에 없음. "
+                                f"트랜스파일러가 잘못된 쌍 생성. "
+                                f"허용 샘플: {sorted(cz_loci)[:4]}"
+                            )
                     instructions.append(CircuitOperation(
                         name="cz",
                         locus=qubits,
@@ -355,7 +374,7 @@ class UQIExecutorIQM:
         """IQM 장비에서 실시간 CZ 토폴로지 조회 후 캐시"""
         try:
             from iqm.iqm_client import IQMClient
-            import os, io, contextlib
+            import os
 
             token = getattr(self, '_token', None) or os.getenv("IQM_QUANTUM_TOKEN")
             device_name = backend_url.rstrip("/").split("/")[-1]
@@ -366,22 +385,37 @@ class UQIExecutorIQM:
                 token=token,
             )
             arch = client.get_dynamic_quantum_architecture()
+
+            # 디버그: 사용 가능한 게이트 키 출력
+            gate_keys = list(arch.gates.keys())
+            print(f"    ✓ {device_name} 게이트 목록: {gate_keys}")
+
+            # qubit 이름 → 인덱스 맵 (숫자 순 정렬: QB1, QB2, ..., QB9, QB10, ...)
+            def _qb_sort_key(q):
+                digits = ''.join(c for c in q if c.isdigit())
+                return int(digits) if digits else 0
+            all_qubits = sorted(arch.qubits, key=_qb_sort_key)
+            self._qubit_index_map    = {q: i for i, q in enumerate(all_qubits)}
+            self._index_to_qubit_map = {i: q for i, q in enumerate(all_qubits)}
+            print(f"    ✓ {device_name} 큐비트 ({len(all_qubits)}개): {all_qubits}")
+
+            # CZ 토폴로지 수집 — 대소문자 무관하게 'cz' 키 탐색
+            cz_key = next((k for k in arch.gates if str(k).lower() == 'cz'), None)
             loci = set()
-            if 'cz' in arch.gates:
-                cz = arch.gates['cz']
+            if cz_key is not None:
+                cz = arch.gates[cz_key]
                 for impl_info in cz.implementations.values():
                     for locus in impl_info.loci:
                         if len(locus) == 2:
                             loci.add(tuple(locus))
+                print(f"    ✓ {device_name} CZ 허용 loci ({len(loci)}개): {sorted(loci)[:5]}{'...' if len(loci)>5 else ''}")
+            else:
+                print(f"    ⚠ {device_name}: 'cz' 게이트 키 없음 — 전체 gate 키: {gate_keys}")
+
             self._cz_loci_cache = loci
-            # qubit 이름 → 인덱스 맵 저장
-            all_qubits = sorted(arch.qubits)
-            self._qubit_index_map = {q: i for i, q in enumerate(all_qubits)}
-            print(f"    ✓ {device_name} CZ 토폴로지 조회: {len(loci)}개 엣지")
-            print(f"    ✓ {device_name} 큐비트: {all_qubits}")
             return loci
         except Exception as e:
-            print(f"    ⚠ CZ 토폴로지 조회 실패: {e} → fallback 사용")
+            print(f"    ⚠ CZ 토폴로지 조회 실패: {e}")
             return set()
         
     # ─────────────────────────────────────────
@@ -396,6 +430,7 @@ class UQIExecutorIQM:
     ) -> dict:
         """
         IQM QPU에 job 제출 후 job_id 즉시 리턴.
+        qiskit-iqm 기반 트랜스파일 — Garnet/Emerald/Sirius 공진기 아키텍처 모두 지원.
         wait_for_completion() 블로킹 없음.
         """
         result = {
@@ -405,56 +440,36 @@ class UQIExecutorIQM:
             "error":       None,
         }
         try:
-            from qiskit import QuantumCircuit, transpile
-            from qiskit.transpiler import CouplingMap
-
-            circuit = QuantumCircuit.from_qasm_str(qasm)
-            device_n_qubits = len(getattr(self, '_qubit_index_map', {})) or 20
-            if circuit.num_qubits < device_n_qubits:
-                from qiskit import QuantumRegister
-                qr = QuantumRegister(device_n_qubits, 'q')
-                qc_pad = QuantumCircuit(qr)
-                qc_pad.compose(circuit, qubits=list(range(circuit.num_qubits)), inplace=True)
-                circuit = qc_pad
-
-            basis_gates = ["rx", "ry", "rz", "cz", "measure", "reset"]
-            cz_loci = self._get_cz_loci(backend_url)
-            if cz_loci:
-                qubit_map = getattr(self, '_qubit_index_map', {})
-                edges = [(qubit_map[a], qubit_map[b]) for a, b in cz_loci
-                         if a in qubit_map and b in qubit_map]
-                if not edges:
-                    n = len(qubit_map) if qubit_map else 20
-                    edges = [(i, j) for i in range(n) for j in range(n) if i != j]
-                edges_sym = list(set(edges + [(b, a) for a, b in edges]))
-                coupling_map = CouplingMap(edges_sym)
-            else:
-                garnet_edges = [(int(a[2:])-1, int(b[2:])-1) for a, b in self.GARNET_CZ_LOCI_QB]
-                garnet_edges += [(b, a) for a, b in garnet_edges]
-                coupling_map = CouplingMap(garnet_edges)
-
-            transpiled = transpile(circuit, basis_gates=basis_gates,
-                                   coupling_map=coupling_map, optimization_level=1)
-            iqm_circuit = self._to_iqm_circuit(name, transpiled)
-            if iqm_circuit is None:
-                result["error"] = "IQM Circuit 변환 실패"
-                return result
-
-            from iqm.iqm_client import IQMClient
+            from qiskit import QuantumCircuit
+            from iqm.qiskit_iqm import IQMProvider, transpile_to_IQM
             import os
+
             token = getattr(self, '_token', None) or os.getenv("IQM_QUANTUM_TOKEN")
             if not token:
                 result["error"] = "IQM_QUANTUM_TOKEN 없음"
                 return result
 
             device_name = backend_url.rstrip("/").split("/")[-1]
-            client = IQMClient(
+            provider = IQMProvider(
                 "https://resonance.meetiqm.com",
                 quantum_computer=device_name,
                 token=token,
             )
-            job = client.submit_circuits(circuits=[iqm_circuit], shots=self.shots)
-            result["job_id"] = str(job.job_id)
+            backend = provider.get_backend()
+            print(f"    ✓ IQM backend 연결: {device_name} ({backend.num_qubits}q)")
+
+            # QASM → Qiskit circuit
+            circuit = QuantumCircuit.from_qasm_str(qasm)
+            if not circuit.cregs:
+                circuit.measure_all(add_bits=True)
+
+            # qiskit-iqm 트랜스파일 (MOVE 게이트 라우팅 포함 — Sirius 공진기 아키텍처 자동 처리)
+            transpiled = transpile_to_IQM(circuit, backend)
+            print(f"    ✓ qiskit-iqm 트랜스파일 완료 ({len(transpiled.data)} instructions)")
+
+            # job 제출 (비동기, 결과 대기 없음)
+            job = backend.run(transpiled, shots=self.shots)
+            result["job_id"] = job.job_id()
             result["ok"]     = True
             print(f"    ✓ IQM job 제출 완료: {result['job_id']}")
 
@@ -494,14 +509,17 @@ class UQIExecutorIQM:
             )
 
             import uuid
-            status = client.get_job_status(uuid.UUID(job_id))
-            result["status"] = str(status)
+            from iqm.iqm_client import JobStatus
 
-            done_statuses = {"JobStatus.READY", "READY", "ready"}
-            if str(status) in done_statuses or (hasattr(status, 'name') and status.name == "READY"):
-                job_result = client.get_job_result(uuid.UUID(job_id))
-                if job_result:
-                    meas = job_result[0]
+            job = client.get_job(uuid.UUID(job_id))
+            status = job.status                             # JobStatus enum
+            status_str = status.value                       # 'waiting'|'processing'|'completed'|'failed'|'cancelled'
+            result["status"] = status_str
+
+            if status == JobStatus.COMPLETED:
+                measurements = client.get_job_measurements(uuid.UUID(job_id))
+                if measurements:
+                    meas = measurements[0]
                     counts = {}
                     for key, shots_data in meas.items():
                         for shot in shots_data:
@@ -510,8 +528,24 @@ class UQIExecutorIQM:
                     result["counts"] = counts
                     result["done"]   = True
                     print(f"    ✓ IQM job 완료: {job_id}")
+            elif status == JobStatus.CANCELLED:
+                result["cancelled"] = True
+                print(f"    ✕ IQM job 취소됨: {job_id}")
+            elif status == JobStatus.FAILED:
+                # IQM 장비 측 실패: errors 상세 메시지 수집
+                errors = getattr(job.data, 'errors', [])
+                if errors:
+                    reason = "; ".join(
+                        f"[{e.source}] {e.message}" + (f" (code={e.error_code})" if e.error_code else "")
+                        for e in errors
+                    )
+                else:
+                    reason = "IQM 장비 실패 (상세 없음)"
+                result["error"]          = reason
+                result["cloud_failed"]   = True  # 확정 실패 → 재시도 방지
+                print(f"    ✗ IQM job 실패: {job_id} — {reason}")
             else:
-                print(f"    … IQM job 진행중: {job_id} ({status})")
+                print(f"    … IQM job 진행중: {job_id} ({status_str})")
 
         except Exception as e:
             result["error"] = str(e)
@@ -536,7 +570,7 @@ class UQIExecutorIQM:
                 quantum_computer=device_name,
                 token=token,
             )
-            client.abort_job(uuid.UUID(job_id))
+            client.cancel_job(uuid.UUID(job_id))
             print(f"    ✓ IQM job 취소 요청: {job_id}")
             return {"ok": True}
 

@@ -172,6 +172,44 @@ class TestRunAll:
             executor.run_all()
             assert called_names == ["tape_a"]
 
+    def test_TC02A_backend_inaccessible_skips_remaining_circuits(self):
+        """'No backend matches criteria' 오류 시 나머지 회로 스킵"""
+        executor = _make_executor(circuits={"a": MagicMock(), "b": MagicMock(), "c": MagicMock()})
+
+        def fake_run(name, *args, **kwargs):
+            if name == "a":
+                return {"ok": False, "counts": None, "probs": None,
+                        "backend": "ibm_fez", "via": None,
+                        "error": "No backend matches criteria"}
+            return {"ok": True, "counts": {}, "probs": {}, "backend": "ibm_fez", "via": None, "error": None}
+
+        with patch.object(executor, "_run_single", side_effect=fake_run):
+            result = executor.run_all()
+
+        # "a" 는 실패, "b"/"c" 는 스킵 처리 (ok=False, 이전 오류 메시지)
+        assert result["a"]["ok"] is False
+        assert result["b"]["ok"] is False
+        assert result["c"]["ok"] is False
+        assert "백엔드 접근 불가" in (result["b"].get("error") or "")
+        assert "백엔드 접근 불가" in (result["c"].get("error") or "")
+
+    def test_TC02B_backend_inaccessible_flag_resets_per_run_all(self):
+        """run_all 재호출 시 _backend_inaccessible 플래그는 초기화됨"""
+        executor = _make_executor(circuits={"a": MagicMock()})
+
+        call_count = [0]
+        def fake_run(name, *args, **kwargs):
+            call_count[0] += 1
+            return {"ok": False, "counts": None, "probs": None,
+                    "backend": "ibm_fez", "via": None,
+                    "error": "No backend matches criteria"}
+
+        with patch.object(executor, "_run_single", side_effect=fake_run):
+            executor.run_all()
+            executor.run_all()
+
+        assert call_count[0] == 2  # 각 run_all 에서 1회씩 호출
+
 
 # ─────────────────────────────────────────────────────────────
 # TC-03x: _run_single (Sampler)

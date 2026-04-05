@@ -1043,7 +1043,12 @@ async def uqi_calibration_info(
 
         def _blocking_sync(timeout_sec: int):
             """sync를 별도 스레드에서 실행, timeout 초과 시 즉시 복귀.
-            wait=False로 shutdown해야 hang 중인 API 스레드가 asyncio 슬롯을 점유하지 않는다."""
+            wait=False로 shutdown해야 hang 중인 API 스레드가 asyncio 슬롯을 점유하지 않는다.
+            TTL 미만이면 API 호출 없이 즉시 반환 (_SYNC_CACHE는 서버 재시작 시 초기화되므로
+            _is_expired()로 판단 — last_updated 기반이라 재시작 후에도 유효)."""
+            if not _cal._is_expired(qpu_name):
+                print(f"  [CalInfo] {qpu_name} TTL 유효 (last_updated 기준), sync 스킵")
+                return
             _exe = _cf.ThreadPoolExecutor(max_workers=1)
             try:
                 _f = _exe.submit(_do_sync)
@@ -1056,9 +1061,8 @@ async def uqi_calibration_info(
 
         try:
             if refresh:
-                # refresh=True: 명시적 동기화 요청 — 최신 데이터 반환
-                # (원래 의도 유지, shutdown=wait=False로 무한 hang만 방지)
-                print(f"  [CalInfo] {qpu_name} 동기화 요청 (max 25s)")
+                # refresh=True: TTL 만료 시에만 실제 API sync, 미만이면 캐시 즉시 반환
+                print(f"  [CalInfo] {qpu_name} refresh 요청")
                 _blocking_sync(25)
                 calibration = _cal.data.get(qpu_name, {})
             else:

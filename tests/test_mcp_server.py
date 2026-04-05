@@ -44,6 +44,7 @@ patch("uqi_rag.UQIRAG", return_value=_mock_rag):
         _safe_json,
         _file_hash,
         _get_calibration,
+        _build_calibration_response,
         SUPPORTED_QPUS,
         _BLOCKED_PATTERNS,
         _ALLOWED_IMPORTS,
@@ -400,6 +401,48 @@ class TestGetCalibration:
         _mock_cal.get_transpile_params.return_value = None
         result = _get_calibration("unknown_qpu")
         assert result == {}
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-046~048: _build_calibration_response (detail 파라미터)
+# ─────────────────────────────────────────────────────────────
+
+_PER_QUBIT_KEYS = ("qubit_t1_ms", "qubit_t2_ms", "qubit_ro_error",
+                   "qubit_1q_error", "edge_2q_error",
+                   "coupling_map", "qubit_positions")
+_SAMPLE_CAL = {
+    "num_qubits": 5,
+    "avg_2q_error": 0.01,
+    "avg_t1_ms": 100.0,
+    "last_updated": "2026-01-01T00:00:00",
+    "qubit_t1_ms": [100.0, 200.0, 150.0, 120.0, 180.0],
+    "qubit_t2_ms": [50.0,  80.0,  60.0,  70.0,  90.0],
+    "qubit_ro_error": [0.01] * 5,
+    "qubit_1q_error": [0.001] * 5,
+    "edge_2q_error":  [[0, 1, 0.01], [1, 2, 0.012]],
+    "coupling_map":   [[0, 1], [1, 2]],
+    "qubit_positions": {"0": [0.0, 0.0], "1": [1.0, 0.0]},
+}
+
+class TestBuildCalibrationResponse:
+
+    def test_TC046_detail_false_excludes_per_qubit(self):
+        result = json.loads(_build_calibration_response(_SAMPLE_CAL, "ibm_test", detail=False))
+        for key in _PER_QUBIT_KEYS:
+            assert key not in result, f"{key} should not be in summary response"
+
+    def test_TC047_detail_false_includes_avg_fields(self):
+        result = json.loads(_build_calibration_response(_SAMPLE_CAL, "ibm_test", detail=False))
+        assert result["qpu_name"] == "ibm_test"
+        assert result["num_qubits"] == 5
+        assert result["avg_2q_error"] == pytest.approx(0.01)
+
+    def test_TC048_detail_true_includes_per_qubit(self):
+        result = json.loads(_build_calibration_response(_SAMPLE_CAL, "ibm_test", detail=True))
+        for key in _PER_QUBIT_KEYS:
+            assert key in result, f"{key} should be in detail response"
+        assert result["qubit_t1_ms"] == [100.0, 200.0, 150.0, 120.0, 180.0]
+        assert result["edge_2q_error"] == [[0, 1, 0.01], [1, 2, 0.012]]
 
 
 # ─────────────────────────────────────────────────────────────

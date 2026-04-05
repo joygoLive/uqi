@@ -986,6 +986,60 @@ async def uqi_rag_search(
 # 툴 6: 캘리브레이션 조회
 # ─────────────────────────────────────────────────────────
 
+def _build_calibration_response(calibration: dict, qpu_name: str, detail: bool = False) -> str:
+    """캘리브레이션 dict → JSON 문자열 변환.
+    detail=False(기본): summary avg 데이터만 (~400B).
+    detail=True: per-qubit 상세 데이터 포함 (~22KB, Deep Analysis / QPU 상세보기용).
+    """
+    if cal_bg := calibration.get('basis_gates'):
+        if isinstance(cal_bg, list):
+            calibration = dict(calibration)
+            calibration['basis_gates'] = [g for g in cal_bg if g in _QISKIT_STD_GATES]
+    result = {
+        "qpu_name":        qpu_name,
+        "num_qubits":      calibration.get("num_qubits"),
+        "basis_gates":     calibration.get("basis_gates"),
+        "avg_t1_ms":       calibration.get("avg_t1_ms"),
+        "avg_t2_ms":       calibration.get("avg_t2_ms"),
+        "avg_1q_ns":       calibration.get("avg_1q_ns"),
+        "avg_2q_ns":       calibration.get("avg_2q_ns"),
+        "avg_1q_error":    calibration.get("avg_1q_error"),
+        "avg_2q_error":    calibration.get("avg_2q_error"),
+        "avg_ro_error":    calibration.get("avg_ro_error"),
+        "last_updated":    calibration.get("last_updated"),
+    }
+    if detail:
+        result.update({
+            "coupling_map":    calibration.get("coupling_map"),
+            "qubit_positions": calibration.get("qubit_positions"),
+            "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
+            "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
+            "qubit_ro_error":  calibration.get("qubit_ro_error"),
+            "qubit_1q_error":  calibration.get("qubit_1q_error"),
+            "edge_2q_error":   calibration.get("edge_2q_error"),
+        })
+    result.update({
+        # neutral atom 전용
+        "rabi_freq_max_mhz":     calibration.get("rabi_freq_max_mhz"),
+        "rydberg_level":         calibration.get("rydberg_level"),
+        "min_atom_distance_um":  calibration.get("min_atom_distance_um"),
+        "max_radial_distance_um":calibration.get("max_radial_distance_um"),
+        "c6_coefficient":        calibration.get("c6_coefficient"),
+        # photonic 전용
+        "max_mode_count":        calibration.get("max_mode_count"),
+        "max_photon_count":      calibration.get("max_photon_count"),
+        "avg_transmittance":     calibration.get("avg_transmittance"),
+        "avg_hom":               calibration.get("avg_hom"),
+        "avg_g2":                calibration.get("avg_g2"),
+        "clock_mhz":             calibration.get("clock_mhz"),
+        # quantinuum 전용
+        "memory_error":          calibration.get("memory_error"),
+        "quantum_volume":        calibration.get("quantum_volume"),
+        "noise_date":            calibration.get("noise_date"),
+    })
+    return _safe_json(result)
+
+
 @mcp.tool()
 async def uqi_calibration_info(
     qpu_name: str  = "ibm_fez",
@@ -994,53 +1048,7 @@ async def uqi_calibration_info(
 ) -> str:
     """QPU 캘리브레이션 조회. qpu_name: ibm_fez|iqm_garnet, refresh: 갱신 여부, detail: per-qubit 데이터 포함"""
     def _build_response(calibration: dict) -> str:
-        if cal_bg := calibration.get('basis_gates'):
-            if isinstance(cal_bg, list):
-                calibration = dict(calibration)
-                calibration['basis_gates'] = [g for g in cal_bg if g in _QISKIT_STD_GATES]
-        result = {
-            "qpu_name":        qpu_name,
-            "num_qubits":      calibration.get("num_qubits"),
-            "basis_gates":     calibration.get("basis_gates"),
-            "avg_t1_ms":       calibration.get("avg_t1_ms"),
-            "avg_t2_ms":       calibration.get("avg_t2_ms"),
-            "avg_1q_ns":       calibration.get("avg_1q_ns"),
-            "avg_2q_ns":       calibration.get("avg_2q_ns"),
-            "avg_1q_error":    calibration.get("avg_1q_error"),
-            "avg_2q_error":    calibration.get("avg_2q_error"),
-            "avg_ro_error":    calibration.get("avg_ro_error"),
-            "last_updated":    calibration.get("last_updated"),
-        }
-        if detail:
-            result.update({
-                "coupling_map":    calibration.get("coupling_map"),
-                "qubit_positions": calibration.get("qubit_positions"),
-                "qubit_t1_ms":     calibration.get("qubit_t1_ms"),
-                "qubit_t2_ms":     calibration.get("qubit_t2_ms"),
-                "qubit_ro_error":  calibration.get("qubit_ro_error"),
-                "qubit_1q_error":  calibration.get("qubit_1q_error"),
-                "edge_2q_error":   calibration.get("edge_2q_error"),
-            })
-        result.update({
-            # neutral atom 전용
-            "rabi_freq_max_mhz":     calibration.get("rabi_freq_max_mhz"),
-            "rydberg_level":         calibration.get("rydberg_level"),
-            "min_atom_distance_um":  calibration.get("min_atom_distance_um"),
-            "max_radial_distance_um":calibration.get("max_radial_distance_um"),
-            "c6_coefficient":        calibration.get("c6_coefficient"),
-            # photonic 전용
-            "max_mode_count":        calibration.get("max_mode_count"),
-            "max_photon_count":      calibration.get("max_photon_count"),
-            "avg_transmittance":     calibration.get("avg_transmittance"),
-            "avg_hom":               calibration.get("avg_hom"),
-            "avg_g2":                calibration.get("avg_g2"),
-            "clock_mhz":             calibration.get("clock_mhz"),
-            # quantinuum 전용
-            "memory_error":          calibration.get("memory_error"),
-            "quantum_volume":        calibration.get("quantum_volume"),
-            "noise_date":            calibration.get("noise_date"),
-        })
-        return _safe_json(result)
+        return _build_calibration_response(calibration, qpu_name, detail)
 
     def _run():
         import concurrent.futures as _cf

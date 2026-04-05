@@ -58,21 +58,21 @@ def analyze_qec_necessity(
     # Fidelity 기반
     if fidelity >= 0.99:
         necessity = "unnecessary"
-        reasons.append(f"Fidelity={fidelity:.4f} ≥ 0.99 → QEC 불필요")
+        reasons.append(f"Fidelity={fidelity:.4f} ≥ 0.99 → QEC not needed")
     elif fidelity >= 0.95:
         necessity = "recommended"
-        reasons.append(f"Fidelity={fidelity:.4f} 0.95~0.99 → QEC 권장")
+        reasons.append(f"Fidelity={fidelity:.4f} 0.95~0.99 → QEC recommended")
         codes.extend(["bit_flip", "phase_flip"])
     else:
         necessity = "required"
-        reasons.append(f"Fidelity={fidelity:.4f} < 0.95 → QEC 필수")
+        reasons.append(f"Fidelity={fidelity:.4f} < 0.95 → QEC required")
         codes.extend(["bit_flip", "phase_flip", "shor", "steane"])
 
     # TVD 기반 보완
     if tvd > 0.05:
         if necessity == "unnecessary":
             necessity = "recommended"
-        reasons.append(f"TVD={tvd:.4f} > 0.05 → 분포 왜곡 심함")
+        reasons.append(f"TVD={tvd:.4f} > 0.05 → significant distribution distortion")
         if "bit_flip" not in codes:
             codes.append("bit_flip")
 
@@ -80,13 +80,13 @@ def analyze_qec_necessity(
     if t2_ratio is not None:
         if t2_ratio > 10:
             necessity = "required"
-            reasons.append(f"T2 비율={t2_ratio:.1f}x → 코히어런스 손실 심각")
+            reasons.append(f"T2 ratio={t2_ratio:.1f}x → severe coherence loss")
             if "steane" not in codes:
                 codes.extend(["steane", "surface"])
         elif t2_ratio > 1:
             if necessity == "unnecessary":
                 necessity = "recommended"
-            reasons.append(f"T2 비율={t2_ratio:.1f}x → 코히어런스 손실 주의")
+            reasons.append(f"T2 ratio={t2_ratio:.1f}x → coherence loss warning")
 
     # 회로 특성 기반 코드 추천 정제
     if qc:
@@ -99,11 +99,11 @@ def analyze_qec_necessity(
         if t_ratio > 0.3:
             if "steane" not in codes and necessity != "unnecessary":
                 codes.append("steane")
-            reasons.append(f"T-gate 비중={t_ratio:.2f} → Steane 코드 적합")
+            reasons.append(f"T-gate ratio={t_ratio:.2f} → Steane code suitable")
 
         if n_qubits > 10:
             codes = [c for c in codes if c not in ["steane", "shor"]]
-            reasons.append(f"{n_qubits}q 회로 → Surface code만 현실적")
+            reasons.append(f"{n_qubits}q circuit → Surface code only practical option")
             if necessity == "required" and "surface" not in codes:
                 codes.append("surface")
 
@@ -125,35 +125,35 @@ QEC_CODES = {
     "bit_flip": {
         "name":        "Bit-flip Code",
         "qubits":      3,
-        "description": "X 에러 보호 (3큐비트)",
+        "description": "X error protection (3 qubits)",
         "overhead":    3.0,
         "implemented": True,
     },
     "phase_flip": {
         "name":        "Phase-flip Code",
         "qubits":      3,
-        "description": "Z 에러 보호 (3큐비트)",
+        "description": "Z error protection (3 qubits)",
         "overhead":    3.0,
         "implemented": True,
     },
     "shor": {
         "name":        "Shor Code",
         "qubits":      9,
-        "description": "X+Z 에러 보호 (9큐비트)",
+        "description": "X+Z error protection (9 qubits)",
         "overhead":    9.0,
-        "implemented": False,  # 향후 구현
+        "implemented": False,
     },
     "steane": {
         "name":        "Steane Code",
         "qubits":      7,
-        "description": "T-gate 최적화 (7큐비트)",
+        "description": "T-gate optimized (7 qubits)",
         "overhead":    7.0,
-        "implemented": False,  # 향후 구현
+        "implemented": False,
     },
     "surface": {
         "name":        "Surface Code",
         "qubits":      "d²+(d-1)²",
-        "description": "대규모 범용 (분석만)",
+        "description": "Large-scale general purpose (analysis only)",
         "overhead":    "d²",
         "implemented": False,
     },
@@ -331,15 +331,15 @@ class UQIQEC:
         result = analyze_qec_necessity(
             noise_comparison, self.calibration, qc)
 
-        print(f"\n  [QEC] 분석 결과: {result['necessity'].upper()}")
+        print(f"\n  [QEC] Analysis result: {result['necessity'].upper()}")
         print(f"    Fidelity={result['fidelity']:.4f} "
               f"TVD={result['tvd']:.4f}")
         if result['t2_ratio']:
-            print(f"    T2 비율={result['t2_ratio']:.2f}x")
+            print(f"    T2 ratio={result['t2_ratio']:.2f}x")
         for r in result['reasons']:
             print(f"    • {r}")
         if result['recommended_codes']:
-            print(f"    추천 코드: {result['recommended_codes']}")
+            print(f"    Recommended codes: {result['recommended_codes']}")
 
         return result
 
@@ -359,10 +359,10 @@ class UQIQEC:
         info = QEC_CODES.get(code, {})
         if not info.get("implemented"):
             raise NotImplementedError(
-                f"{code} 코드는 미구현 (향후 지원 예정)")
+                f"{code} code is not yet implemented")
 
-        print(f"\n  [QEC] 인코딩: {info['name']} "
-              f"(큐비트 {qc.num_qubits}q → "
+        print(f"\n  [QEC] Encoding: {info['name']} "
+              f"(qubits {qc.num_qubits}q → "
               f"{qc.num_qubits * info['qubits']}q)")
 
         qc_no_meas = qc.remove_final_measurements(inplace=False)
@@ -372,7 +372,7 @@ class UQIQEC:
         elif code == "phase_flip":
             return encode_phase_flip(qc_no_meas)
         else:
-            raise ValueError(f"미지원 코드: {code}")
+            raise ValueError(f"Unsupported code: {code}")
 
     def compare_fidelity(self,
                          qc:       QuantumCircuit,
@@ -387,7 +387,7 @@ class UQIQEC:
             noise = UQINoise(qpu_name, self.calibration)
 
         # ── 인코딩 전 ──
-        print(f"\n  [QEC] 인코딩 전 노이즈 시뮬...")
+        print(f"\n  [QEC] Pre-encoding noise simulation...")
         ideal_counts  = noise.simulate_ideal(qc, shots)
         noisy_counts  = noise.simulate(qc, sdk="qiskit", shots=shots)
         cmp_before    = noise.compare(
@@ -398,14 +398,14 @@ class UQIQEC:
         qc_enc    = self.encode(qc, code)
         overhead  = measure_overhead(qc, qc_enc)
 
-        print(f"  [QEC] 오버헤드: "
-              f"큐비트 {overhead['orig_qubits']}→{overhead['enc_qubits']} "
+        print(f"  [QEC] Overhead: "
+              f"qubits {overhead['orig_qubits']}→{overhead['enc_qubits']} "
               f"({overhead['qubit_overhead']}x) "
-              f"게이트 {overhead['orig_gates']}→{overhead['enc_gates']} "
+              f"gates {overhead['orig_gates']}→{overhead['enc_gates']} "
               f"({overhead['gate_overhead']}x)")
 
         # ── 인코딩 후 노이즈 시뮬 (같은 noise 인스턴스 재사용) ──
-        print(f"  [QEC] 인코딩 후 노이즈 시뮬...")
+        print(f"  [QEC] Post-encoding noise simulation...")
         ideal_enc    = noise.simulate_ideal(qc_enc, shots)
         noisy_enc    = noise.simulate(qc_enc, sdk="qiskit", shots=shots)
 
@@ -427,7 +427,7 @@ class UQIQEC:
             label_a="ideal_enc", label_b="after_qec")
 
         improvement = cmp_after["fidelity"] - cmp_before["fidelity"]
-        print(f"\n  [QEC] Fidelity 변화: "
+        print(f"\n  [QEC] Fidelity change: "
               f"{cmp_before['fidelity']:.4f} → {cmp_after['fidelity']:.4f} "
               f"({'↑' if improvement > 0 else '↓'}{abs(improvement):.4f})")
 

@@ -1037,33 +1037,40 @@ async def uqi_calibration_info(
 
     def _run():
         import concurrent.futures as _cf
+        import threading as _threading
 
         def _do_sync():
             _cal.sync(qpu_name)
 
         try:
             if refresh:
-                # refresh=True: 명시적 동기화 요청 (25s 타임아웃)
-                print(f"  [CalInfo] {qpu_name} 명시적 동기화 요청 (max 25s)")
-                with _cf.ThreadPoolExecutor(max_workers=1) as _exe:
-                    _f = _exe.submit(_do_sync)
-                    try:
-                        _f.result(timeout=25)
-                    except _cf.TimeoutError:
-                        print(f"  [CalInfo] {qpu_name} sync timeout (25s) — 기존 캐시 사용")
+                # refresh=True: 현재 캐시 즉시 반환 + 만료된 경우 백그라운드 sync 트리거
+                # → API hang이 있어도 UI 스피너 없음
                 calibration = _cal.data.get(qpu_name, {})
+                from datetime import datetime, timezone, timedelta as _td
+                last = _cal._SYNC_CACHE.get(qpu_name)
+                _now = datetime.now(timezone.utc)
+                needs_sync = not last or (_now - last) >= _td(hours=1)
+                if needs_sync:
+                    print(f"  [CalInfo] {qpu_name} 백그라운드 동기화 트리거 (non-blocking)")
+                    _threading.Thread(target=_do_sync, daemon=True).start()
+                else:
+                    print(f"  [CalInfo] {qpu_name} 최근 sync 완료 — 캐시 반환")
             else:
                 # refresh=False: 캐시 데이터 직접 반환 (auto-sync 없음, API hang 방지)
                 calibration = _cal.data.get(qpu_name, {})
                 if not calibration:
-                    # DB에 데이터 자체가 없는 경우에만 1회 동기화 (25s 타임아웃)
-                    print(f"  [CalInfo] {qpu_name} 캐시 없음 — 최초 동기화 시도 (max 25s)")
-                    with _cf.ThreadPoolExecutor(max_workers=1) as _exe:
+                    # DB에 데이터 자체가 없는 경우에만 1회 동기화 (10s 타임아웃)
+                    print(f"  [CalInfo] {qpu_name} 캐시 없음 — 최초 동기화 시도 (max 10s)")
+                    _exe = _cf.ThreadPoolExecutor(max_workers=1)
+                    try:
                         _f = _exe.submit(_do_sync)
                         try:
-                            _f.result(timeout=25)
+                            _f.result(timeout=10)
                         except _cf.TimeoutError:
-                            print(f"  [CalInfo] {qpu_name} sync timeout (25s)")
+                            print(f"  [CalInfo] {qpu_name} sync timeout (10s)")
+                    finally:
+                        _exe.shutdown(wait=False)  # hang 중인 스레드 기다리지 않음
                     calibration = _cal.data.get(qpu_name, {})
 
             if not calibration:

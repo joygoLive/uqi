@@ -1106,6 +1106,13 @@ async function loadQPUDashboard(forceRefresh) {
       document.getElementById('qpu-cache-ts') &&
         (document.getElementById('qpu-cache-ts').innerHTML += ' <span style="color:var(--accent);font-size:10px"><span class="spinner"></span>Refreshing in background...</span>');
       _fetchQPUData('background');
+    } else {
+      // per-qubit 데이터 없으면 background로 detail 로드 (박스플롯 복원)
+      const needsDetail = cache.qpus && cache.qpus.some(q => {
+        const d = _qpuData[q];
+        return d && !d.error && !d._loading && !d.qubit_t1_ms && !q.startsWith('sim:') && !q.startsWith('qpu:');
+      });
+      if (needsDetail) _fetchQPUData('background');
     }
     return;
   }

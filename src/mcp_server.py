@@ -1038,39 +1038,49 @@ async def uqi_calibration_info(
     def _run():
         import concurrent.futures as _cf
         import threading as _threading
+        from datetime import datetime, timezone, timedelta as _td
 
         def _do_sync():
             _cal.sync(qpu_name)
 
+        def _blocking_sync(timeout_sec: int):
+            """별도 스레드에서 sync 실행 (timeout 후 wait=False로 즉시 복귀)."""
+            _exe = _cf.ThreadPoolExecutor(max_workers=1)
+            try:
+                _f = _exe.submit(_do_sync)
+                try:
+                    _f.result(timeout=timeout_sec)
+                except _cf.TimeoutError:
+                    print(f"  [CalInfo] {qpu_name} sync timeout ({timeout_sec}s)")
+            finally:
+                _exe.shutdown(wait=False)  # hang 중인 스레드 기다리지 않음
+
         try:
+            calibration = _cal.data.get(qpu_name, {})
+
             if refresh:
-                # refresh=True: 현재 캐시 즉시 반환 + 만료된 경우 백그라운드 sync 트리거
-                # → API hang이 있어도 UI 스피너 없음
-                calibration = _cal.data.get(qpu_name, {})
-                from datetime import datetime, timezone, timedelta as _td
-                last = _cal._SYNC_CACHE.get(qpu_name)
-                _now = datetime.now(timezone.utc)
-                needs_sync = not last or (_now - last) >= _td(hours=1)
-                if needs_sync:
-                    print(f"  [CalInfo] {qpu_name} 백그라운드 동기화 트리거 (non-blocking)")
-                    _threading.Thread(target=_do_sync, daemon=True).start()
+                if calibration:
+                    # 캐시 있음: 즉시 반환 + 만료된 경우 백그라운드 sync (non-blocking)
+                    last = _cal._SYNC_CACHE.get(qpu_name)
+                    _now = datetime.now(timezone.utc)
+                    needs_sync = not last or (_now - last) >= _td(hours=1)
+                    if needs_sync:
+                        print(f"  [CalInfo] {qpu_name} 백그라운드 동기화 트리거 (non-blocking)")
+                        _threading.Thread(target=_do_sync, daemon=True).start()
+                    else:
+                        print(f"  [CalInfo] {qpu_name} 최근 sync 완료 — 캐시 반환")
                 else:
-                    print(f"  [CalInfo] {qpu_name} 최근 sync 완료 — 캐시 반환")
+                    # 캐시 없음: 돌려줄 데이터가 없으므로 blocking sync 필요
+                    # _SYNC_FAIL_CACHE 무시하고 강제 재시도 (refresh=True는 명시적 요청)
+                    _cal._SYNC_FAIL_CACHE.pop(qpu_name, None)
+                    print(f"  [CalInfo] {qpu_name} 캐시 없음(refresh) — 동기화 시도 (max 15s)")
+                    _blocking_sync(15)
+                    calibration = _cal.data.get(qpu_name, {})
             else:
-                # refresh=False: 캐시 데이터 직접 반환 (auto-sync 없음, API hang 방지)
-                calibration = _cal.data.get(qpu_name, {})
                 if not calibration:
-                    # DB에 데이터 자체가 없는 경우에만 1회 동기화 (10s 타임아웃)
+                    # 최초 로드: 캐시 없는 경우만 blocking sync
                     print(f"  [CalInfo] {qpu_name} 캐시 없음 — 최초 동기화 시도 (max 10s)")
-                    _exe = _cf.ThreadPoolExecutor(max_workers=1)
-                    try:
-                        _f = _exe.submit(_do_sync)
-                        try:
-                            _f.result(timeout=10)
-                        except _cf.TimeoutError:
-                            print(f"  [CalInfo] {qpu_name} sync timeout (10s)")
-                    finally:
-                        _exe.shutdown(wait=False)  # hang 중인 스레드 기다리지 않음
+                    _blocking_sync(10)
                     calibration = _cal.data.get(qpu_name, {})
 
             if not calibration:

@@ -1041,14 +1041,14 @@ async def uqi_calibration_info(
         def _do_sync():
             _cal.sync(qpu_name)
 
+        def _fire_background_sync():
+            """non-blocking: sync를 데몬 스레드에서 실행 (hang해도 응답 지연 없음)."""
+            _exe = _cf.ThreadPoolExecutor(max_workers=1)
+            _exe.submit(_do_sync)
+            _exe.shutdown(wait=False)
+
         def _blocking_sync(timeout_sec: int):
-            """sync를 별도 스레드에서 실행, timeout 초과 시 즉시 복귀.
-            wait=False로 shutdown해야 hang 중인 API 스레드가 asyncio 슬롯을 점유하지 않는다.
-            TTL 미만이면 API 호출 없이 즉시 반환 (_SYNC_CACHE는 서버 재시작 시 초기화되므로
-            _is_expired()로 판단 — last_updated 기반이라 재시작 후에도 유효)."""
-            if not _cal._is_expired(qpu_name):
-                print(f"  [CalInfo] {qpu_name} TTL 유효 (last_updated 기준), sync 스킵")
-                return
+            """blocking: sync 완료/timeout까지 대기 후 반환."""
             _exe = _cf.ThreadPoolExecutor(max_workers=1)
             try:
                 _f = _exe.submit(_do_sync)
@@ -1057,18 +1057,28 @@ async def uqi_calibration_info(
                 except _cf.TimeoutError:
                     print(f"  [CalInfo] {qpu_name} sync timeout ({timeout_sec}s)")
             finally:
-                _exe.shutdown(wait=False)  # ← 핵심: 행 중인 API 스레드를 기다리지 않고 즉시 복귀
+                _exe.shutdown(wait=False)  # hang 중인 스레드 기다리지 않음
 
         try:
+            calibration = _cal.data.get(qpu_name, {})
+
             if refresh:
-                # refresh=True: TTL 만료 시에만 실제 API sync, 미만이면 캐시 즉시 반환
-                print(f"  [CalInfo] {qpu_name} refresh 요청")
-                _blocking_sync(25)
-                calibration = _cal.data.get(qpu_name, {})
+                if calibration:
+                    # 캐시 있음 → 즉시 반환, 만료됐으면 백그라운드 sync (non-blocking)
+                    # IBM/Rigetti API가 느려도 UI가 block되지 않는다
+                    if _cal._is_expired(qpu_name):
+                        print(f"  [CalInfo] {qpu_name} TTL 만료 — 백그라운드 sync 트리거")
+                        _fire_background_sync()
+                    else:
+                        print(f"  [CalInfo] {qpu_name} TTL 유효 — 캐시 반환")
+                else:
+                    # 캐시 없음 → blocking sync (돌려줄 데이터가 없으므로)
+                    print(f"  [CalInfo] {qpu_name} 캐시 없음(refresh) — sync 대기 (max 15s)")
+                    _blocking_sync(15)
+                    calibration = _cal.data.get(qpu_name, {})
             else:
-                # refresh=False: 캐시 우선 반환, 없을 때만 1회 동기화
-                calibration = _cal.data.get(qpu_name, {})
                 if not calibration:
+                    # refresh=False + 캐시 없음 → 최초 1회 blocking sync
                     print(f"  [CalInfo] {qpu_name} 캐시 없음 — 최초 동기화 시도 (max 10s)")
                     _blocking_sync(10)
                     calibration = _cal.data.get(qpu_name, {})

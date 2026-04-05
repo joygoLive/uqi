@@ -1210,6 +1210,8 @@ async function _fetchQPUData(isBackground) {
       for (const qpu of qpus) {
         await fetchDetail(qpu);
       }
+      // per-qubit 데이터 포함 캐시 저장 (박스플롯 등 Deep Analysis 복원용)
+      _saveQPUCache(qpus, _qpuData);
       renderQPUDeepAnalysis();
     })();
   } catch(e) {

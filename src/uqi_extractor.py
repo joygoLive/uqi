@@ -626,7 +626,9 @@ try:
             return None
 
         n_q = max(qubit_row.keys()) + 1
-        if n_qubits_hint and n_qubits_hint > n_q:
+        # n_qubits_hint는 draw가 qubit row를 감지하지 못했을 때만 fallback으로 사용
+        # (int 인자 중 max가 루프 카운트일 수 있으므로 draw 결과를 우선)
+        if not qubit_row and n_qubits_hint:
             n_q = n_qubits_hint
 
         # Step 4: build per-qubit wire by concatenating across pages

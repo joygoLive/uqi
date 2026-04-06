@@ -769,7 +769,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="font-size:10px;color:var(--text3)">Status</span>
                 <select id="jh-status" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="loadJobHistory()">
+                  onchange="_jobHistoryPage=1; loadJobHistory()">
                   <option value="">All</option>
                   <option value="active">Active</option>
                   <option value="done">Done</option>
@@ -780,7 +780,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="font-size:10px;color:var(--text3)">Period</span>
                 <select id="jh-days" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="loadJobHistory()">
+                  onchange="_jobHistoryPage=1; loadJobHistory()">
                   <option value="0">All time</option>
                   <option value="1" selected>Today</option>
                   <option value="7">Last 7 days</option>
@@ -790,13 +790,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <div style="display:flex;align-items:center;gap:6px">
                 <span style="font-size:10px;color:var(--text3)">Show</span>
                 <select id="jh-limit" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="loadJobHistory()">
+                  onchange="_jobHistoryPage=1; loadJobHistory()">
                   <option value="20">20</option>
                   <option value="50" selected>50</option>
                   <option value="100">100</option>
                 </select>
               </div>
-              <button class="btn-run" id="btn-job-refresh" onclick="loadJobHistory()"
+              <button class="btn-run" id="btn-job-refresh" onclick="_jobHistoryPage=1; loadJobHistory()"
                 style="padding:4px 14px;font-size:10px;min-width:0;margin-left:auto">↻ Refresh</button>
             </div>
             <div class="step-result" id="result-job-history"><div class="empty-state">Click Refresh to load jobs</div></div>
@@ -1098,6 +1098,7 @@ async function loadQPUDashboard(forceRefresh) {
   if (cache && !forceRefresh) {
     _qpuData = cache.data;
     renderQPUGrid(cache.qpus);
+    _populateQPUSelectors(cache.qpus);  // 캐시에서 즉시 셀렉터 채우기
     renderQPUDeepAnalysis();
     _renderCacheTimestamp(cache);
 
@@ -1154,6 +1155,9 @@ async function _fetchQPUData(isBackground) {
     const listRes = await callTool('uqi_list_qpus', {});
     const listData = JSON.parse(getResultText(listRes));
     const qpus = listData.qpus || [];
+
+    // 셀렉터 즉시 채우기 (별도 loadQPUSelectors 호출 불필요 — 경쟁조건 방지)
+    _populateQPUSelectors(qpus);
 
     // Step2: 스켈레톤 렌더링 (background 모드에서는 기존 데이터 보존 — hang QPU 카드 보호)
     if (isBackground !== 'background') {
@@ -2768,29 +2772,30 @@ function _renderBoxplotChart(qpus, metric) {
 // ─────────────────────────────────────────────────────────
 // QPU Selector population
 // ─────────────────────────────────────────────────────────
+function _populateQPUSelectors(qpus) {
+  if (!qpus || !qpus.length) return;
+  const selectors = ['global-qpu', 'rag-qpu'];
+  selectors.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const cur = el.value;
+    const prefix = id === 'rag-qpu' ? '<option value="">All QPUs</option>' : '';
+    el.innerHTML = prefix + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+    if ([...el.options].some(o=>o.value===cur)) el.value=cur;
+    else if (id === 'rag-qpu') el.value = '';
+  });
+  // QPU Submit selector
+  const qpuSel = document.getElementById('qpu-qpu');
+  if (qpuSel) {
+    const cur = qpuSel.value;
+    qpuSel.innerHTML = '<option value="auto">Auto (Recommended)</option>' + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+    if ([...qpuSel.options].some(o=>o.value===cur)) qpuSel.value=cur;
+  }
+}
+
 async function loadQPUSelectors() {
-  try {
-    const res = await callTool('uqi_list_qpus', {});
-    const data = JSON.parse(getResultText(res));
-    const qpus = data.qpus || [];
-    const selectors = ['global-qpu', 'rag-qpu'];
-    selectors.forEach(id => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const cur = el.value;
-      const prefix = id === 'rag-qpu' ? '<option value="">All QPUs</option>' : '';
-      el.innerHTML = prefix + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
-      if ([...el.options].some(o=>o.value===cur)) el.value=cur;
-      else if (id === 'rag-qpu') el.value = '';
-    });
-    // QPU Submit selector
-    const qpuSel = document.getElementById('qpu-qpu');
-    if (qpuSel) {
-      const cur = qpuSel.value;
-      qpuSel.innerHTML = '<option value="auto">Auto (Recommended)</option>' + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
-      if ([...qpuSel.options].some(o=>o.value===cur)) qpuSel.value=cur;
-    }
-  } catch(e) {}
+  // _fetchQPUData / loadQPUDashboard(cache) 에서 _populateQPUSelectors를 이미 호출함
+  // 이 함수는 호환성 유지를 위해 남겨둠
 }
 
 // ─────────────────────────────────────────────────────────
@@ -2958,6 +2963,9 @@ function getQPU() { return document.getElementById('global-qpu').value; }
 function elapsed(t0) { return ((Date.now()-t0)/1000).toFixed(2)+'s'; }
 
 // ── Analyze ──
+let _lastAnalyzeData  = null;
+let _lastOptimizeData = null;
+
 async function runAnalyze() {
   const f = getSelectedFile();
   if (!f) { alert('Please select or upload an algorithm file'); return; }
@@ -2968,6 +2976,7 @@ async function runAnalyze() {
     const res = await callTool('uqi_analyze', { algorithm_file: f, qpu_name: getQPU() });
     const data = JSON.parse(getResultText(res));
     if (data.error) { setStepResult('analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('analyze','error'); return; }
+    _lastAnalyzeData = data;
     setStepResult('analyze', renderAnalyze(data, elapsed(t0)));
     _addCacheBadge('analyze', f, getQPU(), data._cached);
     setBadge('analyze','done');
@@ -3050,6 +3059,7 @@ async function runOptimize() {
     });
     const data = JSON.parse(getResultText(res));
     if (data.error) { setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('optimize','error'); return; }
+    _lastOptimizeData = data;
     setStepResult('optimize', renderOptimize(data, elapsed(t0)));
     _addCacheBadge('optimize', f, getQPU(), data._cached);
     setBadge('optimize','done');
@@ -3065,16 +3075,22 @@ function renderOptimize(data, el) {
     if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
     const gRed = r.gate_reduction!=null?(r.gate_reduction*100).toFixed(1)+'%':'—';
     const dRed = r.depth_reduction!=null?(r.depth_reduction*100).toFixed(1)+'%':'—';
+    const gRedCls = r.gate_reduction > 0 ? 'good' : r.gate_reduction < 0 ? 'warn' : 'neutral';
+    const dRedCls = r.depth_reduction > 0 ? 'good' : r.depth_reduction < 0 ? 'warn' : 'neutral';
     const qasmId = `opt-qasm-${name.replace(/\W/g,'_')}`;
+    const hasPhysical = r.opt_gates != null;
     html += `
       <div class="section-divider">${name}</div>
       <div class="metric-grid">
         <div class="metric-item"><div class="metric-label">Combination</div><div class="metric-value neutral" style="font-size:11px">${r.combination||'—'}</div></div>
-        <div class="metric-item"><div class="metric-label">Gate Reduction</div><div class="metric-value ${r.gate_reduction>0?'good':'neutral'}">${gRed}</div></div>
-        <div class="metric-item"><div class="metric-label">Depth Reduction</div><div class="metric-value ${r.depth_reduction>0?'good':'neutral'}">${dRed}</div></div>
-        <div class="metric-item"><div class="metric-label">Opt Gates</div><div class="metric-value neutral">${r.opt1_gates??'—'}</div></div>
-        <div class="metric-item"><div class="metric-label">Opt Depth</div><div class="metric-value neutral">${r.opt1_depth??'—'}</div></div>
-        <div class="metric-item"><div class="metric-label">Time</div><div class="metric-value neutral">${r.opt_time_sec!=null?r.opt_time_sec.toFixed(2)+'s':'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Gate Reduction</div><div class="metric-value ${gRedCls}">${gRed}</div></div>
+        <div class="metric-item"><div class="metric-label">Depth Reduction</div><div class="metric-value ${dRedCls}">${dRed}</div></div>
+        <div class="metric-item"><div class="metric-label">Stage1 Gates</div><div class="metric-value neutral">${r.opt1_gates??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Stage1 Depth</div><div class="metric-value neutral">${r.opt1_depth??'—'}</div></div>
+        ${hasPhysical ? `
+        <div class="metric-item"><div class="metric-label" style="color:var(--accent)">Physical Gates</div><div class="metric-value neutral">${r.opt_gates}</div></div>
+        <div class="metric-item"><div class="metric-label" style="color:var(--accent)">Physical Depth</div><div class="metric-value neutral">${r.opt_depth}</div></div>` : ''}
+        <div class="metric-item"><div class="metric-label">Time</div><div class="metric-value neutral">${r.opt_time_sec!=null?(r.opt_time_sec+(r.map_time_sec||0)).toFixed(2)+'s':'—'}</div></div>
       </div>
       ${r.qasm ? (()=>{
         const _k = `${name}_optimized`;
@@ -3599,7 +3615,9 @@ function _stopAutoPoll(jobId) {
 // ─── QPU Job Manager ───────────────────────────────────
 let _jobHistoryBusy = false;
 let _jobHistoryLastHtml = null; // 마지막 정상 렌더링 결과 캐시
-async function loadJobHistory(skipCloudPoll = false) {
+let _jobHistoryPage = 1;        // 현재 페이지 (1-based)
+async function loadJobHistory(skipCloudPoll = false, page = null) {
+  if (page !== null) _jobHistoryPage = page;
   if (_jobHistoryBusy) return; // 이미 로딩 중이면 중복 실행 무시
   const el  = document.getElementById('result-job-history');
   const btn = document.getElementById('btn-job-refresh');
@@ -3610,13 +3628,15 @@ async function loadJobHistory(skipCloudPoll = false) {
   const statusFilter = document.getElementById('jh-status')?.value || '';
   const daysFilter   = parseInt(document.getElementById('jh-days')?.value  || '0');
   const limitVal     = parseInt(document.getElementById('jh-limit')?.value || '50');
+  const offset       = (_jobHistoryPage - 1) * limitVal;
 
   try {
-    const res  = await callTool('uqi_job_list', { limit: limitVal, status: statusFilter, days: daysFilter });
+    const res  = await callTool('uqi_job_list', { limit: limitVal, status: statusFilter, days: daysFilter, offset });
     const data = JSON.parse(getResultText(res));
     if (!data.ok) { el.innerHTML = `<div class="error-state">⚠ ${escHtml(data.error||'조회 실패')}</div>`; return; }
 
-    const jobs = data.jobs || [];
+    const jobs  = data.jobs || [];
+    const total = data.total ?? jobs.length;
 
     // 활성 job cloud 상태 자동 동기화 (필터 무관하게 all time 기준으로 active만 따로 조회)
     if (!skipCloudPoll) {
@@ -3646,19 +3666,19 @@ async function loadJobHistory(skipCloudPoll = false) {
       }
     }
 
-    const rendered = renderJobHistory(jobs, data.filter);
+    const rendered = renderJobHistory(jobs, data.filter, total);
     _jobHistoryLastHtml = rendered; // 정상 결과 캐시
     el.innerHTML = rendered;
     const active = jobs.filter(j => ['submitted','running','error'].includes(j.status)).length;
     // setBadge 대신 직접 조작 (setBadge는 done/error 이진 상태만 지원)
     const badge = document.getElementById('badge-job-history');
     if (badge) {
-      if (!jobs.length) {
+      if (!total) {
         badge.style.display = 'none';
       } else {
         badge.style.display = 'inline';
         badge.className = 'step-badge ' + (active > 0 ? 'running' : 'done');
-        badge.textContent = active > 0 ? `${active} active` : `${jobs.length} jobs`;
+        badge.textContent = active > 0 ? `${active} active` : `${total} jobs`;
       }
     }
   } catch(e) {
@@ -3674,14 +3694,62 @@ async function loadJobHistory(skipCloudPoll = false) {
   }
 }
 
-function renderJobHistory(jobs, filter = {}) {
+function _renderPagination(total, limit, offset) {
+  const totalPages  = Math.ceil(total / limit);
+  if (totalPages <= 1) return '';
+  const currentPage = Math.floor(offset / limit) + 1;
+
+  // 표시할 페이지 번호 목록 생성 (ellipsis 포함)
+  let pageNums = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pageNums.push(i);
+  } else {
+    const set = new Set([1, 2, currentPage - 1, currentPage, currentPage + 1, totalPages - 1, totalPages]
+      .filter(p => p >= 1 && p <= totalPages));
+    const sorted = [...set].sort((a, b) => a - b);
+    let prev = null;
+    for (const p of sorted) {
+      if (prev !== null && p - prev > 1) pageNums.push('…');
+      pageNums.push(p);
+      prev = p;
+    }
+  }
+
+  const btnBase = 'font-family:var(--font-mono);font-size:10px;border-radius:4px;padding:3px 8px;cursor:pointer;transition:all 0.15s;border:1px solid var(--border);background:var(--surface2);color:var(--text2)';
+  const btnActive = 'background:var(--accent);color:#000;border-color:var(--accent)';
+  const btnDisabled = 'opacity:0.3;cursor:not-allowed';
+
+  const prevDisabled = currentPage === 1;
+  const nextDisabled = currentPage === totalPages;
+
+  const pageBtn = (p) => {
+    if (p === '…') return `<span style="font-size:10px;color:var(--text3);padding:0 3px">…</span>`;
+    const isActive = p === currentPage;
+    return `<button onclick="loadJobHistory(false,${p})" style="${btnBase};${isActive ? btnActive : ''}" ${isActive ? 'disabled' : ''}>${p}</button>`;
+  };
+
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px;flex-wrap:wrap">
+    <button onclick="loadJobHistory(false,${currentPage - 1})" ${prevDisabled ? 'disabled' : ''} style="${btnBase};${prevDisabled ? btnDisabled : ''}">← Prev</button>
+    ${pageNums.map(pageBtn).join('')}
+    <button onclick="loadJobHistory(false,${currentPage + 1})" ${nextDisabled ? 'disabled' : ''} style="${btnBase};${nextDisabled ? btnDisabled : ''}">Next →</button>
+  </div>`;
+}
+
+function renderJobHistory(jobs, filter = {}, total = null) {
+  const offset     = filter.offset ?? 0;
+  const limit      = filter.limit  ?? jobs.length;
+  const realTotal  = total ?? jobs.length;
   const filterDesc = [
     filter.status && filter.status !== 'all' ? `Status: ${filter.status}` : 'All statuses',
     filter.days   && filter.days > 0 ? `Last ${filter.days}d` : 'All time',
-    `${filter.limit || jobs.length} max`,
   ].join(' · ');
-  if (!jobs.length) return `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc}</div><div class="empty-state">No jobs found</div>`;
-  const summary = `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${jobs.length} job${jobs.length!==1?'s':''}</div>`;
+  const rangeFrom  = realTotal === 0 ? 0 : offset + 1;
+  const rangeTo    = offset + jobs.length;
+  const rangeText  = realTotal > limit
+    ? `Showing ${rangeFrom}–${rangeTo} of ${realTotal} jobs`
+    : `${realTotal} job${realTotal !== 1 ? 's' : ''}`;
+  if (!jobs.length) return `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${rangeText}</div><div class="empty-state">No jobs found</div>`;
+  const summary = `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${rangeText}</div>`;
 
   const statusBadge = (s) => {
     const cls = `job-status-${s}`;
@@ -3752,6 +3820,7 @@ function renderJobHistory(jobs, filter = {}) {
     return [mainRow];
   }).join('');
 
+  const pagination = _renderPagination(realTotal, limit, offset);
   return summary + actionBar + `<div style="overflow-x:auto">
     <table class="job-table">
       <thead><tr>
@@ -3759,7 +3828,7 @@ function renderJobHistory(jobs, filter = {}) {
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-  </div>`;
+  </div>` + pagination;
 }
 
 const _expandedRows = new Set();
@@ -3906,30 +3975,57 @@ function renderQPUAnalysis(data, el) {
     html += `</div>`;
   }
 
-  // ── circuit_info ──
-  if (data.circuit_info && Object.keys(data.circuit_info).length) {
-    html += `<div class="section-divider">Circuit Info</div>`;
-    html += `<div class="metric-grid">`;
-    for (const [name, c] of Object.entries(data.circuit_info)) {
-      if (!c || typeof c !== 'object') continue;
-      html += `
-        <div class="metric-item">
-          <div class="metric-label">${escHtml(name)}</div>
-          <div style="font-size:10px;color:var(--text2);margin-top:4px;line-height:1.7">
-            ${c.num_qubits   != null ? `<div>${c.num_qubits}q &nbsp;·&nbsp; ${c.total_gates ?? '—'} gates &nbsp;·&nbsp; depth ${c.depth ?? '—'}</div>` : ''}
-            ${c.combination  ? `<div style="color:var(--accent);font-size:9px">transpile: ${escHtml(c.combination)}</div>` : ''}
+  // ── Pre-flight: 물리회로 복잡도 (트랜스파일 결과) ──
+  const circNames = new Set([
+    ...Object.keys(data.circuit_info || {}),
+    ...Object.keys(data.circuit_info_rec || {}),
+  ]);
+  if (circNames.size) {
+    html += `<div class="section-divider">Physical Circuit (Pre-flight)</div>`;
+    for (const name of circNames) {
+      const cSel = (data.circuit_info     || {})[name] || {};
+      const cRec = (data.circuit_info_rec || {})[name] || {};
+      html += `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:600;color:var(--accent);margin-bottom:8px">${escHtml(name)}</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">`;
+
+      if (Object.keys(cSel).length && !cSel.error) {
+        const fidCls = cSel.fidelity > 0.8 ? 'var(--success)' : cSel.fidelity > 0.5 ? 'var(--warn)' : 'var(--error)';
+        html += `<div style="background:var(--surface);border:1px solid rgba(0,212,255,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:9px;color:var(--accent);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px">✓ ${escHtml(selQpu)}</div>
+          <div style="font-size:10px;color:var(--text2);line-height:1.8">
+            <div style="color:var(--accent);font-size:9px;margin-bottom:2px">${escHtml(cSel.combination || '—')}</div>
+            <div>${cSel.num_qubits ?? '—'}q · ${cSel.total_gates ?? '—'} gates · depth ${cSel.depth ?? '—'}</div>
+            ${cSel.fidelity != null ? `<div>fidelity: <span style="color:${fidCls}">${cSel.fidelity.toFixed(4)}</span></div>` : ''}
+            ${cSel.exec_time_s != null && cSel.exec_time_s > 0 ? `<div style="color:var(--text3)">est. ${cSel.exec_time_s}s/shot</div>` : ''}
           </div>
         </div>`;
+      }
+
+      if (Object.keys(cRec).length && !cRec.error) {
+        const fidCls = cRec.fidelity > 0.8 ? 'var(--success)' : cRec.fidelity > 0.5 ? 'var(--warn)' : 'var(--error)';
+        html += `<div style="background:var(--surface);border:1px solid rgba(124,58,237,0.2);border-radius:6px;padding:8px 10px">
+          <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:5px">★ ${escHtml(recQpu)} (rec)</div>
+          <div style="font-size:10px;color:var(--text2);line-height:1.8">
+            <div style="color:var(--text3);font-size:9px;margin-bottom:2px">${escHtml(cRec.combination || '—')}</div>
+            <div>${cRec.num_qubits ?? '—'}q · ${cRec.total_gates ?? '—'} gates · depth ${cRec.depth ?? '—'}</div>
+            ${cRec.fidelity != null ? `<div>fidelity: <span style="color:${fidCls}">${cRec.fidelity.toFixed(4)}</span></div>` : ''}
+            ${cRec.exec_time_s != null && cRec.exec_time_s > 0 ? `<div style="color:var(--text3)">est. ${cRec.exec_time_s}s/shot</div>` : ''}
+          </div>
+        </div>`;
+      }
+
+      html += `</div></div>`;
     }
-    html += `</div>`;
   }
 
   // ── QPU Comparison 카드 그리드 ──
   if (data.qpu_comparison && Object.keys(data.qpu_comparison).length) {
     html += `<div class="section-divider">QPU Comparison</div>`;
+    // composite_score 기준 정렬 (없으면 fidelity fallback)
     const entries = Object.entries(data.qpu_comparison)
-      .sort((a,b) => (b[1].avg_fidelity||0) - (a[1].avg_fidelity||0));
-    const maxFid = Math.max(...entries.map(([,v]) => v.avg_fidelity || 0)) || 1;
+      .sort((a,b) => (b[1].composite_score || b[1].avg_fidelity || 0) - (a[1].composite_score || a[1].avg_fidelity || 0));
+    const maxScore = Math.max(...entries.map(([,v]) => v.composite_score || 0)) || 1;
 
     html += `<div class="qpu-cmp-grid">`;
     for (const [qpu, v] of entries) {
@@ -3941,9 +4037,19 @@ function renderQPUAnalysis(data, el) {
       const fidCls = fid == null ? '#6e7681' : fid > 0.8 ? 'var(--success)' : fid > 0.5 ? 'var(--warn)' : 'var(--error)';
       const q2e    = v.avg_2q_error != null ? (v.avg_2q_error * 100).toFixed(3) + '%' : '—';
       const t2     = v.avg_t2_ms    != null ? (v.avg_t2_ms * 1000).toFixed(0) + ' μs' : '—';
-      const exec   = v.total_exec_s != null && v.total_exec_s > 0 ? v.total_exec_s + 's' : '—';
+      const timeS  = v.total_exec_s;
+      const exec   = timeS != null && timeS > 0
+        ? (timeS >= 60 ? (timeS / 60).toFixed(1) + 'min' : timeS.toFixed(2) + 's')
+        : '—';
+      const execCls = timeS == null ? 'var(--text2)'
+        : timeS < 10    ? 'var(--success)'
+        : timeS < 120   ? 'var(--warn)'
+        : 'var(--error)';
+      const score   = v.composite_score;
+      const scoreStr = score != null ? score.toFixed(3) : '—';
+      const scoreCls = score == null ? '#6e7681' : score > 0.7 ? 'var(--success)' : score > 0.4 ? 'var(--warn)' : 'var(--error)';
       const queue  = v.pending_jobs != null ? v.pending_jobs + ' pending' : (v.queue_note || '—');
-      const fidBarW = fid != null ? Math.max(4, (fid / maxFid) * 100).toFixed(1) : '0';
+      const scoreBarW = score != null ? Math.max(4, (score / maxScore) * 100).toFixed(1) : '0';
       const cardCls = [
         'qpu-cmp-card',
         isRec ? 'is-recommended' : '',
@@ -3955,14 +4061,21 @@ function renderQPUAnalysis(data, el) {
         <div class="qpu-cmp-name">
           <span>${escHtml(qpu)}</span>
           ${isRec ? '<span class="qpu-cmp-tag rec">★ REC</span>' : ''}
-          ${isSel && !isRec ? '<span class="qpu-cmp-tag sel">✓ SEL</span>' : ''}
-          ${isSel && isRec  ? '<span class="qpu-cmp-tag sel">✓ SEL</span>' : ''}
+          ${isSel ? '<span class="qpu-cmp-tag sel">✓ SEL</span>' : ''}
           ${isOff ? '<span class="qpu-cmp-tag off">OFFLINE</span>' : ''}
         </div>
         <div class="qpu-cmp-rows">
           <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">Score</span>
+            <span class="qpu-cmp-rval" style="color:${scoreCls};font-weight:700">${scoreStr}</span>
+          </div>
+          <div class="qpu-cmp-row">
             <span class="qpu-cmp-rlabel">Fidelity</span>
             <span class="qpu-cmp-rval" style="color:${fidCls}">${fidStr}</span>
+          </div>
+          <div class="qpu-cmp-row">
+            <span class="qpu-cmp-rlabel">Est. Time</span>
+            <span class="qpu-cmp-rval" style="color:${execCls}">${exec}</span>
           </div>
           <div class="qpu-cmp-row">
             <span class="qpu-cmp-rlabel">2Q Error</span>
@@ -3973,16 +4086,12 @@ function renderQPUAnalysis(data, el) {
             <span class="qpu-cmp-rval" style="color:var(--text2)">${t2}</span>
           </div>
           <div class="qpu-cmp-row">
-            <span class="qpu-cmp-rlabel">Est. Time</span>
-            <span class="qpu-cmp-rval" style="color:var(--text2)">${exec}</span>
-          </div>
-          <div class="qpu-cmp-row">
             <span class="qpu-cmp-rlabel">Queue</span>
             <span class="qpu-cmp-rval" style="color:var(--text3);font-size:9px">${escHtml(String(queue))}</span>
           </div>
         </div>
         <div class="qpu-cmp-fid-bar">
-          <div class="qpu-cmp-fid-fill" style="width:${fidBarW}%;background:${fidCls}"></div>
+          <div class="qpu-cmp-fid-fill" style="width:${scoreBarW}%;background:${scoreCls}"></div>
         </div>
       </div>`;
     }

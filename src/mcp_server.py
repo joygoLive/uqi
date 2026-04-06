@@ -461,13 +461,15 @@ async def uqi_optimize(
 
             extractor, converter, framework = _extract_and_convert(algorithm_file)
             calibration = _get_calibration(qpu_name)
+            device_qubits = calibration.get("num_qubits", 0)
             optimizer   = UQIOptimizer(calibration=calibration)
             results     = {}
-            _should_cache = False
             for name, qasm in converter.qasm_results.items():
                 try:
                     qc     = QuantumCircuit.from_qasm_str(qasm)
-                    _should_cache = True
+                    if device_qubits and qc.num_qubits > device_qubits:
+                        results[name] = {"error": f"회로 큐비트({qc.num_qubits}q)가 {qpu_name} 장비({device_qubits}q)를 초과합니다. 트랜스파일 불가."}
+                        continue
                     result = optimizer.optimize(qc, qpu_name, combination=combination, verify=verify)
                     meta   = optimizer.collect_metadata(name, result, qpu_name)
                     _rag.add_optimization(meta)
@@ -487,6 +489,8 @@ async def uqi_optimize(
                         "depth_reduction": result.get("depth_reduction"),
                         "opt1_gates":      result.get("opt1_gates"),
                         "opt1_depth":      result.get("opt1_depth"),
+                        "opt_gates":       result.get("opt_gates"),
+                        "opt_depth":       result.get("opt_depth"),
                         "opt_time_sec":    result.get("opt_time_sec"),
                         "map_time_sec":    result.get("map_time_sec"),
                         "ok":              result.get("ok"),
@@ -511,7 +515,9 @@ async def uqi_optimize(
                         "transport":  ctx.get("transport", "unknown"),
                     }
                 )
-            if _should_cache:
+            # ok=True인 회로가 하나 이상 있을 때만 캐시 저장 (실패 결과 캐싱 방지)
+            _any_ok = any(r.get("ok") for r in results.values() if isinstance(r, dict))
+            if _any_ok:
                 _rag.set_cache(_cache_key, _result)
             return _result
         except Exception as e:
@@ -1470,7 +1476,17 @@ async def uqi_qpu_submit(
                             ops      = qc_opt.count_ops()
                             n_1q     = sum(v for k, v in ops.items() if k not in ['cx','cz','ecr','measure','reset','barrier','delay'])
                             n_2q     = sum(v for k, v in ops.items() if k in ['cx','cz','ecr'])
-                            n_qubits = qc_opt.num_qubits
+                            # 실제 사용된 큐비트만 카운트 (IBM 156q 가상 할당 문제 우회)
+                            _used_q  = set()
+                            for _inst in qc_opt.data:
+                                if _inst.operation.name in ['barrier']:
+                                    continue
+                                for _qb in _inst.qubits:
+                                    try:
+                                        _used_q.add(qc_opt.find_bit(_qb).index)
+                                    except Exception:
+                                        pass
+                            n_qubits = len(_used_q) if _used_q else qc_opt.num_qubits
                             q1_ns    = calibration.get("avg_1q_ns") or 0
                             q2_ns_c  = calibration.get("avg_2q_ns") or 0
                             ro_ms    = calibration.get("avg_ro_ms") or 0
@@ -1522,7 +1538,7 @@ async def uqi_qpu_submit(
                             ))
     
                             qpu_analysis[qpu]["circuits"][name] = {
-                                "num_qubits":     qc_opt.num_qubits,
+                                "num_qubits":     n_qubits,  # 실제 사용 큐비트 (가상 할당 제외)
                                 "total_gates":    sum(qc_opt.count_ops().values()),
                                 "depth":          qc_opt.depth(),
                                 "two_q_gates":    n_2q,
@@ -1532,6 +1548,7 @@ async def uqi_qpu_submit(
                                 "fidelity":       est_fidelity,
                                 "t2_ratio":       t2_ratio,
                                 "t2_warning":     (t2_ratio or 0) > 1,
+                                "combination":    result.get("combination"),
                             }
                             qpu_analysis[qpu]["total_cost"] += total_exec_ms
                             qpu_circuits[qpu][name] = qc_opt
@@ -1552,20 +1569,36 @@ async def uqi_qpu_submit(
                         round(sum(fidelities) / len(fidelities), 4) if fidelities else None
                     )
     
-                # ── Phase 2: 추천 QPU 결정 (캘리브레이션 기반) ──
+                # ── Phase 2: 추천 QPU 결정 (Fidelity + 실행시간 복합 점수) ──
+                # score = 0.4 * fidelity + 0.6 * (TIME_REF / (TIME_REF + exec_time_s))
+                # TIME_REF=30s: 30초 기준 time_score=0.5; 3100초는 ~0.01로 급격히 페널티
+                _TIME_REF = 30.0
+                def _qpu_composite_score(a):
+                    fidelity   = a.get("avg_fidelity") or 0
+                    total_ms   = a.get("total_cost") or 0
+                    time_s     = total_ms / 1000.0
+                    time_score = _TIME_REF / (_TIME_REF + time_s)
+                    return 0.4 * fidelity + 0.6 * time_score
+
                 recommended_qpu = max(
                     (q for q in qpu_analysis
                      if qpu_analysis[q]["avg_fidelity"] and not qpu_analysis[q].get("_skip")),
-                    key=lambda q: qpu_analysis[q]["avg_fidelity"] or 0,
+                    key=lambda q: _qpu_composite_score(qpu_analysis[q]),
                     default=SUPPORTED_QPUS[0]
                 )
-    
+                rec_score = _qpu_composite_score(qpu_analysis.get(recommended_qpu, {}))
+
                 # Phase 3 제거 — 모든 QPU Fidelity를 캘리브레이션 기반으로 일관성 있게 계산
                 # 노이즈 시뮬은 별도 Pipeline > Noise Simulation 스텝에서 확인
-    
+
                 if qpu_name == "auto":
                     selected_qpu   = recommended_qpu
-                    selection_note = f"UQI 추천: {recommended_qpu} (최고 Fidelity)"
+                    rec_time_s = (qpu_analysis.get(recommended_qpu, {}).get("total_cost") or 0) / 1000.0
+                    selection_note = (
+                        f"UQI 추천: {recommended_qpu} "
+                        f"(Fidelity {qpu_analysis.get(recommended_qpu,{}).get('avg_fidelity', 0):.4f}, "
+                        f"Est. Time {rec_time_s:.1f}s, Score {rec_score:.3f})"
+                    )
                     disadvantages  = []
                 else:
                     selected_qpu = qpu_name
@@ -1598,7 +1631,19 @@ async def uqi_qpu_submit(
                         if sel_t2 < rec_t2 and rec_t2 > 0:
                             ratio = round(rec_t2 / sel_t2, 1)
                             disadvantages.append(f"T2 코히어런스 {ratio}배 짧음 ({sel_t2*1000:.1f}μs vs {rec_t2*1000:.1f}μs for {recommended_qpu})")
-                        selection_note = f"사용자 선택: {selected_qpu} (UQI 추천: {recommended_qpu})"
+                        # 실행 시간 비교
+                        sel_time_s = (sel.get("total_cost") or 0) / 1000.0
+                        rec_time_s = (rec.get("total_cost") or 0) / 1000.0
+                        if sel_time_s > rec_time_s * 2 and rec_time_s > 0:
+                            ratio = round(sel_time_s / rec_time_s, 1)
+                            disadvantages.append(
+                                f"실행 시간 {ratio}배 느림 ({sel_time_s:.1f}s vs {rec_time_s:.1f}s for {recommended_qpu})"
+                            )
+                        sel_score = _qpu_composite_score(sel)
+                        selection_note = (
+                            f"사용자 선택: {selected_qpu} (Score {sel_score:.3f}) "
+                            f"/ UQI 추천: {recommended_qpu} (Score {rec_score:.3f})"
+                        )
                     else:
                         selection_note = f"사용자 선택 = UQI 추천: {selected_qpu} ✓"
     
@@ -1644,12 +1689,16 @@ async def uqi_qpu_submit(
                     qpu_status_info = _get_qpu_status_cached()
                     qpu_summary = {}
                     for qpu in available_qpus:
-                        a = qpu_analysis.get(qpu, {})
+                        a = qpu_analysis.get(qpu)
+                        if a is None:
+                            # Phase 1에서 스킵된 QPU (아날로그/포토닉 등) 제외
+                            continue
                         s = qpu_status_info.get(qpu, {})
                         qpu_summary[qpu] = {
                             "avg_fidelity":  a.get("avg_fidelity"),
                             "total_exec_ms": a.get("total_cost"),
                             "total_exec_s":  round((a.get("total_cost") or 0) / 1000, 2),
+                            "composite_score": round(_qpu_composite_score(a), 4),
                             "avg_2q_error":  a.get("calibration", {}).get("avg_2q_error"),
                             "avg_t2_ms":     a.get("calibration", {}).get("avg_t2_ms"),
                             "recommended":   qpu == recommended_qpu,
@@ -1658,16 +1707,18 @@ async def uqi_qpu_submit(
                             "pending_jobs":  s.get("pending_jobs"),
                             "queue_note":    s.get("note", ""),
                         }
-    
+
+                    rec_info = qpu_analysis.get(recommended_qpu, {})
                     _result = _safe_json({
-                        "status":          "awaiting_confirmation",
-                        "message":         "\n".join(msg_lines),
-                        "selected_qpu":    selected_qpu,
-                        "recommended_qpu": recommended_qpu,
-                        "selection_note":  selection_note,
-                        "disadvantages":   disadvantages,
-                        "qpu_comparison":  qpu_summary,
-                        "circuit_info":    sel_info.get("circuits", {}),
+                        "status":           "awaiting_confirmation",
+                        "message":          "\n".join(msg_lines),
+                        "selected_qpu":     selected_qpu,
+                        "recommended_qpu":  recommended_qpu,
+                        "selection_note":   selection_note,
+                        "disadvantages":    disadvantages,
+                        "qpu_comparison":   qpu_summary,
+                        "circuit_info":     sel_info.get("circuits", {}),
+                        "circuit_info_rec": rec_info.get("circuits", {}) if recommended_qpu != selected_qpu else {},
                     })
                     _rag.set_cache(_submit_cache_key, _result)
                     return _result
@@ -1978,8 +2029,9 @@ async def uqi_job_list(
     limit:  int = 50,
     status: str = "",    # "" = 전체, "active" = submitted+running, "done", "cancelled", "error"
     days:   int = 0,     # 0 = 전체, N = 최근 N일
+    offset: int = 0,     # 페이지네이션 오프셋
 ) -> str:
-    """QPU job 이력 조회. limit: 건수, status: 상태 필터, days: 기간 필터(일)"""
+    """QPU job 이력 조회. limit: 건수, status: 상태 필터, days: 기간 필터(일), offset: 페이지네이션"""
     def _run():
         try:
             import sqlite3 as _sq
@@ -2005,11 +2057,14 @@ async def uqi_job_list(
                 params.append(cutoff)
 
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-            params.append(limit)
+
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM jobs {where}", params
+            ).fetchone()[0]
 
             rows = conn.execute(
-                f"SELECT * FROM jobs {where} ORDER BY submitted_at DESC LIMIT ?",
-                params
+                f"SELECT * FROM jobs {where} ORDER BY submitted_at DESC LIMIT ? OFFSET ?",
+                params + [limit, offset]
             ).fetchall()
             conn.close()
 
@@ -2023,7 +2078,8 @@ async def uqi_job_list(
 
             return _json.dumps({
                 "ok": True, "jobs": result, "count": len(result),
-                "filter": {"status": status or "all", "days": days, "limit": limit},
+                "total": total,
+                "filter": {"status": status or "all", "days": days, "limit": limit, "offset": offset},
             }, ensure_ascii=False, default=str)
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})

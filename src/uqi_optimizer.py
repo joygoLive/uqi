@@ -779,6 +779,8 @@ class UQIOptimizer:
             result["circuit"]         = qc_mapped
             result["gate_reduction"]  = gate_red
             result["depth_reduction"] = depth_red
+            result["opt_gates"]       = opt_gates
+            result["opt_depth"]       = opt_depth
             result["ok"]              = True
 
             opt1_gates = result.get("opt1_gates", orig_gates)

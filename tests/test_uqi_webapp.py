@@ -471,7 +471,9 @@ class TestRenderNoise:
                 qpu_name: 'ibm_fez', shots: 1024
             }, '1s')
         """)
-        assert "00:600" in result
+        # 카운트 바 방식: 비트문자열과 퍼센트 모두 포함됨
+        assert "00" in result
+        assert "%" in result
 
 
 # ─────────────────────────────────────────────────────────────

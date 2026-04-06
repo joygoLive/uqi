@@ -414,7 +414,7 @@ class TestCollectMetadata:
         }
         meta = self.opt.collect_metadata("test_circuit", result, "ibm_fez")
         required = {
-            "circuit_name", "qpu_name", "combination", "opt_engine",
+            "circuit_name", "algorithm_file", "qpu_name", "combination", "opt_engine",
             "map_engine", "num_qubits", "orig_gates", "orig_depth",
             "gate_reduction", "depth_reduction", "ok", "timestamp"
         }
@@ -441,6 +441,15 @@ class TestCollectMetadata:
         meta = self.opt.collect_metadata("c", {"profile": {}}, "ibm_fez")
         assert meta["num_qubits"] is None
         assert meta["orig_gates"] is None
+
+    def test_TC087_algorithm_file_stored(self):
+        meta = self.opt.collect_metadata("c", {"profile": {}}, "ibm_fez",
+                                         algorithm_file="alg-files/test.py")
+        assert meta["algorithm_file"] == "alg-files/test.py"
+
+    def test_TC088_algorithm_file_defaults_to_empty(self):
+        meta = self.opt.collect_metadata("c", {"profile": {}}, "ibm_fez")
+        assert meta["algorithm_file"] == ""
 
 
 if __name__ == "__main__":

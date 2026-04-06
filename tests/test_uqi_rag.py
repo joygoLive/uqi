@@ -365,19 +365,19 @@ class TestSearchBestCombination:
         yield
         _cleanup(self.rag_f, self.cache_f)
 
-    def test_TC071_no_records_returns_none(self):
-        result = self.rag.search_best_combination(4, 100, "ibm_fez")
-        assert result is None
+    def test_TC071_no_records_returns_empty_list(self):
+        result = self.rag.search_best_combination(qpu_name="ibm_fez")
+        assert result == []
 
-    def test_TC072_no_similar_qubits_returns_none(self):
+    def test_TC072_qubit_filter_excludes_larger(self):
         self.rag.add("optimization", {
             "qpu_name": "ibm_fez", "num_qubits": 20,
             "gate_reduction": 0.3, "ok": True
         })
-        result = self.rag.search_best_combination(4, 100, "ibm_fez")
-        assert result is None
+        result = self.rag.search_best_combination(num_qubits=4, qpu_name="ibm_fez")
+        assert result == []
 
-    def test_TC073_returns_best_gate_reduction(self):
+    def test_TC073_sorted_by_gate_reduction_descending(self):
         self.rag.add("optimization", {
             "qpu_name": "ibm_fez", "num_qubits": 4,
             "gate_reduction": 0.2, "ok": True
@@ -386,17 +386,98 @@ class TestSearchBestCombination:
             "qpu_name": "ibm_fez", "num_qubits": 5,
             "gate_reduction": 0.5, "ok": True
         })
-        result = self.rag.search_best_combination(4, 100, "ibm_fez")
-        assert result is not None
-        assert result["data"]["gate_reduction"] == 0.5
+        result = self.rag.search_best_combination(qpu_name="ibm_fez")
+        assert len(result) == 2
+        assert result[0]["gate_reduction"] == 0.5
 
     def test_TC074_only_ok_true_considered(self):
         self.rag.add("optimization", {
             "qpu_name": "ibm_fez", "num_qubits": 4,
             "gate_reduction": 0.9, "ok": False
         })
-        result = self.rag.search_best_combination(4, 100, "ibm_fez")
-        assert result is None
+        result = self.rag.search_best_combination(qpu_name="ibm_fez")
+        assert result == []
+
+    def test_TC075_suspicious_records_excluded(self):
+        # empty circuit (opt1_gates=0) should be excluded
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "num_qubits": 4,
+            "gate_reduction": 1.0, "opt1_gates": 0,
+            "equivalent": None, "ok": True
+        })
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "num_qubits": 4,
+            "gate_reduction": 0.4, "opt1_gates": 10,
+            "equivalent": True, "ok": True
+        })
+        result = self.rag.search_best_combination(qpu_name="ibm_fez")
+        assert len(result) == 1
+        assert result[0]["gate_reduction"] == 0.4
+
+    def test_TC076_limit_respected(self):
+        for i in range(5):
+            self.rag.add("optimization", {
+                "qpu_name": "ibm_fez", "num_qubits": 4,
+                "gate_reduction": i * 0.1, "ok": True
+            })
+        result = self.rag.search_best_combination(qpu_name="ibm_fez", limit=3)
+        assert len(result) == 3
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-077x: search_suspicious_optimizations
+# ─────────────────────────────────────────────────────────────
+
+class TestSearchSuspiciousOptimizations:
+
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.rag, self.rag_f, self.cache_f = _tmp_rag()
+        yield
+        _cleanup(self.rag_f, self.cache_f)
+
+    def test_TC0771_empty_circuit_flagged(self):
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "opt1_gates": 0,
+            "gate_reduction": 1.0, "equivalent": None, "ok": True
+        })
+        result = self.rag.search_suspicious_optimizations()
+        assert len(result) == 1
+        assert "empty_circuit" in result[0]["_suspicious_reasons"]
+
+    def test_TC0772_not_equivalent_flagged(self):
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "opt1_gates": 10,
+            "gate_reduction": 0.3, "equivalent": False, "ok": True
+        })
+        result = self.rag.search_suspicious_optimizations()
+        assert len(result) == 1
+        assert "not_equivalent" in result[0]["_suspicious_reasons"]
+
+    def test_TC0773_unverified_full_reduction_flagged(self):
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "opt1_gates": 5,
+            "gate_reduction": 1.0, "equivalent": None, "ok": True
+        })
+        result = self.rag.search_suspicious_optimizations()
+        assert len(result) == 1
+        assert "unverified_full_reduction" in result[0]["_suspicious_reasons"]
+
+    def test_TC0774_normal_record_not_flagged(self):
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "opt1_gates": 20,
+            "gate_reduction": 0.4, "equivalent": True, "ok": True
+        })
+        result = self.rag.search_suspicious_optimizations()
+        assert result == []
+
+    def test_TC0775_qpu_filter_applied(self):
+        self.rag.add("optimization", {
+            "qpu_name": "ibm_fez", "opt1_gates": 0,
+            "gate_reduction": 1.0, "equivalent": None, "ok": True
+        })
+        result = self.rag.search_suspicious_optimizations(qpu_name="iqm_garnet")
+        assert result == []
 
 
 # ─────────────────────────────────────────────────────────────

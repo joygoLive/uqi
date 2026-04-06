@@ -471,7 +471,7 @@ async def uqi_optimize(
                         results[name] = {"error": f"회로 큐비트({qc.num_qubits}q)가 {qpu_name} 장비({device_qubits}q)를 초과합니다. 트랜스파일 불가."}
                         continue
                     result = optimizer.optimize(qc, qpu_name, combination=combination, verify=verify)
-                    meta   = optimizer.collect_metadata(name, result, qpu_name)
+                    meta   = optimizer.collect_metadata(name, result, qpu_name, algorithm_file)
                     _rag.add_optimization(meta)
                     qc_final = result.get("circuit")
                     opt_qasm = None
@@ -931,10 +931,11 @@ async def uqi_rag_search(
             if query_type == "stats":
                 return _safe_json(_rag.stats())
             elif query_type == "best_combination":
-                r = _rag.search_best_combination(num_qubits, total_gates, qpu_name or "ibm_fez")
-                if r:
-                    return _safe_json(r["data"])
-                return json.dumps({"result": "데이터 없음"})
+                rows = _rag.search_best_combination(num_qubits, qpu_name or "", limit)
+                return _safe_json(rows)
+            elif query_type == "suspicious_optimizations":
+                rows = _rag.search_suspicious_optimizations(qpu_name or "", limit)
+                return _safe_json(rows)
             elif query_type == "pipeline_issues":
                 records = _rag.search_pipeline_issues(sdk=sdk or None)
                 return _safe_json([r["data"] for r in records[:limit]])
@@ -1577,7 +1578,7 @@ async def uqi_qpu_submit(
 
                 recommended_qpu = max(
                     (q for q in qpu_analysis
-                     if qpu_analysis[q]["avg_fidelity"] and not qpu_analysis[q].get("_skip")),
+                     if qpu_analysis[q].get("avg_fidelity") is not None and not qpu_analysis[q].get("_skip")),
                     key=lambda q: _qpu_composite_score(qpu_analysis[q]),
                     default=SUPPORTED_QPUS[0]
                 )

@@ -538,13 +538,37 @@ class UQIRAG:
                 break
         return results
 
-    def search_best_combination(self, num_qubits, total_gates, qpu_name, t_ratio=0.0):
-        candidates = self.search(record_type="optimization", filters={"qpu_name": qpu_name}, limit=100)
-        candidates = [r for r in candidates if r["data"].get("ok") is True]
-        if not candidates: return None
-        similar = [r for r in candidates if abs(r["data"].get("num_qubits", 0) - num_qubits) <= 2]
-        if not similar: return None
-        return max(similar, key=lambda r: r["data"].get("gate_reduction", 0))
+    def search_best_combination(self, num_qubits=0, qpu_name="", limit=20):
+        filters = {"qpu_name": qpu_name} if qpu_name else {}
+        candidates = self.search(record_type="optimization", filters=filters, limit=500)
+        candidates = [r["data"] for r in candidates if r["data"].get("ok") is True]
+        candidates = [d for d in candidates if not (
+            d.get("opt1_gates") == 0 or
+            d.get("equivalent") is False or
+            (d.get("gate_reduction") == 1.0 and d.get("equivalent") is None)
+        )]
+        if num_qubits > 0:
+            candidates = [d for d in candidates if d.get("num_qubits", 0) <= num_qubits]
+        candidates.sort(key=lambda d: d.get("gate_reduction", 0), reverse=True)
+        return candidates[:limit]
+
+    def search_suspicious_optimizations(self, qpu_name="", limit=50):
+        filters = {"qpu_name": qpu_name} if qpu_name else {}
+        candidates = self.search(record_type="optimization", filters=filters, limit=500)
+        results = []
+        for r in candidates:
+            d = r["data"]
+            reasons = []
+            if d.get("opt1_gates") == 0:
+                reasons.append("empty_circuit")
+            if d.get("equivalent") is False:
+                reasons.append("not_equivalent")
+            if d.get("gate_reduction") == 1.0 and d.get("equivalent") is None:
+                reasons.append("unverified_full_reduction")
+            if reasons:
+                results.append({**d, "_suspicious_reasons": reasons})
+        results.sort(key=lambda d: len(d["_suspicious_reasons"]), reverse=True)
+        return results[:limit]
 
     def search_pipeline_issues(self, stage=None, sdk=None):
         filters = {}

@@ -870,11 +870,12 @@ class UQIOptimizer:
         return results
 
     def collect_metadata(self, name: str, result: dict,
-                         qpu_name: str) -> dict:
+                         qpu_name: str, algorithm_file: str = "") -> dict:
         """지식베이스 저장용 메타데이터"""
         profile = result.get("profile", {})
         return {
             "circuit_name":    name,
+            "algorithm_file":  algorithm_file,
             "qpu_name":        qpu_name,
             "combination":     result.get("combination"),
             "opt_engine":      result.get("opt_engine"),

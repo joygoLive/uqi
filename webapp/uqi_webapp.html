@@ -781,8 +781,8 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                 <span style="font-size:10px;color:var(--text3)">Period</span>
                 <select id="jh-days" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
                   onchange="_jobHistoryPage=1; loadJobHistory()">
-                  <option value="0">All time</option>
-                  <option value="1" selected>Today</option>
+                  <option value="0" selected>All time</option>
+                  <option value="1">Today</option>
                   <option value="7">Last 7 days</option>
                   <option value="30">Last 30 days</option>
                 </select>
@@ -2901,7 +2901,7 @@ function toggleStep(name) {
     body.classList.add('open');
     chev.classList.add('open');
     // Auto-load job history when opening that panel
-    if (name === 'job-history') loadJobHistory();
+    if (name === 'job-history') { _jhLoadDistinct(); loadJobHistory(); }
   }
 }
 // Open analyze by default
@@ -3614,6 +3614,37 @@ function _stopAutoPoll(jobId) {
 
 // ─── QPU Job Manager ───────────────────────────────────
 let _jobHistoryBusy = false;
+function _jhClearSearch() {
+  ['jh-search-vendor','jh-search-qpu','jh-search-circuit'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  _jhDistinctCache = null;  // 새 job 제출 후 목록 갱신 반영
+  _jobHistoryPage = 1; loadJobHistory();
+}
+let _jhDistinctCache = null;
+async function _jhLoadDistinct(restoreValues) {
+  try {
+    if (!_jhDistinctCache) {
+      const res  = await callTool('uqi_job_list', { distinct_values: true });
+      const data = JSON.parse(getResultText(res));
+      if (!data.ok || !data.distinct) return;
+      _jhDistinctCache = data.distinct;
+    }
+    const { vendors, qpus, circuits } = _jhDistinctCache;
+    const fill = (id, values, allLabel, restoreVal) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const cur = restoreVal !== undefined ? restoreVal : el.value;
+      el.innerHTML = `<option value="">${allLabel}</option>` +
+        values.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+      if ([...el.options].some(o => o.value === cur)) el.value = cur;
+    };
+    const rv = restoreValues || {};
+    fill('jh-search-vendor',  vendors,  'All', rv.vendor);
+    fill('jh-search-qpu',     qpus,     'All', rv.qpu);
+    fill('jh-search-circuit', circuits, 'All', rv.circuit);
+  } catch(e) {}
+}
 let _jobHistoryLastHtml = null; // 마지막 정상 렌더링 결과 캐시
 let _jobHistoryPage = 1;        // 현재 페이지 (1-based)
 async function loadJobHistory(skipCloudPoll = false, page = null) {
@@ -3625,13 +3656,19 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   _jobHistoryBusy = true;
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
 
-  const statusFilter = document.getElementById('jh-status')?.value || '';
-  const daysFilter   = parseInt(document.getElementById('jh-days')?.value  || '0');
-  const limitVal     = parseInt(document.getElementById('jh-limit')?.value || '50');
-  const offset       = (_jobHistoryPage - 1) * limitVal;
+  const statusFilter  = document.getElementById('jh-status')?.value || '';
+  const daysFilter    = parseInt(document.getElementById('jh-days')?.value  || '0');
+  const limitVal      = parseInt(document.getElementById('jh-limit')?.value || '50');
+  const offset        = (_jobHistoryPage - 1) * limitVal;
+  const searchVendor  = document.getElementById('jh-search-vendor')?.value  || '';
+  const searchQpu     = document.getElementById('jh-search-qpu')?.value     || '';
+  const searchCircuit = document.getElementById('jh-search-circuit')?.value || '';
 
   try {
-    const res  = await callTool('uqi_job_list', { limit: limitVal, status: statusFilter, days: daysFilter, offset });
+    const res  = await callTool('uqi_job_list', {
+      limit: limitVal, status: statusFilter, days: daysFilter, offset,
+      search_vendor: searchVendor, search_qpu: searchQpu, search_circuit: searchCircuit,
+    });
     const data = JSON.parse(getResultText(res));
     if (!data.ok) { el.innerHTML = `<div class="error-state">⚠ ${escHtml(data.error||'조회 실패')}</div>`; return; }
 
@@ -3820,15 +3857,31 @@ function renderJobHistory(jobs, filter = {}, total = null) {
     return [mainRow];
   }).join('');
 
+  // 헤더 드롭다운: 현재 선택값 유지
+  const _hv = (id) => document.getElementById(id)?.value || '';
+  const _mkSel = (id, allLabel, onchange) =>
+    `<select id="${id}" style="margin-top:3px;width:100%;font-size:9px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:3px;padding:1px 3px;cursor:pointer" onchange="${onchange}"><option value="">${allLabel}</option></select>`;
+
   const pagination = _renderPagination(realTotal, limit, offset);
-  return summary + actionBar + `<div style="overflow-x:auto">
+  const tbl = `<div style="overflow-x:auto">
     <table class="job-table">
       <thead><tr>
-        <th></th><th>Job ID</th><th>Vendor</th><th>QPU</th><th>Circuit</th><th>Shots</th><th>Status</th><th>Submitted</th><th></th>
+        <th></th>
+        <th>Job ID</th>
+        <th style="min-width:80px"><div>Vendor</div>${_mkSel('jh-search-vendor','All','_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th style="min-width:110px"><div>QPU</div>${_mkSel('jh-search-qpu','All','_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th style="min-width:110px"><div>Circuit</div>${_mkSel('jh-search-circuit','All','_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th>Shots</th><th>Status</th><th>Submitted</th><th></th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
-  </div>` + pagination;
+  </div>`;
+  // 드롭다운 옵션을 렌더 직후 채우기 (distinct 캐시 활용)
+  setTimeout(() => {
+    const cur = { vendor: _hv('jh-search-vendor'), qpu: _hv('jh-search-qpu'), circuit: _hv('jh-search-circuit') };
+    _jhLoadDistinct(cur);
+  }, 0);
+  return summary + actionBar + tbl + pagination;
 }
 
 const _expandedRows = new Set();

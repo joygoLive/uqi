@@ -1501,38 +1501,33 @@ async def uqi_qpu_submit(
                                 est_ns   = q2_ns * qc_opt.depth()
                                 t2_ratio = round(est_ns / t2_ns, 2)
     
-                            # 캘리브레이션 기반 예상 fidelity (1Q + 2Q + Readout 통합)
+                            # 캘리브레이션 기반 예상 fidelity — 실제 제출되는 물리 회로(qc_opt) 기준
                             q1_error = calibration.get("avg_1q_error") or 0
                             q2_error = calibration.get("avg_2q_error") or 0
                             ro_error = calibration.get("avg_ro_error") or 0
-    
-                            ops = s1["qc"].count_ops()
+
+                            phys_ops = qc_opt.count_ops()
                             _2Q_GATES = {'cx','cz','ecr','swap','iswap','cp','crz','crx','cry','cu','cu3','mcx'}
                             _1Q_GATES = {'x','y','z','h','s','sdg','t','tdg','sx','sxdg','rx','ry','rz','u','u1','u2','u3','r','p'}
-                            _MEAS     = {'measure'}
-    
-                            orig_n_2q  = sum(v for k,v in ops.items() if k in _2Q_GATES)
-                            orig_n_1q  = sum(v for k,v in ops.items() if k in _1Q_GATES)
-                            orig_n_meas= sum(v for k,v in ops.items() if k in _MEAS)
-                            # readout 횟수가 없으면 큐비트 수 기준으로 추정
-                            if orig_n_meas == 0:
-                                orig_n_meas = s1["qc"].num_qubits
-    
+
+                            phys_n_2q  = sum(v for k,v in phys_ops.items() if k in _2Q_GATES)
+                            phys_n_1q  = sum(v for k,v in phys_ops.items() if k in _1Q_GATES)
+                            phys_n_meas= phys_ops.get('measure', 0) or n_qubits
+
                             import math
-                            # T2 디코히어런스 항: exp(-t_circuit / T2)
-                            # t_circuit = depth * avg_2q_ns (2Q 게이트가 지배적)
+                            # T2 디코히어런스: 물리 회로 깊이 기준
                             t2_ms  = calibration.get("avg_t2_ms")
                             q2_ns  = calibration.get("avg_2q_ns") or 0
-                            depth  = s1["qc"].depth()
+                            phys_depth = qc_opt.depth()
                             t2_decay = 1.0
-                            if t2_ms and q2_ns and depth:
-                                t_circuit_ms = (depth * q2_ns) / 1e6  # ns → ms
+                            if t2_ms and q2_ns and phys_depth:
+                                t_circuit_ms = (phys_depth * q2_ns) / 1e6
                                 t2_decay = math.exp(-t_circuit_ms / t2_ms)
-    
+
                             est_fidelity = max(0.0, round(
-                                (1.0 - q1_error) ** orig_n_1q *
-                                (1.0 - q2_error) ** orig_n_2q *
-                                (1.0 - ro_error) ** orig_n_meas *
+                                (1.0 - q1_error) ** phys_n_1q *
+                                (1.0 - q2_error) ** phys_n_2q *
+                                (1.0 - ro_error) ** phys_n_meas *
                                 t2_decay,
                                 4
                             ))
@@ -2026,12 +2021,17 @@ async def uqi_job_cancel(job_id: str) -> str:
 
 @mcp.tool()
 async def uqi_job_list(
-    limit:  int = 50,
-    status: str = "",    # "" = 전체, "active" = submitted+running, "done", "cancelled", "error"
-    days:   int = 0,     # 0 = 전체, N = 최근 N일
-    offset: int = 0,     # 페이지네이션 오프셋
+    limit:          int  = 50,
+    status:         str  = "",    # "" = 전체, "active" = submitted+running, "done", "cancelled", "error"
+    days:           int  = 0,     # 0 = 전체, N = 최근 N일
+    offset:         int  = 0,     # 페이지네이션 오프셋
+    search_id:      str  = "",    # job_id 부분 일치 검색 (대소문자 무관)
+    search_vendor:  str  = "",    # vendor 부분 일치 검색
+    search_qpu:     str  = "",    # qpu_name 부분 일치 검색
+    search_circuit: str  = "",    # circuit_name 부분 일치 검색
+    distinct_values:bool = False, # True: 필터 드롭다운용 고유값 목록만 반환
 ) -> str:
-    """QPU job 이력 조회. limit: 건수, status: 상태 필터, days: 기간 필터(일), offset: 페이지네이션"""
+    """QPU job 이력 조회. distinct_values=True 시 vendor/qpu_name/circuit_name 고유값 목록 반환"""
     def _run():
         try:
             import sqlite3 as _sq
@@ -2041,6 +2041,23 @@ async def uqi_job_list(
             db_path = Path(__file__).parent.parent / "data" / "uqi_jobs.db"
             conn = _sq.connect(str(db_path), timeout=10)
             conn.row_factory = _sq.Row
+
+            # distinct_values 모드: 필터 드롭다운 초기화용
+            if distinct_values:
+                import json as _json
+                vendors  = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT vendor FROM jobs WHERE vendor IS NOT NULL ORDER BY vendor").fetchall()]
+                qpus     = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT qpu_name FROM jobs WHERE qpu_name IS NOT NULL ORDER BY qpu_name").fetchall()]
+                circuits = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT circuit_name FROM jobs WHERE circuit_name IS NOT NULL ORDER BY circuit_name").fetchall()]
+                job_ids  = [r[0] for r in conn.execute(
+                    "SELECT job_id FROM jobs ORDER BY submitted_at DESC LIMIT 200").fetchall()]
+                conn.close()
+                return _json.dumps({"ok": True, "distinct": {
+                    "vendors": vendors, "qpus": qpus,
+                    "circuits": circuits, "job_ids": job_ids,
+                }}, ensure_ascii=False)
 
             conditions = []
             params: list = []
@@ -2055,6 +2072,20 @@ async def uqi_job_list(
                 cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
                 conditions.append("submitted_at >= ?")
                 params.append(cutoff)
+
+            # 대소문자 무관 LIKE (LOWER 비교)
+            if search_id:
+                conditions.append("LOWER(job_id) LIKE LOWER(?)")
+                params.append(f"%{search_id}%")
+            if search_vendor:
+                conditions.append("LOWER(vendor) LIKE LOWER(?)")
+                params.append(f"%{search_vendor}%")
+            if search_qpu:
+                conditions.append("LOWER(qpu_name) LIKE LOWER(?)")
+                params.append(f"%{search_qpu}%")
+            if search_circuit:
+                conditions.append("LOWER(circuit_name) LIKE LOWER(?)")
+                params.append(f"%{search_circuit}%")
 
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -2079,7 +2110,11 @@ async def uqi_job_list(
             return _json.dumps({
                 "ok": True, "jobs": result, "count": len(result),
                 "total": total,
-                "filter": {"status": status or "all", "days": days, "limit": limit, "offset": offset},
+                "filter": {
+                    "status": status or "all", "days": days, "limit": limit, "offset": offset,
+                    "search_id": search_id, "search_vendor": search_vendor,
+                    "search_qpu": search_qpu, "search_circuit": search_circuit,
+                },
             }, ensure_ascii=False, default=str)
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})

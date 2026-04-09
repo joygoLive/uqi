@@ -1,3 +1,6 @@
+** ngrok 재시작(systemctl 등록됨, 아래는 수동 기동시 참고) **
+nohup ngrok http --url=superelegant-terrence-grittiest.ngrok-free.dev 8765 > ngrok.log 2>&1 &
+
 **1. 초기 설정**
 ```bash
 git clone https://github.com/joygoLive/uqi.git

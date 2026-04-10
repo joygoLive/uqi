@@ -157,7 +157,7 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .dgx-row .form-select { flex:1; }
 .btn-view-file { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text2); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
 .btn-view-file:hover { border-color:var(--accent); color:var(--accent); }
-.btn-refresh-list { background:none; border:1px solid var(--border); border-radius:6px; padding:8px 10px; color:var(--text3); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; }
+.btn-refresh-list { background:none; border:1px solid var(--accent); border-radius:6px; padding:8px 10px; color:var(--accent); font-family:var(--font-mono); font-size:10px; cursor:pointer; transition:all 0.2s; }
 .btn-refresh-list:hover { border-color:var(--accent); color:var(--accent); }
 .form-select { background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:var(--font-mono); font-size:12px; outline:none; transition:border-color 0.2s; appearance:none; cursor:pointer; width:100%; }
 .form-select:focus { border-color:var(--accent); }
@@ -3711,8 +3711,10 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
       }
     }
   } catch(e) {
-    // 에러 시 마지막 정상 결과 유지, 없으면 에러 표시
-    if (_jobHistoryLastHtml) {
+    // Not connected일 때는 초기 상태 유지 (조용히 무시)
+    if (e.message === 'Not connected') {
+      if (!_jobHistoryLastHtml) el.innerHTML = '<div class="empty-state">Click Refresh to load jobs</div>';
+    } else if (_jobHistoryLastHtml) {
       el.innerHTML = _jobHistoryLastHtml;
     } else {
       el.innerHTML = `<div class="error-state">⚠ ${escHtml(e.message)}</div>`;

@@ -829,5 +829,75 @@ class TestBoxStats:
         assert result == "none"
 
 
+class TestRefreshBtnStyle:
+    """TC16x: btn-refresh-list CSS 색상 가시성"""
+
+    def test_TC161_refresh_btn_color_is_accent(self, page):
+        """btn-refresh-list의 color가 --accent(#00d4ff)이어야 함 — text3(#484f58)이면 배경에 묻힘"""
+        color = page.evaluate("""
+            (() => {
+                const btn = document.querySelector('.btn-refresh-list');
+                return getComputedStyle(btn).color;
+            })()
+        """)
+        assert color == "rgb(0, 212, 255)"
+
+    def test_TC162_refresh_btn_border_is_accent(self, page):
+        """btn-refresh-list의 border-color가 --accent이어야 함"""
+        color = page.evaluate("""
+            (() => {
+                const btn = document.querySelector('.btn-refresh-list');
+                return getComputedStyle(btn).borderTopColor;
+            })()
+        """)
+        assert color == "rgb(0, 212, 255)"
+
+    def test_TC163_refresh_btn_not_text3_color(self, page):
+        """btn-refresh-list가 이전 text3(#484f58) 색을 사용하지 않아야 함"""
+        color = page.evaluate("""
+            (() => {
+                const btn = document.querySelector('.btn-refresh-list');
+                return getComputedStyle(btn).color;
+            })()
+        """)
+        assert color != "rgb(72, 79, 88)"  # #484f58
+
+
+class TestLoadJobHistoryNotConnected:
+    """TC17x: loadJobHistory Not Connected 에러 처리"""
+
+    def test_TC171_not_connected_shows_initial_state(self, page):
+        """미연결 상태에서 loadJobHistory 호출 시 error-state 대신 초기 상태 표시"""
+        result = page.evaluate("""
+            (async () => {
+                // msgUrl이 null인 초기 상태에서 호출
+                await loadJobHistory();
+                return document.getElementById('result-job-history').innerHTML;
+            })()
+        """)
+        assert "Click Refresh to load jobs" in result
+
+    def test_TC172_not_connected_no_error_state(self, page):
+        """미연결 상태에서 error-state 클래스가 나타나지 않아야 함"""
+        has_error = page.evaluate("""
+            (async () => {
+                await loadJobHistory();
+                const el = document.getElementById('result-job-history');
+                return el.querySelector('.error-state') !== null;
+            })()
+        """)
+        assert has_error is False
+
+    def test_TC173_not_connected_text_not_shown_in_result(self, page):
+        """미연결 상태에서 'Not connected' 문구가 결과 영역에 노출되지 않아야 함"""
+        result = page.evaluate("""
+            (async () => {
+                await loadJobHistory();
+                return document.getElementById('result-job-history').textContent;
+            })()
+        """)
+        assert "Not connected" not in result
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

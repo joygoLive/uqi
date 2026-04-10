@@ -2201,7 +2201,7 @@ if __name__ == "__main__":
                 content = html_path.read_text(encoding="utf-8")
             else:
                 content = "<h1>uqi_webapp.html not found</h1>"
-            return HTMLResponse(content)
+            return HTMLResponse(content, headers={"Cache-Control": "no-store"})
 
         from starlette.applications import Starlette
         from starlette.routing import Mount, Route

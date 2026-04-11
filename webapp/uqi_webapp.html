@@ -1179,7 +1179,7 @@ function switchMain(name,el) {
   document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if (name === 'knowledge') { onRagTypeChange(); runRAG(); }
+  if (name === 'knowledge') { onRagTypeChange(); if (msgUrl) runRAG(); }
 }
 
 // ─────────────────────────────────────────────────────────

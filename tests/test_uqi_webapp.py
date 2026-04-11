@@ -981,24 +981,36 @@ class TestLangPicker:
 
 
 class TestKnowledgeAutoLoad:
-    """TC19x: Knowledge 탭 진입 시 Stats 자동 로드 테스트"""
+    """TC19x: Knowledge 탭 진입 시 Stats 자동 로드 조건 테스트"""
 
-    def test_TC191_knowledge_tab_auto_runs_rag_on_enter(self, page):
-        """Knowledge 탭 진입 시 결과 영역이 '검색 실행' 초기 문구에서 벗어나야 함"""
-        # switchMain 호출 시 runRAG가 실행되어 결과 body가 변경됨
+    def test_TC191_knowledge_no_autoload_when_not_connected(self, page):
+        """미연결 상태(msgUrl=null)에서 Knowledge 탭 진입 시 runRAG가 실행되지 않아야 함"""
         page.evaluate("""
             () => {
+                msgUrl = null;
                 const btn = document.querySelector('.nav-btn[onclick*="knowledge"]');
                 if (btn) switchMain('knowledge', btn);
             }
         """)
-        # runRAG는 async이므로 결과가 loading 또는 data 상태로 바뀌어야 함
         body_html = page.evaluate("document.getElementById('rag-result-body').innerHTML")
-        # 초기 no_results 텍스트("Run a search")가 아닌 상태여야 함
-        assert "Run a search to see results" not in body_html
-        assert "검색을 실행하여" not in body_html
+        # 미연결 상태에서 스피너가 돌면 안 됨
+        assert "spinner" not in body_html
 
-    def test_TC192_knowledge_default_type_is_stats(self, page):
+    def test_TC192_knowledge_autoload_runs_each_visit_when_connected(self, page):
+        """연결된 상태에서 탭 전환마다 runRAG가 실행되어 스피너가 표시되어야 함"""
+        page.evaluate("""
+            () => {
+                msgUrl = 'http://fake';
+                document.getElementById('rag-result-body').innerHTML = '<div>prev</div>';
+                const btn = document.querySelector('.nav-btn[onclick*="knowledge"]');
+                if (btn) switchMain('knowledge', btn);
+            }
+        """)
+        body_html = page.evaluate("document.getElementById('rag-result-body').innerHTML")
+        # runRAG가 실행되어 스피너 또는 결과가 표시되어야 함
+        assert "prev" not in body_html
+
+    def test_TC193_knowledge_default_type_is_stats(self, page):
         """Knowledge 탭의 기본 선택 타입이 stats여야 함"""
         selected = page.evaluate("document.getElementById('rag-type').value")
         assert selected == "stats"

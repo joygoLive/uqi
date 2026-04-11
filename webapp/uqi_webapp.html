@@ -4575,14 +4575,14 @@ function _renderGPUBenchmarkBest(body, rows) {
   if (best.length === 0) {
     body.innerHTML = `<div class="empty-state">No successful GPU acceleration records yet.<br><small>Run the GPU Benchmark step to collect data.</small></div>`; return;
   }
+  window._gpuDetailCache = best;
   const medals = ['🥇','🥈','🥉'];
   const maxSpeedup = best[0].speedup || 1;
   const rowsHtml = best.map((r, i) => {
-    const json = escHtml(JSON.stringify(_sanitizeRecordPaths(r)));
     const rank = medals[i] ?? `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
     const barW = Math.min((r.speedup / maxSpeedup) * 100, 100).toFixed(1);
     return `
-      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showRagDetail('${json}')"
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showGPUDetail(_gpuDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(99,102,241,.06)'" onmouseleave="this.style.background=''">
         <td style="padding:8px 10px;font-size:16px;text-align:center">${rank}</td>
         <td style="padding:8px 10px">
@@ -4630,15 +4630,15 @@ function _renderQECBestResults(body, rows) {
   if (effective.length === 0) {
     body.innerHTML = `<div class="empty-state">No effective QEC experiments yet.<br><small>Run QEC Apply step to collect data.</small></div>`; return;
   }
+  window._qecDetailCache = effective;
   const medals = ['🥇','🥈','🥉'];
   const maxImp = effective[0].improvement || 1;
   const pct = v => v != null ? (v*100).toFixed(1)+'%' : '—';
   const rowsHtml = effective.map((r, i) => {
-    const json = escHtml(JSON.stringify(_sanitizeRecordPaths(r)));
     const rank = medals[i] ?? `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
     const barW = Math.min((r.improvement / maxImp) * 100, 100).toFixed(1);
     return `
-      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showRagDetail('${json}')"
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showQECDetail(_qecDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(74,222,128,.04)'" onmouseleave="this.style.background=''">
         <td style="padding:8px 10px;font-size:16px;text-align:center">${rank}</td>
         <td style="padding:8px 10px">
@@ -4690,13 +4690,13 @@ function _renderPipelineIssues(body, rows) {
     warn:  { color:'#f59e0b',     bg:'rgba(245,158,11,.15)' },
     info:  { color:'var(--text3)',bg:'rgba(99,102,241,.10)' },
   };
-  const rowsHtml = rows.map(r => {
-    const json = escHtml(JSON.stringify(r));
+  window._pipelineDetailCache = rows;
+  const rowsHtml = rows.map((r, i) => {
     const sev = SEV[r.severity] || SEV.warn;
     const badge = `<span style="padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;
       background:${sev.bg};color:${sev.color};border:1px solid ${sev.color}55">${escHtml((r.severity||'warn').toUpperCase())}</span>`;
     return `
-      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showRagDetail('${json}')"
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showPipelineDetail(_pipelineDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(239,68,68,.04)'" onmouseleave="this.style.background=''">
         <td style="padding:8px 10px">
           <div style="font-size:11px;font-weight:600;color:var(--text2)">${escHtml(r.stage||'—')}</div>
@@ -4729,12 +4729,12 @@ function _renderSecurityBlocks(body, rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     body.innerHTML = `<div class="empty-state">No security blocks recorded.</div>`; return;
   }
-  const rowsHtml = rows.map(item => {
+  window._securityDetailCache = rows;
+  const rowsHtml = rows.map((item, i) => {
     const r = item.data || item;
     const ts = item.timestamp || r._ts;
-    const json = escHtml(JSON.stringify(_sanitizeRecordPaths(item)));
     return `
-      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showRagDetail('${json}')"
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showSecurityDetail(_securityDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(239,68,68,.04)'" onmouseleave="this.style.background=''">
         <td style="padding:8px 10px">
           <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.file_name||_baseName(r.algorithm_file)||'—')}</div>
@@ -4894,6 +4894,185 @@ function _showOptDetail(r) {
           <div><div style="font-size:9px;color:var(--text3)">Mapping</div><div style="font-size:13px;font-weight:600;color:var(--text1)">${sec(r.map_time_sec)}</div></div>
           <div><div style="font-size:9px;color:var(--text3)">Total</div><div style="font-size:13px;font-weight:600;color:var(--accent)">${sec(r.total_time_sec)}</div></div>
         </div>
+      </div>
+    </div>`;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function _showGPUDetail(r) {
+  const sec  = v => v != null ? v.toFixed(3) + 's' : '—';
+  const badge = (ok, tLabel, fLabel) => ok == null ? '' :
+    `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;
+      background:${ok?'rgba(74,222,128,.15)':'rgba(239,68,68,.15)'};
+      color:${ok?'var(--good)':'var(--bad)'};">${ok ? tLabel : fLabel}</span>`;
+
+  const speedupPct = r.speedup != null ? ((r.speedup - 1) * 100).toFixed(1) : null;
+  const barW = r.speedup != null ? Math.min(r.speedup / 10 * 100, 100).toFixed(1) : 0;
+
+  document.getElementById('codeModalTitle').textContent = r.circuit_name || 'GPU Benchmark Detail';
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent);background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">${escHtml(r.framework||'—')}</span>
+        ${badge(r.gpu_available, 'GPU Available', 'GPU Unavailable')}
+        ${badge(r.gpu_accelerated, 'GPU Accelerated', 'Not Accelerated')}
+        ${badge(r.ok, 'Both Completed', 'Incomplete')}
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r._ts ? _fmtDate(r._ts) : ''}</span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:14px 18px;text-align:center">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">GPU Speedup</div>
+        <div style="font-size:42px;font-weight:800;color:var(--accent);line-height:1">
+          ${r.speedup != null ? r.speedup.toFixed(2) + '×' : '—'}
+        </div>
+        ${speedupPct != null ? `<div style="font-size:12px;color:var(--good);margin-top:4px">▲ ${speedupPct}% faster than CPU</div>` : ''}
+        <div style="margin-top:10px;background:rgba(99,102,241,.15);border-radius:4px;height:8px;overflow:hidden">
+          <div style="width:${barW}%;height:100%;background:var(--accent);border-radius:4px"></div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Timing Comparison</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">CPU Time</div>
+            <div style="font-size:22px;font-weight:700;color:var(--text2)">${sec(r.cpu_time_sec)}</div>
+            <div style="font-size:10px;margin-top:3px;color:${r.cpu_status==='completed'?'var(--good)':'var(--bad)'}">${escHtml(r.cpu_status||'—')}</div>
+            ${r.cpu_error ? `<div style="font-size:9px;color:var(--bad);margin-top:2px">${escHtml(String(r.cpu_error).slice(0,60))}</div>` : ''}
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">GPU Time</div>
+            <div style="font-size:22px;font-weight:700;color:var(--good)">${sec(r.gpu_time_sec)}</div>
+            <div style="font-size:10px;margin-top:3px;color:${r.gpu_status==='completed'?'var(--good)':'var(--bad)'}">${escHtml(r.gpu_status||'—')}</div>
+            ${r.gpu_error ? `<div style="font-size:9px;color:var(--bad);margin-top:2px">${escHtml(String(r.gpu_error).slice(0,60))}</div>` : ''}
+          </div>
+        </div>
+      </div>
+
+      ${r.verdict ? `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Verdict</div>
+        <div style="font-size:12px;color:var(--text1)">${escHtml(r.verdict)}</div>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function _showQECDetail(r) {
+  const pct = v => v != null ? (v * 100).toFixed(2) + '%' : '—';
+  const num = v => v != null ? v.toLocaleString(_uiLocale()) : '—';
+
+  document.getElementById('codeModalTitle').textContent = (r.circuit_name || 'QEC') + ' · ' + (r.code || 'Detail');
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent);background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">${escHtml(r.qpu_name||'—')}</span>
+        <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:rgba(74,222,128,.12);color:var(--good)">${escHtml(r.code||'—')}</span>
+        <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;
+          background:${r.effective?'rgba(74,222,128,.15)':'rgba(239,68,68,.15)'};
+          color:${r.effective?'var(--good)':'var(--bad)'};">${r.effective ? '✓ Effective' : '✗ Ineffective'}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r._ts ? _fmtDate(r._ts) : ''}</span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:14px 18px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Fidelity</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:20px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Before</div>
+            <div style="font-size:28px;font-weight:700;color:var(--text2)">${pct(r.fidelity_before)}</div>
+          </div>
+          <div style="font-size:24px;color:var(--text3)">→</div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">After</div>
+            <div style="font-size:28px;font-weight:700;color:var(--good)">${pct(r.fidelity_after)}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Improvement</div>
+            <div style="font-size:22px;font-weight:800;color:var(--accent)">▲${pct(r.improvement)}</div>
+          </div>
+        </div>
+        ${r.tvd_before != null ? `
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:24px">
+          <div><span style="font-size:10px;color:var(--text3)">TVD Before </span><span style="font-size:12px;color:var(--text2)">${r.tvd_before.toFixed(4)}</span></div>
+          <div><span style="font-size:10px;color:var(--text3)">TVD After </span><span style="font-size:12px;color:var(--good)">${r.tvd_after?.toFixed(4)||'—'}</span></div>
+        </div>` : ''}
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Overhead</div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div><div style="font-size:9px;color:var(--text3)">Original Qubits</div><div style="font-size:16px;font-weight:700;color:var(--text1)">${num(r.orig_qubits)}</div></div>
+          <div><div style="font-size:9px;color:var(--text3)">Qubit Overhead</div><div style="font-size:16px;font-weight:700;color:var(--warn,#f59e0b)">${num(r.qubit_overhead)}×</div></div>
+          <div><div style="font-size:9px;color:var(--text3)">Gate Overhead</div><div style="font-size:16px;font-weight:700;color:var(--warn,#f59e0b)">${num(r.gate_overhead)}×</div></div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function _showPipelineDetail(r) {
+  const SEV = {
+    error: { color:'var(--bad)',  bg:'rgba(239,68,68,.12)' },
+    warn:  { color:'#f59e0b',     bg:'rgba(245,158,11,.12)' },
+    info:  { color:'var(--text3)',bg:'rgba(99,102,241,.10)' },
+  };
+  const sev = SEV[r.severity] || SEV.warn;
+
+  document.getElementById('codeModalTitle').textContent = 'Pipeline Error · ' + (r.stage || '—');
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent);background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">${escHtml(r.stage||'—')}</span>
+        <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:${sev.bg};color:${sev.color}">${escHtml((r.severity||'warn').toUpperCase())}</span>
+        ${r.sdk ? `<span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px">${escHtml(r.sdk)}</span>` : ''}
+        ${r.qpu_name ? `<span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px">${escHtml(r.qpu_name)}</span>` : ''}
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r._ts ? _fmtDate(r._ts) : ''}</span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Issue</div>
+        <div style="font-size:13px;color:var(--text1);line-height:1.5">${escHtml(String(r.issue||'—'))}</div>
+      </div>
+
+      ${r.solution ? `
+      <div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:12px 14px">
+        <div style="font-size:9px;color:var(--good);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Solution</div>
+        <div style="font-size:12px;color:var(--text1);line-height:1.5">${escHtml(String(r.solution))}</div>
+      </div>` : ''}
+    </div>`;
+  document.getElementById('codeModal').classList.add('open');
+}
+
+function _showSecurityDetail(item) {
+  const r = item.data || item;
+  const ts = item.timestamp || r._ts;
+
+  document.getElementById('codeModalTitle').textContent = '🔒 Security Block · ' + (r.file_name || _baseName(r.algorithm_file) || '—');
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:rgba(239,68,68,.12);color:var(--bad)">BLOCKED</span>
+        ${r.tool ? `<span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px">${escHtml(r.tool)}</span>` : ''}
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${ts ? _fmtDate(ts) : ''}</span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">File</div>
+        <div style="font-size:13px;font-weight:600;color:var(--text1);font-family:var(--font-mono)">${escHtml(r.file_name||_baseName(r.algorithm_file)||'—')}</div>
+      </div>
+
+      <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px 14px">
+        <div style="font-size:9px;color:var(--bad);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Reason</div>
+        <div style="font-size:13px;color:var(--text1);line-height:1.5">${escHtml(String(r.reason||'—'))}</div>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Detected Pattern</div>
+        <div style="font-size:12px;font-family:var(--font-mono);color:var(--accent);background:rgba(99,102,241,.08);padding:6px 10px;border-radius:5px">${escHtml(r.pattern||'—')}</div>
       </div>
     </div>`;
   document.getElementById('codeModal').classList.add('open');

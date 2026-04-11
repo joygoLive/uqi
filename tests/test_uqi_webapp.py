@@ -899,5 +899,158 @@ class TestLoadJobHistoryNotConnected:
         assert "Not connected" not in result
 
 
+class TestLangPicker:
+    """TC18x: 언어 피커 팝업 동작 테스트"""
+
+    def test_TC181_lang_picker_popup_hidden_by_default(self, page):
+        """초기 상태에서 언어 피커 팝업이 닫혀 있어야 함"""
+        is_open = page.evaluate("""
+            document.getElementById('lang-picker-popup').classList.contains('open')
+        """)
+        assert is_open is False
+
+    def test_TC182_lang_picker_opens_on_button_click(self, page):
+        """lang 버튼 클릭 시 팝업이 열려야 함"""
+        page.evaluate("document.getElementById('btn-lang-toggle').click()")
+        is_open = page.evaluate("""
+            document.getElementById('lang-picker-popup').classList.contains('open')
+        """)
+        assert is_open is True
+
+    def test_TC183_lang_picker_closes_on_outside_click(self, page):
+        """팝업 열린 후 외부 클릭 시 닫혀야 함"""
+        page.evaluate("document.getElementById('btn-lang-toggle').click()")
+        page.evaluate("document.body.click()")
+        is_open = page.evaluate("""
+            document.getElementById('lang-picker-popup').classList.contains('open')
+        """)
+        assert is_open is False
+
+    def test_TC184_select_lang_changes_language(self, page):
+        """KO 선택 시 _lang이 'ko'로 변경되어야 함"""
+        page.evaluate("selectLang('ko')")
+        lang = page.evaluate("_lang")
+        assert lang == "ko"
+
+    def test_TC185_select_lang_closes_popup(self, page):
+        """언어 선택 후 팝업이 닫혀야 함"""
+        page.evaluate("document.getElementById('btn-lang-toggle').click()")
+        page.evaluate("selectLang('en')")
+        is_open = page.evaluate("""
+            document.getElementById('lang-picker-popup').classList.contains('open')
+        """)
+        assert is_open is False
+
+    def test_TC186_active_item_matches_current_lang_en(self, page):
+        """EN 선택 시 첫 번째 항목에 active 클래스가 있어야 함"""
+        page.evaluate("selectLang('en')")
+        active_index = page.evaluate("""
+            [...document.querySelectorAll('#lang-picker-popup .lang-picker-item')]
+              .findIndex(el => el.classList.contains('active'))
+        """)
+        assert active_index == 0
+
+    def test_TC187_active_item_matches_current_lang_ko(self, page):
+        """KO 선택 시 두 번째 항목에 active 클래스가 있어야 함"""
+        page.evaluate("selectLang('ko')")
+        active_index = page.evaluate("""
+            [...document.querySelectorAll('#lang-picker-popup .lang-picker-item')]
+              .findIndex(el => el.classList.contains('active'))
+        """)
+        assert active_index == 1
+
+    def test_TC188_btn_label_shows_en_when_english(self, page):
+        """EN 선택 후 버튼 레이블이 'EN'이어야 함"""
+        page.evaluate("selectLang('en')")
+        label = page.evaluate("document.getElementById('btn-lang-toggle').textContent")
+        assert label == "EN"
+
+    def test_TC189_btn_label_shows_ko_when_korean(self, page):
+        """KO 선택 후 버튼 레이블이 'KO'이어야 함"""
+        page.evaluate("selectLang('ko')")
+        label = page.evaluate("document.getElementById('btn-lang-toggle').textContent")
+        assert label == "KO"
+
+    def test_TC18A_exactly_one_active_item(self, page):
+        """한 번에 정확히 하나의 항목만 active여야 함"""
+        page.evaluate("selectLang('ko')")
+        active_count = page.evaluate("""
+            document.querySelectorAll('#lang-picker-popup .lang-picker-item.active').length
+        """)
+        assert active_count == 1
+
+
+class TestKnowledgeAutoLoad:
+    """TC19x: Knowledge 탭 진입 시 Stats 자동 로드 테스트"""
+
+    def test_TC191_knowledge_tab_auto_runs_rag_on_enter(self, page):
+        """Knowledge 탭 진입 시 결과 영역이 '검색 실행' 초기 문구에서 벗어나야 함"""
+        # switchMain 호출 시 runRAG가 실행되어 결과 body가 변경됨
+        page.evaluate("""
+            () => {
+                const btn = document.querySelector('.nav-btn[onclick*="knowledge"]');
+                if (btn) switchMain('knowledge', btn);
+            }
+        """)
+        # runRAG는 async이므로 결과가 loading 또는 data 상태로 바뀌어야 함
+        body_html = page.evaluate("document.getElementById('rag-result-body').innerHTML")
+        # 초기 no_results 텍스트("Run a search")가 아닌 상태여야 함
+        assert "Run a search to see results" not in body_html
+        assert "검색을 실행하여" not in body_html
+
+    def test_TC192_knowledge_default_type_is_stats(self, page):
+        """Knowledge 탭의 기본 선택 타입이 stats여야 함"""
+        selected = page.evaluate("document.getElementById('rag-type').value")
+        assert selected == "stats"
+
+
+class TestCacheTimestampLocale:
+    """TC20x: QPU 캐시 타임스탬프 로케일 갱신 테스트"""
+
+    def test_TC201_cache_timestamp_rendered_on_set(self, page):
+        """_renderCacheTimestamp 호출 후 qpu-cache-ts 요소에 텍스트가 채워져야 함"""
+        ts_text = page.evaluate("""
+            () => {
+                _renderCacheTimestamp({ ts: Date.now() - 3600000, qpus: [], data: {} });
+                return document.getElementById('qpu-cache-ts').innerHTML;
+            }
+        """)
+        assert "Cache:" in ts_text
+        assert "ago" in ts_text
+
+    def test_TC202_last_qpu_cache_stored_after_render(self, page):
+        """_renderCacheTimestamp 호출 후 _lastQPUCache가 설정되어야 함"""
+        has_cache = page.evaluate("""
+            () => {
+                _renderCacheTimestamp({ ts: Date.now(), qpus: [], data: {} });
+                return _lastQPUCache !== null;
+            }
+        """)
+        assert has_cache is True
+
+    def test_TC203_apply_i18n_rerenders_cache_timestamp(self, page):
+        """applyI18n 호출 시 _lastQPUCache가 있으면 타임스탬프가 재렌더링되어야 함"""
+        result = page.evaluate("""
+            () => {
+                _renderCacheTimestamp({ ts: Date.now() - 7200000, qpus: [], data: {} });
+                const before = document.getElementById('qpu-cache-ts').innerHTML;
+                selectLang('ko');  // applyI18n 내부 호출
+                const after = document.getElementById('qpu-cache-ts').innerHTML;
+                return { before_empty: !before, after_has_cache: after.includes('Cache:') };
+            }
+        """)
+        assert result["after_has_cache"] is True
+
+    def test_TC204_cache_timestamp_contains_ago(self, page):
+        """렌더된 타임스탬프에 'ago' 텍스트가 포함되어야 함"""
+        ts_text = page.evaluate("""
+            () => {
+                _renderCacheTimestamp({ ts: Date.now() - 1800000, qpus: [], data: {} });
+                return document.getElementById('qpu-cache-ts').textContent;
+            }
+        """)
+        assert "ago" in ts_text
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

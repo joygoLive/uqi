@@ -1,10 +1,18 @@
 # uqi_executor_iqm.py
+# (imports uqi_messages at bottom of imports block)
 # Qiskit circuit → IQM native 게이트 트랜스파일 → IQMClient 직접 실행
 # UQIQIRConverter 기반
 
 import math
 from typing import Optional
 from uqi_qir_converter import UQIQIRConverter
+from uqi_messages import (
+    IQM_NO_QASM,
+    IQM_CIRCUIT_CONVERT_FAIL,
+    IQM_NO_RESULT,
+    IQM_NO_TOKEN,
+    iqm_limit_exceeded,
+)
 
 
 IQM_NATIVE_GATES = ["prx", "cz", "measure", "reset", "barrier"]
@@ -100,7 +108,7 @@ class UQIExecutorIQM:
         }
 
         if qasm is None:
-            result["error"] = "QASM 없음"
+            result["error"] = IQM_NO_QASM
             print(f"    ✗ {result['error']}")
             return result
 
@@ -155,13 +163,13 @@ class UQIExecutorIQM:
             # ── Step 3: Qiskit circuit → IQM Circuit ──
             iqm_circuit = self._to_iqm_circuit(name, transpiled)
             if iqm_circuit is None:
-                result["error"] = "IQM Circuit 변환 실패"
+                result["error"] = IQM_CIRCUIT_CONVERT_FAIL
                 return result
             print(f"    ✓ IQM Circuit 변환 ({len(iqm_circuit.instructions)} instructions)")
 
             # ── 실제 QPU: 10000 instructions 초과 시 스킵 ──
             if not use_simulator and len(iqm_circuit.instructions) > 10000:
-                result["error"] = f"IQM 제한 초과 ({len(iqm_circuit.instructions)} instructions > 10000)"
+                result["error"] = iqm_limit_exceeded(len(iqm_circuit.instructions))
                 print(f"    ✗ {result['error']}")
                 return result
 
@@ -174,7 +182,7 @@ class UQIExecutorIQM:
                 result["backend"] = backend_url
 
             if counts is None:
-                result["error"] = "실행 결과 없음"
+                result["error"] = IQM_NO_RESULT
                 return result
 
             total = sum(counts.values())
@@ -446,7 +454,7 @@ class UQIExecutorIQM:
 
             token = getattr(self, '_token', None) or os.getenv("IQM_QUANTUM_TOKEN")
             if not token:
-                result["error"] = "IQM_QUANTUM_TOKEN 없음"
+                result["error"] = IQM_NO_TOKEN
                 return result
 
             device_name = backend_url.rstrip("/").split("/")[-1]
@@ -498,7 +506,7 @@ class UQIExecutorIQM:
 
             token = token or os.getenv("IQM_QUANTUM_TOKEN")
             if not token:
-                result["error"] = "IQM_QUANTUM_TOKEN 없음"
+                result["error"] = IQM_NO_TOKEN
                 return result
 
             device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
@@ -562,7 +570,7 @@ class UQIExecutorIQM:
 
             token = token or os.getenv("IQM_QUANTUM_TOKEN")
             if not token:
-                return {"ok": False, "error": "IQM_QUANTUM_TOKEN 없음"}
+                return {"ok": False, "error": IQM_NO_TOKEN}
 
             device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
             client = IQMClient(

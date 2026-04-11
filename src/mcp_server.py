@@ -20,6 +20,28 @@ from uqi_noise       import UQINoise
 from uqi_qec         import UQIQEC
 from uqi_rag         import UQIRAG
 import uqi_job_store as _job_store
+from uqi_messages import (
+    MCP_CACHE_EXPIRED,
+    MCP_SEMANTIC_NO_QUERY,
+    MCP_FILE_EXT_NOT_ALLOWED,
+    MCP_FILE_ONLY_PY,
+    MCP_FILE_TOO_LARGE,
+    MCP_SUBMISSION_NOT_FOUND,
+    mcp_qpu_offline,
+    mcp_qpu_offline_cached,
+    mcp_unavailable_qpu,
+    mcp_qubit_exceeded_submit,
+    mcp_qubit_exceeded_transpile,
+    mcp_unsupported_query_type,
+    mcp_no_calibration,
+    mcp_file_not_found,
+    mcp_dir_not_found,
+    perceval_run_fail,
+    STATUS_AWAITING_CONFIRMATION,
+    STATUS_COMPLETED,
+    STATUS_CACHE_EXPIRED,
+    STATUS_SUBMITTING,
+)
 
 import builtins
 import os
@@ -217,7 +239,7 @@ def _safe_file_check(algorithm_file: str, tool: str = None) -> Optional[str]:
     import re as _re
     path = Path(algorithm_file)
     if not path.exists():
-        return f"파일 없음: {algorithm_file}"
+        return mcp_file_not_found(algorithm_file)
     if path.suffix != ".py":
         return f"Python 파일(.py)만 허용됩니다: {algorithm_file}"
     if path.stat().st_size > 1 * 1024 * 1024:
@@ -468,7 +490,7 @@ async def uqi_optimize(
                 try:
                     qc     = QuantumCircuit.from_qasm_str(qasm)
                     if device_qubits and qc.num_qubits > device_qubits:
-                        results[name] = {"error": f"회로 큐비트({qc.num_qubits}q)가 {qpu_name} 장비({device_qubits}q)를 초과합니다. 트랜스파일 불가."}
+                        results[name] = {"error": mcp_qubit_exceeded_transpile(name, qc.num_qubits, qpu_name, device_qubits)}
                         continue
                     result = optimizer.optimize(qc, qpu_name, combination=combination, verify=verify)
                     meta   = optimizer.collect_metadata(name, result, qpu_name, algorithm_file)
@@ -950,7 +972,7 @@ async def uqi_rag_search(
                 return _safe_json([r["data"] for r in records])
             elif query_type == "semantic":
                 if not query:
-                    return json.dumps({"error": "semantic 검색은 query 파라미터 필요"})
+                    return json.dumps({"error": MCP_SEMANTIC_NO_QUERY})
                 records = _rag.search_semantic(query, limit=limit)
                 return _safe_json([{
                     "id":         r["id"],
@@ -979,7 +1001,7 @@ async def uqi_rag_search(
                 } for r in records])
             else:
                 return json.dumps({
-                    "error": f"미지원 query_type: {query_type}",
+                    "error": mcp_unsupported_query_type(query_type),
                     "supported": ["best_combination", "pipeline_issues",
                                   "transpile_patterns", "qec_results", "recent", "stats"]
                 })
@@ -1106,7 +1128,7 @@ async def uqi_calibration_info(
                     calibration = _cal.data.get(qpu_name, {})
 
             if not calibration:
-                return json.dumps({"error": f"캘리브레이션 없음: {qpu_name}"})
+                return json.dumps({"error": mcp_no_calibration(qpu_name)})
             return _build_response(calibration)
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -1169,7 +1191,7 @@ async def uqi_submit_progress(submission_id: str) -> str:
     """백그라운드 QPU 제출 진행상황 조회. submission_id는 uqi_qpu_submit(confirmed=True) 반환값."""
     prog = _submission_progress.get(submission_id)
     if prog is None:
-        return json.dumps({"error": "submission_id not found", "submission_id": submission_id})
+        return json.dumps({"error": MCP_SUBMISSION_NOT_FOUND, "submission_id": submission_id})
     return json.dumps(prog, ensure_ascii=False)
 
 
@@ -1195,7 +1217,7 @@ async def uqi_upload_algorithm(
         try:
             ALG_FILES_DIR.mkdir(parents=True, exist_ok=True)
             if not filename.endswith(".py"):
-                return json.dumps({"error": "허용 확장자: .py"})
+                return json.dumps({"error": MCP_FILE_EXT_NOT_ALLOWED})
             safe_name = Path(filename).name
             dest = ALG_FILES_DIR / safe_name
             dest.write_text(content, encoding="utf-8")
@@ -1224,14 +1246,25 @@ async def uqi_invalidate_cache(
         try:
             path = Path(algorithm_file)
             if not path.exists():
-                return json.dumps({"error": f"파일 없음: {algorithm_file}"})
+                return json.dumps({"error": mcp_file_not_found(algorithm_file)})
             h = hashlib.md5(path.read_bytes()).hexdigest()[:12]
+
+            # 웹앱 step 이름 → 서버 stage 키 정규화
+            _stage_alias = {
+                "qec-analyze":    "qec_analyze",
+                "qec-apply":      "qec_apply",
+                "gpu":            "gpu_benchmark",
+                "gpu-benchmark":  "gpu_benchmark",
+                "qpu_submit":     "qpu_submit",
+            }
+            stage_norm = _stage_alias.get(stage, stage)
 
             stages = {
                 "analyze":     [f"analyze:{h}:{qpu_name or 'ibm_fez'}", f"analyze:{h}:iqm_garnet", f"extract:{h}"],
                 "optimize":    [f"optimize:{h}:{qpu_name or 'ibm_fez'}:auto", f"optimize:{h}:{qpu_name or 'ibm_fez'}:qiskit+sabre",
                                 f"optimize:{h}:{qpu_name or 'ibm_fez'}:tket+sabre"],
-                "noise":       [f"noise:{h}:{qpu_name or 'ibm_fez'}:1024", f"noise:{h}:{qpu_name or 'ibm_fez'}:256"],
+                "noise":       [f"noise_v2:{h}:{qpu_name or 'ibm_fez'}:1024", f"noise_v2:{h}:{qpu_name or 'ibm_fez'}:256",
+                                f"noise:{h}:{qpu_name or 'ibm_fez'}:1024", f"noise:{h}:{qpu_name or 'ibm_fez'}:256"],
                 "qec_analyze": [f"qec_analyze:{h}:{qpu_name or 'ibm_fez'}:1024"],
                 "qec_apply":   [f"qec_apply:{h}:{qpu_name or 'ibm_fez'}:bit_flip:256",
                                 f"qec_apply:{h}:{qpu_name or 'ibm_fez'}:phase_flip:256"],
@@ -1239,12 +1272,23 @@ async def uqi_invalidate_cache(
                 "qpu_submit":  [f"qpu_submit:{h}:{qpu_name or 'auto'}:1024"],
             }
 
-            if stage == "all":
+            if stage_norm == "all":
                 keys = [k for ks in stages.values() for k in ks]
                 # extract 캐시도 포함
                 keys.append(f"extract:{h}")
             else:
-                keys = stages.get(stage, [])
+                keys = stages.get(stage_norm, [])
+
+            # stage별 LIKE 패턴 (버전 prefix 변경 대응)
+            stage_prefixes = {
+                "analyze":      [f"analyze:{h}", f"extract:{h}"],
+                "optimize":     [f"optimize:{h}"],
+                "noise":        [f"noise:{h}", f"noise_v2:{h}"],
+                "qec_analyze":  [f"qec_analyze:{h}"],
+                "qec_apply":    [f"qec_apply:{h}"],
+                "gpu_benchmark":[f"gpu_benchmark:{h}"],
+                "qpu_submit":   [f"qpu_submit:{h}"],
+            }
 
             import sqlite3
             conn = sqlite3.connect(_rag.cache_file, timeout=5.0)
@@ -1253,10 +1297,14 @@ async def uqi_invalidate_cache(
                 for k in keys:
                     cur = conn.execute("DELETE FROM cache WHERE key=?", (k,))
                     deleted += cur.rowcount
-                # LIKE로 해시 기반 전체 삭제 (QPU별 변형 포함)
-                if stage == "all":
+                # LIKE로 해시 기반 삭제 (버전/QPU/shots 변형 포함)
+                if stage_norm == "all":
                     cur = conn.execute("DELETE FROM cache WHERE key LIKE ?", (f"%{h}%",))
                     deleted += cur.rowcount
+                else:
+                    for prefix in stage_prefixes.get(stage_norm, []):
+                        cur = conn.execute("DELETE FROM cache WHERE key LIKE ?", (f"{prefix}%",))
+                        deleted += cur.rowcount
                 conn.commit()
             finally:
                 conn.close()
@@ -1273,7 +1321,7 @@ async def uqi_list_files() -> str:
     def _run():
         alg_dir = ALG_FILES_DIR
         if not alg_dir.exists():
-            return json.dumps({"error": f"디렉토리 없음: {alg_dir}"})
+            return json.dumps({"error": mcp_dir_not_found(str(alg_dir))})
         files = []
         for p in sorted(alg_dir.glob("*.py")):
             if p.name.startswith("_") or p.name.startswith("test_block_"):
@@ -1290,11 +1338,11 @@ async def uqi_read_file(algorithm_file: str) -> str:
     def _run():
         path = Path(algorithm_file)
         if not path.exists():
-            return json.dumps({"error": f"파일 없음: {algorithm_file}"})
+            return json.dumps({"error": mcp_file_not_found(algorithm_file)})
         if path.suffix != ".py":
-            return json.dumps({"error": "Python 파일만 조회 가능합니다"})
+            return json.dumps({"error": MCP_FILE_ONLY_PY})
         if path.stat().st_size > 1 * 1024 * 1024:
-            return json.dumps({"error": "파일 크기 초과 (최대 1MB)"})
+            return json.dumps({"error": MCP_FILE_TOO_LARGE})
         try:
             content = path.read_text(encoding="utf-8")
             return _safe_json({"name": path.name, "path": str(path), "content": content})
@@ -1302,6 +1350,44 @@ async def uqi_read_file(algorithm_file: str) -> str:
             return json.dumps({"error": str(e)})
 
     return await asyncio.to_thread(_run)
+
+
+# ─────────────────────────────────────────────────────────
+# QPU 제출 확인 메시지 빌더 (데이터에서 메시지 재생성 — i18n 대응)
+# 캐시에는 구조화 데이터만 저장, 메시지는 이 함수로 생성
+# ─────────────────────────────────────────────────────────
+
+def _build_qpu_submit_message(d: dict) -> str:
+    """캐시 데이터 또는 분析 결과 dict에서 QPU 제출 확인 메시지 생성"""
+    selected_qpu    = d.get("selected_qpu", "")
+    recommended_qpu = d.get("recommended_qpu", "")
+    avg_fidelity    = d.get("avg_fidelity")
+    total_cost      = d.get("total_cost") or 0
+    shots           = d.get("shots", 0)
+    qubit_warnings  = d.get("qubit_warnings", [])
+    disadvantages   = d.get("disadvantages", [])
+    t2_warnings     = d.get("t2_warnings", [])
+
+    lines = [
+        "⚠️  QPU 제출 확인 필요", "",
+        f"선택 QPU:    {selected_qpu}",
+        f"추천 QPU:    {recommended_qpu}",
+        f"예상 Fidelity: {avg_fidelity}",
+        f"예상 실행시간: {total_cost}ms ({round(total_cost/1000, 2)}s) × {shots} shots",
+        "※ QPU 큐 대기시간 별도",
+        f"shots:       {shots}",
+    ]
+    if qubit_warnings:
+        lines += ["", "⚠️  큐비트 수 초과 (제출 불가):"]
+        lines.extend(f"  • {w}" for w in qubit_warnings)
+    if disadvantages:
+        lines += ["", "⚠️  선택 QPU의 예상 불리한 점:"]
+        lines.extend(f"  • {d_}" for d_ in disadvantages)
+    if t2_warnings:
+        lines += ["", "⚠️  T2 코히어런스 경고:"]
+        lines.extend(f"  • {w}" for w in t2_warnings)
+    lines += ["", "제출하려면 confirmed=True로 다시 호출하세요."]
+    return "\n".join(lines)
 
 
 # ─────────────────────────────────────────────────────────
@@ -1334,6 +1420,9 @@ async def uqi_qpu_submit(
                     if not confirmed:
                         print(f"  [Cache] qpu_submit analyze 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
                         _cached_obj["_cached"] = True
+                        # 캐시에 message가 없는 경우 구조화 데이터에서 재생성
+                        if "message" not in _cached_obj:
+                            _cached_obj["message"] = _build_qpu_submit_message(_cached_obj)
                         return json.dumps(_cached_obj, ensure_ascii=False)
                     else:
                         # confirmed=True: 캐시에서 selected_qpu 복원 후 분석 skip → 바로 제출
@@ -1363,7 +1452,7 @@ async def uqi_qpu_submit(
                     s = qpu_status.get(qpu_name, {})
                     if not s.get("available", True):
                         return json.dumps({
-                            "error": f"{qpu_name} 현재 offline 상태입니다.",
+                            "error": mcp_qpu_offline(qpu_name),
                             "queue_note": s.get("note", ""),
                         })
             else:
@@ -1373,7 +1462,7 @@ async def uqi_qpu_submit(
                     s = qpu_status.get(qpu_name, {})
                     if s and not s.get("available", True):
                         return json.dumps({
-                            "error": f"{qpu_name} 현재 offline 상태입니다 (캐시).",
+                            "error": mcp_qpu_offline_cached(qpu_name),
                             "queue_note": s.get("note", ""),
                         })
 
@@ -1381,8 +1470,12 @@ async def uqi_qpu_submit(
             if qpu_name in PERCEVAL_QPUS:
                 if not confirmed:
                     return _safe_json({
-                        "status": "awaiting_confirmation",
-                        "message": f"⚠️  Perceval QPU 제출 확인 필요\n\n선택 QPU: {qpu_name}\nshots: {shots}\n\n제출하려면 confirmed=True로 다시 호출하세요.",
+                        "status": STATUS_AWAITING_CONFIRMATION,
+                        "message": (
+                            f"⚠️  Perceval QPU 제출 확인 필요\n\n"
+                            f"선택 QPU: {qpu_name}\nshots: {shots}\n\n"
+                            f"제출하려면 confirmed=True로 다시 호출하세요."
+                        ),
                         "selected_qpu": qpu_name,
                     })
                 token = os.getenv("QUANDELA_TOKEN")
@@ -1401,7 +1494,7 @@ async def uqi_qpu_submit(
                         )
                         execution_results[name] = result_dict
                 except Exception as e:
-                    return json.dumps({"error": f"Perceval 실행 실패: {str(e)}"})
+                    return json.dumps({"error": perceval_run_fail(str(e))})
                 return _safe_json({
                     "status": "completed", "selected_qpu": qpu_name,
                     "shots": shots, "results": execution_results,
@@ -1602,8 +1695,8 @@ async def uqi_qpu_submit(
                         qpu_status = _get_qpu_status_cached()
                         s = qpu_status.get(selected_qpu, {})
                         if s and not s.get("available", True):
-                            return json.dumps({"error": f"{selected_qpu} 현재 offline 상태입니다."})
-                        return json.dumps({"error": f"미지원 또는 가용하지 않은 QPU: {selected_qpu}"})
+                            return json.dumps({"error": mcp_qpu_offline(selected_qpu)})
+                        return json.dumps({"error": mcp_unavailable_qpu(selected_qpu)})
     
                     disadvantages = []
                     sel     = qpu_analysis.get(selected_qpu, {})
@@ -1705,29 +1798,38 @@ async def uqi_qpu_submit(
                         }
 
                     rec_info = qpu_analysis.get(recommended_qpu, {})
-                    _result = _safe_json({
-                        "status":           "awaiting_confirmation",
-                        "message":          "\n".join(msg_lines),
+                    # 캐시에는 구조화 데이터만 저장 (메시지 텍스트 제외 → i18n 대응)
+                    _cache_data = {
+                        "status":           STATUS_AWAITING_CONFIRMATION,
                         "selected_qpu":     selected_qpu,
                         "recommended_qpu":  recommended_qpu,
                         "selection_note":   selection_note,
                         "disadvantages":    disadvantages,
+                        "t2_warnings":      t2_warnings,
+                        "qubit_warnings":   qubit_warnings,
                         "qpu_comparison":   qpu_summary,
                         "circuit_info":     sel_info.get("circuits", {}),
                         "circuit_info_rec": rec_info.get("circuits", {}) if recommended_qpu != selected_qpu else {},
+                        "avg_fidelity":     sel_info.get("avg_fidelity"),
+                        "total_cost":       sel_info.get("total_cost"),
+                        "shots":            shots,
+                    }
+                    _rag.set_cache(_submit_cache_key, json.dumps(_cache_data, ensure_ascii=False))
+                    # 응답에는 메시지 텍스트도 포함 (프론트엔드 표시용)
+                    _result = _safe_json({
+                        **_cache_data,
+                        "message": _build_qpu_submit_message(_cache_data),
                     })
-                    _rag.set_cache(_submit_cache_key, _result)
                     return _result
                 else:
-                    # confirmed=True인데 캐시가 없어서 분석 재실행된 경우
-                    # → 분석 결과를 캐시에 저장하고 사용자에게 재확인 요청
+                    # confirmed=True인데 캐시가 없어서 분析 재실행된 경우
+                    # → 재확인 요청
                     return json.dumps({
-                        "error": "분석 캐시가 만료되었습니다. confirmed=False로 다시 분석 후 제출해주세요.",
+                        "error": MCP_CACHE_EXPIRED,
                         "recommended_qpu": recommended_qpu,
                         "selected_qpu": selected_qpu,
-                        "status": "cache_expired",
+                        "status": STATUS_CACHE_EXPIRED,
                     }, ensure_ascii=False)
-
             # confirmed=True → 실제 제출
             cal = _get_calibration(selected_qpu)
             device_qubits = cal.get("num_qubits", 0)
@@ -1735,7 +1837,7 @@ async def uqi_qpu_submit(
                 if isinstance(v, dict) and device_qubits:
                     if v.get("num_qubits", 0) > device_qubits:
                         return json.dumps({
-                            "error": f"{name}: 회로 큐비트({v['num_qubits']}q)가 {selected_qpu} 장비({device_qubits}q)를 초과합니다. 제출 불가."
+                            "error": mcp_qubit_exceeded_submit(name, v['num_qubits'], selected_qpu, device_qubits)
                         })
 
             circuits = qpu_circuits.get(selected_qpu, {})

@@ -4,6 +4,7 @@
 
 import re
 from typing import Optional
+from uqi_messages import CUDAQ_NO_SAMPLE_RESULT, cudaq_qubit_exceeded
 
 
 class UQIExecutorCUDAQ:
@@ -127,7 +128,7 @@ class UQIExecutorCUDAQ:
                         cudaq.sample = original_sample
 
                     if captured_result[0] is None:
-                        raise RuntimeError("cudaq.sample 결과 없음")
+                        raise RuntimeError(CUDAQ_NO_SAMPLE_RESULT)
 
                     counts = {}
                     for bitstring, count in captured_result[0].items():
@@ -274,7 +275,7 @@ class UQIExecutorCUDAQ:
                 num_qubits = int(np.log2(mat.shape[0]))
 
                 if num_qubits > 10:
-                    result["error"] = f"큐비트 수 초과 ({num_qubits}q > 10q)"
+                    result["error"] = cudaq_qubit_exceeded(num_qubits)
                     print(f"    ✗ {result['error']}")
                     return result
 

@@ -6,6 +6,7 @@
 <title>UQI — Quantum Intelligence</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
 <style>
+/* ── Dark Theme (기본) ── */
 :root {
   --bg: #080c10;
   --surface: #0d1117;
@@ -21,24 +22,57 @@
   --text3: #484f58;
   --font-mono: 'JetBrains Mono', monospace;
   --font-display: 'Syne', sans-serif;
+  --grid-line: rgba(0,212,255,0.03);
+  --glow: rgba(0,212,255,0.06);
+}
+/* ── Light Theme ── */
+[data-theme="light"] {
+  --bg: #f8fafc;
+  --surface: #ffffff;
+  --surface2: #f1f5f9;
+  --border: #e2e8f0;
+  --accent: #0969da;
+  --accent2: #7c3aed;
+  --success: #1a7f37;
+  --warn: #9a6700;
+  --error: #cf222e;
+  --text: #1f2328;
+  --text2: #57606a;
+  --text3: #8c959f;
+  --grid-line: rgba(9,105,218,0.04);
+  --glow: rgba(9,105,218,0.04);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
 body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; overflow-x:hidden; }
 body::before {
   content:''; position:fixed; inset:0;
-  background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px);
+  background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
   background-size:40px 40px; pointer-events:none; z-index:0;
 }
 body::after {
   content:''; position:fixed; top:-200px; left:50%; transform:translateX(-50%);
   width:600px; height:600px;
-  background:radial-gradient(circle,rgba(0,212,255,0.06) 0%,transparent 70%);
+  background:radial-gradient(circle,var(--glow) 0%,transparent 70%);
   pointer-events:none; z-index:0;
 }
 
+/* ── Theme & Lang Toggle Buttons ── */
+.btn-theme-toggle,.btn-lang-toggle { background:none; border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text2); font-family:var(--font-mono); font-size:13px; cursor:pointer; transition:all 0.2s; }
+.btn-theme-toggle:hover,.btn-lang-toggle:hover { border-color:var(--accent); color:var(--accent); }
+
+/* ── Language Picker Popup ── */
+.lang-picker-wrap { position:relative; display:inline-block; }
+.lang-picker-popup { display:none; position:absolute; top:calc(100% + 6px); right:0; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:4px; min-width:110px; z-index:2000; box-shadow:0 8px 24px rgba(0,0,0,0.4); }
+.lang-picker-popup.open { display:block; }
+.lang-picker-item { display:flex; align-items:center; gap:8px; padding:7px 12px; border-radius:5px; cursor:pointer; font-family:var(--font-mono); font-size:13px; color:var(--text2); transition:background 0.15s, color 0.15s; white-space:nowrap; }
+.lang-picker-item:hover { background:var(--surface2); color:var(--text1); }
+.lang-picker-item.active { color:var(--accent); font-weight:600; }
+.lang-picker-item .lang-check { font-size:10px; opacity:0; }
+.lang-picker-item.active .lang-check { opacity:1; }
+
 /* ── Lock Screen ── */
 #lockScreen { position:fixed; inset:0; z-index:9999; background:var(--bg); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:24px; }
-#lockScreen::before { content:''; position:absolute; inset:0; background-image:linear-gradient(rgba(0,212,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,0.03) 1px,transparent 1px); background-size:40px 40px; }
+#lockScreen::before { content:''; position:absolute; inset:0; background-image:linear-gradient(var(--grid-line) 1px,transparent 1px),linear-gradient(90deg,var(--grid-line) 1px,transparent 1px); background-size:40px 40px; }
 .lock-card { position:relative; z-index:1; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px 48px; width:380px; display:flex; flex-direction:column; align-items:center; gap:24px; }
 .lock-logo { font-family:var(--font-display); font-size:28px; font-weight:800; letter-spacing:-0.5px; }
 .lock-logo span { color:var(--accent); }
@@ -369,20 +403,20 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="logo-mark">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <!-- 와이어 2개 -->
-            <line x1="1" y1="5.5" x2="19" y2="5.5" stroke="#00d4ff" stroke-width="1.0" opacity="0.5"/>
-            <line x1="1" y1="14.5" x2="19" y2="14.5" stroke="#00d4ff" stroke-width="1.0" opacity="0.5"/>
+            <line x1="1" y1="5.5" x2="19" y2="5.5" stroke="var(--accent)" stroke-width="1.0" opacity="0.5"/>
+            <line x1="1" y1="14.5" x2="19" y2="14.5" stroke="var(--accent)" stroke-width="1.0" opacity="0.5"/>
             <!-- H 게이트 (위 와이어) -->
-            <rect x="2.25" y="2.25" width="7.5" height="6.5" rx="1.2" fill="#0d1117" stroke="#00d4ff" stroke-width="1.3"/>
-            <line x1="4.3" y1="3.85" x2="4.3" y2="7.25" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
-            <line x1="7.2" y1="3.85" x2="7.2" y2="7.25" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
-            <line x1="4.3" y1="5.55" x2="7.2" y2="5.55" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <rect x="2.25" y="2.25" width="7.5" height="6.5" rx="1.2" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.3"/>
+            <line x1="4.3" y1="3.85" x2="4.3" y2="7.25" stroke="var(--accent)" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="7.2" y1="3.85" x2="7.2" y2="7.25" stroke="var(--accent)" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="4.3" y1="5.55" x2="7.2" y2="5.55" stroke="var(--accent)" stroke-width="1.1" stroke-linecap="round"/>
             <!-- CNOT 컨트롤 점 -->
-            <circle cx="14.5" cy="5.5" r="1.5" fill="#00d4ff"/>
-            <line x1="14.5" y1="7" x2="14.5" y2="11.2" stroke="#00d4ff" stroke-width="1.1"/>
+            <circle cx="14.5" cy="5.5" r="1.5" fill="var(--accent)"/>
+            <line x1="14.5" y1="7" x2="14.5" y2="11.2" stroke="var(--accent)" stroke-width="1.1"/>
             <!-- 타겟 원 + 십자 -->
-            <circle cx="14.5" cy="14.5" r="3.0" stroke="#00d4ff" stroke-width="1.3"/>
-            <line x1="14.5" y1="11.5" x2="14.5" y2="17.5" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
-            <line x1="11.5" y1="14.5" x2="17.5" y2="14.5" stroke="#00d4ff" stroke-width="1.1" stroke-linecap="round"/>
+            <circle cx="14.5" cy="14.5" r="3.0" stroke="var(--accent)" stroke-width="1.3"/>
+            <line x1="14.5" y1="11.5" x2="14.5" y2="17.5" stroke="var(--accent)" stroke-width="1.1" stroke-linecap="round"/>
+            <line x1="11.5" y1="14.5" x2="17.5" y2="14.5" stroke="var(--accent)" stroke-width="1.1" stroke-linecap="round"/>
           </svg>
         </div>
         <div class="logo-text">UQ<span>I</span></div>
@@ -392,7 +426,15 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="status-dot" id="statusDot"></div>
           <span id="statusText">disconnected</span>
         </div>
-        <button class="btn-logout" onclick="logout()">LOCK</button>
+        <button class="btn-theme-toggle" id="btn-theme-toggle" onclick="toggleTheme()" title="Toggle theme">☾</button>
+        <div class="lang-picker-wrap" id="lang-picker-wrap">
+          <button class="btn-lang-toggle" id="btn-lang-toggle" onclick="toggleLangPicker(event)" title="Switch language">EN</button>
+          <div class="lang-picker-popup" id="lang-picker-popup">
+            <div class="lang-picker-item" onclick="selectLang('en')"><span class="lang-check">✓</span> EN · English</div>
+            <div class="lang-picker-item" onclick="selectLang('ko')"><span class="lang-check">✓</span> KO · 한국어</div>
+          </div>
+        </div>
+        <button class="btn-logout" onclick="logout()" data-i18n="header.lock">LOCK</button>
       </div>
     </div>
   </header>
@@ -404,9 +446,9 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
   </div>
 
   <div class="main-nav">
-    <button class="nav-btn active" onclick="switchMain('qpus',this)">⚛ QPUs</button>
-    <button class="nav-btn" onclick="switchMain('pipeline',this)">⚙ Pipeline</button>
-    <button class="nav-btn" onclick="switchMain('knowledge',this)">🔍 Knowledge</button>
+    <button class="nav-btn active" onclick="switchMain('qpus',this)" data-i18n="nav.qpus">⚛ QPUs</button>
+    <button class="nav-btn" onclick="switchMain('pipeline',this)" data-i18n="nav.pipeline">⚙ Pipeline</button>
+    <button class="nav-btn" onclick="switchMain('knowledge',this)" data-i18n="nav.knowledge">🔍 Knowledge</button>
   </div>
 
   <!-- ══════════════ QPUs PANEL ══════════════ -->
@@ -473,7 +515,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <text x="133" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Q3</text>
               <text x="178" y="26" text-anchor="middle" font-size="7.5" fill="#6e7681">Max</text>
             </svg>
-            <span style="font-size:9.5px;color:var(--text3);line-height:1.4">Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers</span>
+            <span data-i18n-html="qpu.boxplot_desc" style="font-size:9.5px;color:var(--text3);line-height:1.4">Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers</span>
           </div>
           <div id="chart-boxplot" class="qpu-chart-canvas"></div>
         </div>
@@ -498,7 +540,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               ondragleave="onDragLeave(event)" ondrop="onDrop(event)"
               onclick="document.getElementById('global-file-input').click()">
               <input type="file" accept=".py" id="global-file-input" onchange="onFileChange(event)" style="display:none">
-              Drop .py here or click to browse
+              <span data-i18n="pipeline.drop_hint">Drop .py here or click to browse</span>
             </div>
             <div class="file-name-display" id="global-fname"></div>
           </div>
@@ -528,7 +570,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
 
       <!-- Pipeline Steps -->
       <div class="pipeline-steps">
-        <div style="font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:4px;line-height:1.6">
+        <div data-i18n-html="pipeline.steps_hint" style="font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:4px;line-height:1.6">
           Each step runs <strong style="color:var(--text2)">independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.
         </div>
 
@@ -539,17 +581,17 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🔬</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">Circuit Analysis</span>
+                  <span class="step-name" data-i18n="pipeline.analyze.name">Circuit Analysis</span>
                   <span class="step-badge" id="badge-analyze" style="display:none"></span>
                 </div>
-                <span class="step-desc">Logical complexity — qubits, gates, depth, T-gate ratio</span>
+                <span class="step-desc" data-i18n="pipeline.analyze.desc">Logical complexity — qubits, gates, depth, T-gate ratio</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-analyze">▼</span>
           </div>
           <div class="step-body" id="body-analyze">
-            <button class="btn-run" id="btn-analyze" onclick="runAnalyze()">RUN ANALYSIS</button>
-            <div class="step-result" id="result-analyze"><div class="empty-state">Run analysis to see results</div></div>
+            <button class="btn-run" id="btn-analyze" data-i18n="pipeline.analyze.run" onclick="runAnalyze()">RUN ANALYSIS</button>
+            <div class="step-result" id="result-analyze"><div class="empty-state" data-i18n="pipeline.analyze.empty">Run analysis to see results</div></div>
           </div>
         </div>
 
@@ -560,10 +602,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">⚙️</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">Optimization</span>
+                  <span class="step-name" data-i18n="pipeline.optimize.name">Optimization</span>
                   <span class="step-badge" id="badge-optimize" style="display:none"></span>
                 </div>
-                <span class="step-desc">Physical mapping to target QPU — gate/depth reduction via auto transpile</span>
+                <span class="step-desc" data-i18n="pipeline.optimize.desc">Physical mapping to target QPU — gate/depth reduction via auto transpile</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-optimize">▼</span>
@@ -571,7 +613,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-optimize">
             <div class="step-options">
               <div class="form-group">
-                <label class="form-label">Combination</label>
+                <label class="form-label" data-i18n="pipeline.optimize.combination">Combination</label>
                 <select class="form-select" id="opt-combo">
                   <option value="auto">auto</option>
                   <option value="qiskit+sabre">qiskit+sabre</option>
@@ -581,15 +623,15 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Options</label>
+                <label class="form-label" data-i18n="pipeline.optimize.options">Options</label>
                 <div class="form-checkbox-group">
                   <input type="checkbox" id="opt-verify">
-                  <label for="opt-verify">Verify equivalence</label>
+                  <label for="opt-verify" data-i18n="pipeline.optimize.verify">Verify equivalence</label>
                 </div>
               </div>
             </div>
-            <button class="btn-run" id="btn-optimize" onclick="runOptimize()">RUN OPTIMIZATION</button>
-            <div class="step-result" id="result-optimize"><div class="empty-state">Run optimization to see results</div></div>
+            <button class="btn-run" id="btn-optimize" data-i18n="pipeline.optimize.run" onclick="runOptimize()">RUN OPTIMIZATION</button>
+            <div class="step-result" id="result-optimize"><div class="empty-state" data-i18n="pipeline.optimize.empty">Run optimization to see results</div></div>
           </div>
         </div>
 
@@ -600,10 +642,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">📡</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">Noise Simulation</span>
+                  <span class="step-name" data-i18n="pipeline.noise.name">Noise Simulation</span>
                   <span class="step-badge" id="badge-noise" style="display:none"></span>
                 </div>
-                <span class="step-desc">QPU-realistic fidelity — calibration-based noise model on optimized circuit</span>
+                <span class="step-desc" data-i18n="pipeline.noise.desc">QPU-realistic fidelity — calibration-based noise model on optimized circuit</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-noise">▼</span>
@@ -611,19 +653,19 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-noise">
             <div class="step-options">
               <div class="form-group">
-                <label class="form-label">Simulation Engine</label>
+                <label class="form-label" data-i18n="pipeline.noise.engine">Simulation Engine</label>
                 <select class="form-select" id="noise-sdk">
                   <option value="qiskit">Qiskit</option>
                   <option value="pennylane">PennyLane</option>
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Shots</label>
+                <label class="form-label" data-i18n="pipeline.shots">Shots</label>
                 <input class="form-input" id="noise-shots" type="number" value="1024" min="64" max="8192">
               </div>
             </div>
-            <button class="btn-run" id="btn-noise" onclick="runNoise()">RUN NOISE SIMULATION</button>
-            <div class="step-result" id="result-noise"><div class="empty-state">Run simulation to see results</div></div>
+            <button class="btn-run" id="btn-noise" data-i18n="pipeline.noise.run" onclick="runNoise()">RUN NOISE SIMULATION</button>
+            <div class="step-result" id="result-noise"><div class="empty-state" data-i18n="pipeline.noise.empty">Run simulation to see results</div></div>
           </div>
         </div>
 
@@ -634,10 +676,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🛡</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">QEC Analysis</span>
+                  <span class="step-name" data-i18n="pipeline.qec_analyze.name">QEC Analysis</span>
                   <span class="step-badge" id="badge-qec-analyze" style="display:none"></span>
                 </div>
-                <span class="step-desc">Error correction necessity — T2 ratio, fidelity, recommended codes</span>
+                <span class="step-desc" data-i18n="pipeline.qec_analyze.desc">Error correction necessity — T2 ratio, fidelity, recommended codes</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-qec-analyze">▼</span>
@@ -645,12 +687,12 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-qec-analyze">
             <div class="step-options single">
               <div class="form-group">
-                <label class="form-label">Shots</label>
+                <label class="form-label" data-i18n="pipeline.shots">Shots</label>
                 <input class="form-input" id="qeca-shots" type="number" value="1024" min="64" max="8192">
               </div>
             </div>
-            <button class="btn-run" id="btn-qeca" onclick="runQECAnalyze()">RUN QEC ANALYSIS</button>
-            <div class="step-result" id="result-qec-analyze"><div class="empty-state">Run QEC analysis to see results</div></div>
+            <button class="btn-run" id="btn-qeca" data-i18n="pipeline.qec_analyze.run" onclick="runQECAnalyze()">RUN QEC ANALYSIS</button>
+            <div class="step-result" id="result-qec-analyze"><div class="empty-state" data-i18n="pipeline.qec_analyze.empty">Run QEC analysis to see results</div></div>
           </div>
         </div>
 
@@ -661,10 +703,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🔧</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">QEC Apply</span>
+                  <span class="step-name" data-i18n="pipeline.qec_apply.name">QEC Apply</span>
                   <span class="step-badge" id="badge-qec-apply" style="display:none"></span>
                 </div>
-                <span class="step-desc">Encode circuit with QEC code — compare fidelity before/after</span>
+                <span class="step-desc" data-i18n="pipeline.qec_apply.desc">Encode circuit with QEC code — compare fidelity before/after</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-qec-apply">▼</span>
@@ -672,19 +714,19 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-qec-apply">
             <div class="step-options">
               <div class="form-group">
-                <label class="form-label">QEC Code</label>
+                <label class="form-label" data-i18n="pipeline.qec_apply.code">QEC Code</label>
                 <select class="form-select" id="qecap-code">
                   <option value="bit_flip">Bit Flip</option>
                   <option value="phase_flip">Phase Flip</option>
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Shots</label>
+                <label class="form-label" data-i18n="pipeline.shots">Shots</label>
                 <input class="form-input" id="qecap-shots" type="number" value="256" min="64" max="4096">
               </div>
             </div>
-            <button class="btn-run" id="btn-qecap" onclick="runQECApply()">RUN QEC APPLY</button>
-            <div class="step-result" id="result-qec-apply"><div class="empty-state">Run QEC apply to see results</div></div>
+            <button class="btn-run" id="btn-qecap" data-i18n="pipeline.qec_apply.run" onclick="runQECApply()">RUN QEC APPLY</button>
+            <div class="step-result" id="result-qec-apply"><div class="empty-state" data-i18n="pipeline.qec_apply.empty">Run QEC apply to see results</div></div>
           </div>
         </div>
 
@@ -695,17 +737,17 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🚀</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">GPU Benchmark</span>
+                  <span class="step-name" data-i18n="pipeline.gpu.name">GPU Benchmark</span>
                   <span class="step-badge" id="badge-gpu" style="display:none"></span>
                 </div>
-                <span class="step-desc">CPU vs GPU simulation speed — statevector throughput comparison</span>
+                <span class="step-desc" data-i18n="pipeline.gpu.desc">CPU vs GPU simulation speed — statevector throughput comparison</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-gpu">▼</span>
           </div>
           <div class="step-body" id="body-gpu">
-            <button class="btn-run" id="btn-gpu" onclick="runGPU()">RUN BENCHMARK</button>
-            <div class="step-result" id="result-gpu"><div class="empty-state">Run benchmark to see results</div></div>
+            <button class="btn-run" id="btn-gpu" data-i18n="pipeline.gpu.run" onclick="runGPU()">RUN BENCHMARK</button>
+            <div class="step-result" id="result-gpu"><div class="empty-state" data-i18n="pipeline.gpu.empty">Run benchmark to see results</div></div>
           </div>
         </div>
 
@@ -716,17 +758,17 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🌐</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">QPU Submit</span>
+                  <span class="step-name" data-i18n="pipeline.qpu.name">QPU Submit</span>
                   <span class="step-badge" id="badge-qpu" style="display:none"></span>
                   <span style="font-size:9px;background:rgba(248,81,73,0.15);color:var(--error);border:1px solid rgba(248,81,73,0.3);border-radius:4px;padding:1px 5px">REAL HARDWARE</span>
                 </div>
-                <span class="step-desc">Submit to real quantum hardware — transpiles &amp; executes on actual QPU</span>
+                <span class="step-desc" data-i18n="pipeline.qpu.desc">Submit to real quantum hardware — transpiles &amp; executes on actual QPU</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-qpu">▼</span>
           </div>
           <div class="step-body" id="body-qpu">
-            <div class="warn-banner">⚠ This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use "Analyze (No Submit)" first to preview the transpiled circuit before confirming.</div>
+            <div class="warn-banner" data-i18n-html="pipeline.qpu.warn">⚠ This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use "Analyze (No Submit)" first to preview the transpiled circuit before confirming.</div>
             <div class="step-options">
               <div class="form-group">
                 <label class="form-label">Target QPU</label>
@@ -739,13 +781,13 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                 </select>
               </div>
               <div class="form-group">
-                <label class="form-label">Shots</label>
+                <label class="form-label" data-i18n="pipeline.shots">Shots</label>
                 <input class="form-input" id="qpu-shots" type="number" value="1024" min="64" max="8192">
               </div>
             </div>
-            <button class="btn-run" id="btn-qpu-analyze" onclick="runQPUAnalyze()">ANALYZE (NO SUBMIT)</button>
+            <button class="btn-run" id="btn-qpu-analyze" data-i18n="pipeline.qpu.analyze_btn" onclick="runQPUAnalyze()">ANALYZE (NO SUBMIT)</button>
             <button class="btn-confirm" id="btn-qpu-confirm" onclick="runQPUSubmit()" style="display:none">⚡ CONFIRM & SUBMIT TO QPU</button>
-            <div class="step-result" id="result-qpu"><div class="empty-state">Run analysis first, then confirm to submit</div></div>
+            <div class="step-result" id="result-qpu"><div class="empty-state" data-i18n="pipeline.qpu.empty">Run analysis first, then confirm to submit</div></div>
           </div>
         </div>
 
@@ -756,10 +798,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <span class="step-icon">🖥️</span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
-                  <span class="step-name">QPU Job Manager</span>
+                  <span class="step-name" data-i18n="pipeline.job_manager.name">QPU Job Manager</span>
                   <span class="step-badge" id="badge-job-history" style="display:none"></span>
                 </div>
-                <span class="step-desc">Monitor &amp; manage submitted QPU jobs — check status, view results, cancel jobs</span>
+                <span class="step-desc" data-i18n="pipeline.job_manager.desc">Monitor &amp; manage submitted QPU jobs — check status, view results, cancel jobs</span>
               </div>
             </div>
             <span class="step-chevron" id="chevron-job-history">▼</span>
@@ -767,39 +809,39 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="step-body" id="body-job-history">
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
               <div style="display:flex;align-items:center;gap:6px">
-                <span style="font-size:10px;color:var(--text3)">Status</span>
+                <span style="font-size:10px;color:var(--text3)" data-i18n="pipeline.job_manager.status_label">Status</span>
                 <select id="jh-status" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="_jobHistoryPage=1; loadJobHistory()">
-                  <option value="">All</option>
-                  <option value="active">Active</option>
-                  <option value="done">Done</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="error">Error</option>
+                  onchange="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()">
+                  <option value="" data-i18n="pipeline.job_manager.all">All</option>
+                  <option value="active" data-i18n="pipeline.job_manager.active">Active</option>
+                  <option value="done" data-i18n="pipeline.job_manager.done">Done</option>
+                  <option value="cancelled" data-i18n="pipeline.job_manager.cancelled">Cancelled</option>
+                  <option value="error" data-i18n="pipeline.job_manager.error">Error</option>
                 </select>
               </div>
               <div style="display:flex;align-items:center;gap:6px">
-                <span style="font-size:10px;color:var(--text3)">Period</span>
+                <span style="font-size:10px;color:var(--text3)" data-i18n="pipeline.job_manager.period_label">Period</span>
                 <select id="jh-days" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="_jobHistoryPage=1; loadJobHistory()">
-                  <option value="0" selected>All time</option>
-                  <option value="1">Today</option>
-                  <option value="7">Last 7 days</option>
-                  <option value="30">Last 30 days</option>
+                  onchange="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()">
+                  <option value="0" selected data-i18n="pipeline.job_manager.all_time">All time</option>
+                  <option value="1" data-i18n="pipeline.job_manager.today">Today</option>
+                  <option value="7" data-i18n="pipeline.job_manager.last_7d">Last 7 days</option>
+                  <option value="30" data-i18n="pipeline.job_manager.last_30d">Last 30 days</option>
                 </select>
               </div>
               <div style="display:flex;align-items:center;gap:6px">
-                <span style="font-size:10px;color:var(--text3)">Show</span>
+                <span style="font-size:10px;color:var(--text3)" data-i18n="pipeline.job_manager.show_label">Show</span>
                 <select id="jh-limit" class="form-select" style="padding:3px 8px;font-size:10px;min-width:0;width:auto"
-                  onchange="_jobHistoryPage=1; loadJobHistory()">
+                  onchange="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()">
                   <option value="20">20</option>
                   <option value="50" selected>50</option>
                   <option value="100">100</option>
                 </select>
               </div>
-              <button class="btn-refresh-list" id="btn-job-refresh" onclick="_jobHistoryPage=1; loadJobHistory()"
-                style="margin-left:auto">↻ Refresh</button>
+              <button class="btn-refresh-list" id="btn-job-refresh" onclick="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()"
+                data-i18n="pipeline.job_manager.refresh" style="margin-left:auto">↻ Refresh</button>
             </div>
-            <div class="step-result" id="result-job-history"><div class="empty-state">Click Refresh to load jobs</div></div>
+            <div class="step-result" id="result-job-history"><div class="empty-state" data-i18n="pipeline.job_manager.empty">Click Refresh to load jobs</div></div>
           </div>
         </div>
 
@@ -812,31 +854,31 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
     <div class="knowledge-layout">
       <div class="knowledge-sidebar">
         <div class="knowledge-form">
-          <div class="knowledge-form-title">Search Knowledge Base</div>
+          <div class="knowledge-form-title" data-i18n="knowledge.title">Search Knowledge Base</div>
           <div class="form-group">
-            <label class="form-label">Query Type</label>
+            <label class="form-label" data-i18n="knowledge.query_type">Query Type</label>
             <select class="form-select" id="rag-type" onchange="onRagTypeChange()">
-              <option value="stats">Stats Overview</option>
-              <option value="recent">Recent Entries</option>
-              <option value="best_combination">Best Optimizations</option>
-              <option value="suspicious_optimizations">Suspicious Optimizations</option>
-              <option value="pipeline_issues">Pipeline Issues</option>
-              <option value="transpile_patterns">Transpile Patterns</option>
-              <option value="qec_results">QEC Results</option>
-              <option value="gpu_benchmark">GPU Benchmarks</option>
-              <option value="security_block">Security Blocks</option>
+              <option value="stats" data-i18n="rag.type.stats">Stats Overview</option>
+              <option value="recent" data-i18n="rag.type.recent">Recent Entries</option>
+              <option value="best_combination" data-i18n="rag.type.best_combination">Best Optimizations</option>
+              <option value="suspicious_optimizations" data-i18n="rag.type.suspicious_optimizations">Suspicious Optimizations</option>
+              <option value="pipeline_issues" data-i18n="rag.type.pipeline_issues">Pipeline Issues</option>
+              <option value="transpile_patterns" data-i18n="rag.type.transpile_patterns">Transpile Patterns</option>
+              <option value="qec_results" data-i18n="rag.type.qec_results">QEC Results</option>
+              <option value="gpu_benchmark" data-i18n="rag.type.gpu_benchmark">GPU Benchmarks</option>
+              <option value="security_block" data-i18n="rag.type.security_block">Security Blocks</option>
             </select>
           </div>
           <div id="rag-semantic-input" style="display:none">
             <div class="form-group">
-              <label class="form-label">Semantic Query</label>
+              <label class="form-label" data-i18n="knowledge.semantic_query">Semantic Query</label>
               <textarea id="rag-query" class="form-input"
                 style="resize:vertical;min-height:72px;line-height:1.5"
                 placeholder="e.g. high fidelity experiment on iqm_garnet&#10;PennyLane circuit optimization success&#10;High speedup result in GPU benchmark"></textarea>
             </div>
           </div>
           <div class="form-group" id="rag-group-qpu">
-            <label class="form-label">QPU Filter</label>
+            <label class="form-label" data-i18n="knowledge.qpu_filter">QPU Filter</label>
             <select class="form-select" id="rag-qpu">
               <option value="">All QPUs</option>
               <option value="ibm_fez">IBM Fez</option>
@@ -844,7 +886,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
             </select>
           </div>
           <div class="form-group" id="rag-group-sdk">
-            <label class="form-label">SDK Filter</label>
+            <label class="form-label" data-i18n="knowledge.sdk_filter">SDK Filter</label>
             <select class="form-select" id="rag-sdk">
               <option value="">All SDKs</option>
               <option value="PennyLane">PennyLane</option>
@@ -857,10 +899,10 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
             <label class="form-label">Limit</label>
             <input class="form-input" id="rag-limit" type="number" value="10" min="1" max="50">
           </div>
-          <button class="btn-run" id="btn-rag" onclick="runRAG()">RUN SEARCH</button>
+          <button class="btn-run" id="btn-rag" data-i18n="knowledge.run_search" onclick="runRAG()">RUN SEARCH</button>
         </div>
         <div class="knowledge-form" style="margin-top:12px">
-          <div class="knowledge-form-title">⚛ Semantic Search</div>
+          <div class="knowledge-form-title" data-i18n="knowledge.semantic_title">⚛ Semantic Search</div>
           <div class="form-group">
             <textarea id="semantic-input" class="form-input"
               style="resize:vertical;min-height:80px;line-height:1.5"
@@ -875,16 +917,16 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <option value="20">20</option>
             </select>
           </div>
-          <button class="btn-run" id="btn-semantic" onclick="runSemantic()">SEMANTIC SEARCH</button>
+          <button class="btn-run" id="btn-semantic" data-i18n="knowledge.run_semantic" onclick="runSemantic()">SEMANTIC SEARCH</button>
           <div style="font-size:10px;color:var(--text3);margin-top:8px">
-            Press Enter to search · Shift+Enter for new line<br>Chroma vector similarity search
+            <span data-i18n-html="knowledge.semantic_hint">Press Enter to search · Shift+Enter for new line<br>Chroma vector similarity search</span>
           </div>
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:16px">
         <div class="knowledge-result">
           <div class="knowledge-result-header">
-            <span class="knowledge-result-title">Structured Search Results</span>
+            <span class="knowledge-result-title" data-i18n="knowledge.structured_results">Structured Search Results</span>
             <span id="rag-type-desc" style="font-size:10px;color:var(--accent);opacity:0.8;margin-left:8px"></span>
             <span class="knowledge-result-meta" id="rag-meta">—</span>
           </div>
@@ -894,7 +936,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         </div>
         <div class="knowledge-result" id="semantic-results" style="display:none">
           <div class="knowledge-result-header">
-            <span class="knowledge-result-title">⚛ Semantic Results</span>
+            <span class="knowledge-result-title" data-i18n="knowledge.semantic_results">⚛ Semantic Results</span>
             <span class="knowledge-result-meta" id="semantic-meta">—</span>
           </div>
           <div class="knowledge-result-body" id="semantic-result-body"></div>
@@ -908,6 +950,90 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
 
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script>
+// ─────────────────────────────────────────────────────────
+// i18n — 로케일 정의 및 번역 함수
+// ─────────────────────────────────────────────────────────
+const _LOCALES = {
+  en: null, // lazy-loaded from locales/en.json or fallback
+  ko: null,
+};
+// 인라인 폴백 로케일 (fetch 실패 시 또는 file:// 프로토콜)
+const _LOCALE_EN = {"nav.qpus":"⚛ QPUs","nav.pipeline":"⚙ Pipeline","nav.knowledge":"🔍 Knowledge","header.server_label":"Server","header.connect":"Connect","header.lock":"LOCK","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"disconnected","status.connected":"connected","status.connecting":"Connecting...","status.reconnecting":"Reconnecting...","status.not_connected":"Not connected","lock.subtitle":"QUANTUM INTELLIGENCE","lock.unlock":"UNLOCK","lock.incorrect_password":"Incorrect password","footer.text":"UQI · Universal Quantum Intelligence · Internal Tool","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ Refresh","qpu.loading":"Loading QPU status...","qpu.refreshing":"Refreshing...","qpu.no_qpus":"No QPUs available","qpu.load_fail":"Failed to load QPU list","qpu.loading_calibration":"Loading calibration...","qpu.cache_refresh_recommended":"· Refresh recommended","qpu.close":"Close","qpu.refresh_cal":"↻ Refresh Cal","qpu.deep_analysis":"QPU Deep Analysis","qpu.performance_radar":"Performance Radar","qpu.distribution_box":"Distribution (Box Plot)","qpu.log_scale":"log scale","qpu.all_qpus":"All QPUs","qpu.auto_recommended":"Auto (Recommended)","qpu.online":"Online","qpu.offline":"Offline","qpu.photonic":"Photonic","qpu.no_modality":"No modality selected","qpu.no_distribution":"No distribution data for selected modality.","qpu.boxplot_desc":"Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ Upload","pipeline.dgx":"📂 DGX","pipeline.drop_hint":"Drop .py here or click to browse","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"Logical complexity — qubits, gates, depth, T-gate ratio","pipeline.analyze.run":"RUN ANALYSIS","pipeline.analyze.running":"Analyzing...","pipeline.analyze.empty":"Run analysis to see results","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"Physical mapping to target QPU — gate/depth reduction via auto transpile","pipeline.optimize.run":"RUN OPTIMIZATION","pipeline.optimize.running":"Optimizing...","pipeline.optimize.combination":"Combination","pipeline.optimize.options":"Options","pipeline.optimize.verify":"Verify equivalence","pipeline.optimize.empty":"Run optimization to see results","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU-realistic fidelity — calibration-based noise model on optimized circuit","pipeline.noise.run":"RUN NOISE SIMULATION","pipeline.noise.running":"Simulating...","pipeline.noise.empty":"Run noise simulation to see results","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"Error correction necessity — T2 ratio, fidelity, recommended codes","pipeline.qec_analyze.run":"RUN QEC ANALYSIS","pipeline.qec_analyze.running":"Analyzing...","pipeline.qec_analyze.empty":"Run QEC analysis to see results","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"Encode circuit with QEC code — compare fidelity before/after","pipeline.qec_apply.run":"RUN QEC APPLY","pipeline.qec_apply.running":"Applying...","pipeline.qec_apply.empty":"Run QEC apply to see results","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU simulation speed — statevector throughput comparison","pipeline.gpu.run":"RUN BENCHMARK","pipeline.gpu.running":"Benchmarking...","pipeline.gpu.empty":"Run benchmark to see results","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"Submit to real quantum hardware — transpiles & executes on actual QPU","pipeline.qpu.run":"SUBMIT TO QPU","pipeline.qpu.running":"Submitting...","pipeline.qpu.confirm":"CONFIRM SUBMIT","pipeline.qpu.empty":"Run analysis first, then confirm to submit","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"Monitor & manage submitted QPU jobs — check status, view results, cancel jobs","pipeline.job_manager.refresh":"↻ Refresh","pipeline.job_manager.refreshing":"↻ Refreshing...","pipeline.job_manager.empty":"Click Refresh to load jobs","pipeline.job_manager.status_label":"Status","pipeline.job_manager.period_label":"Period","pipeline.job_manager.show_label":"Show","pipeline.job_manager.all":"All","pipeline.job_manager.active":"Active","pipeline.job_manager.done":"Done","pipeline.job_manager.cancelled":"Cancelled","pipeline.job_manager.error":"Error","pipeline.job_manager.all_time":"All time","pipeline.job_manager.today":"Today","pipeline.job_manager.last_7d":"Last 7 days","pipeline.job_manager.last_30d":"Last 30 days","job.status.checking":"Checking...","job.status.check":"↻ Check Status","job.status.last_checked":"Last checked:","job.status.error_badge":"ERROR","job.status.cancelled_badge":"CANCELLED","job.status.done_badge":"✓ DONE","job.status.cancelled_msg":"Job was cancelled.","job.status.running_msg":"job is running on QPU queue.","job.status.cancel":"✕ Cancel Job","job.status.cancelling":"Cancelling...","job.results.title":"Measurement Results","job.results.total_shots":"Total Shots","job.results.unique_states":"Unique States","step.badge.done":"✓ Done","step.badge.error":"✗ Error","btn.loading":"...","btn.uploading":"⟳ Uploading...","btn.upload_fail":"Upload failed","btn.view":"👁 View","btn.refresh_list":"↻ Refresh","cache.badge":"⚡ Cached result loaded from previous run.","cache.invalidate":"↺ Invalidate Cache","cache.invalidated_msg":"Cache invalidated ({deleted} entries deleted)\nRe-run to fetch fresh results.","cache.fail":"Failed","cache.stale":"· Refresh recommended","alert.select_file":"Please select or upload an algorithm file","alert.select_file_first":"Please select a file first","alert.only_py":"Only Python (.py) files are allowed","knowledge.title":"Search Knowledge Base","knowledge.query_type":"Query Type","knowledge.semantic_query":"Semantic Query","knowledge.qpu_filter":"QPU Filter","knowledge.sdk_filter":"SDK Filter","knowledge.limit":"Limit","knowledge.run_search":"RUN SEARCH","knowledge.searching":"Searching...","knowledge.semantic_title":"⚛ Semantic Search","knowledge.run_semantic":"SEMANTIC SEARCH","knowledge.results_count":"Results: {count}","knowledge.click_details":"Click for details","knowledge.no_results":"Run a search to see results","rag.type.stats":"Stats Overview","rag.type.recent":"Recent Entries","rag.type.best_combination":"Best Optimizations","rag.type.suspicious_optimizations":"Suspicious Optimizations","rag.type.pipeline_issues":"Pipeline Issues","rag.type.transpile_patterns":"Transpile Patterns","rag.type.qec_results":"QEC Results","rag.type.gpu_benchmark":"GPU Benchmarks","rag.type.security_block":"Security Blocks","pipeline.noise.engine":"Simulation Engine","pipeline.qec_apply.code":"QEC Code","pipeline.shots":"Shots","pipeline.qpu.warn":"This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use \"Analyze (No Submit)\" first to preview the transpiled circuit before confirming.","pipeline.qpu.analyze_btn":"ANALYZE (NO SUBMIT)","pipeline.qpu.confirm_btn":"⚡ CONFIRM & SUBMIT TO QPU","knowledge.structured_results":"Structured Search Results","knowledge.semantic_results":"⚛ Semantic Results","knowledge.semantic_hint":"Press Enter to search · Shift+Enter for new line\nChroma vector similarity search","rag.type_desc.stats":"Total knowledge base record count and per-type statistics","rag.type_desc.recent":"Recently saved history (latest first)","rag.type_desc.best_combination":"Optimization history ranked by gate reduction — filter by QPU or qubit count","rag.type_desc.pipeline_issues":"Pipeline error history and solutions per SDK/QPU","rag.type_desc.transpile_patterns":"Transpile success/failure patterns and workarounds","rag.type_desc.qec_results":"QEC experiment results (fidelity before/after encoding)","rag.type_desc.suspicious_optimizations":"Optimization results flagged as suspicious (empty circuit / not equivalent / unverified 100% reduction)","rag.type_desc.gpu_benchmark":"CPU vs GPU simulation benchmark results","rag.type_desc.security_block":"Security policy violation block history (static analysis)","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"Circuit optimization runs — gate/depth reduction results per combination & QPU","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU job execution records — shots, fidelity, job IDs, and result metadata","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU simulation performance comparisons","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"Errors and failures encountered during pipeline stages, with root causes","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"Transpilation success/failure patterns and workarounds per SDK & QPU","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"Quantum error correction experiment results — fidelity before/after encoding","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"QPU online/offline status snapshots over time","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"Requests blocked by static security policy — suspicious imports or patterns","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"Internally cached computation results for performance optimization"};
+const _LOCALE_KO = {"nav.qpus":"⚛ QPUs","nav.pipeline":"⚙ Pipeline","nav.knowledge":"🔍 Knowledge","header.server_label":"서버","header.connect":"연결","header.lock":"잠금","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"미연결","status.connected":"연결됨","status.connecting":"연결 중...","status.reconnecting":"재연결 중...","status.not_connected":"미연결","lock.subtitle":"퀀텀 인텔리전스","lock.unlock":"잠금 해제","lock.incorrect_password":"비밀번호가 틀렸습니다","footer.text":"UQI · Universal Quantum Intelligence · 내부 도구","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ 새로고침","qpu.loading":"QPU 상태 로딩 중...","qpu.refreshing":"새로고침 중...","qpu.no_qpus":"사용 가능한 QPU 없음","qpu.load_fail":"QPU 목록 로드 실패","qpu.loading_calibration":"캘리브레이션 로딩 중...","qpu.cache_refresh_recommended":"· 새로고침 권장","qpu.close":"닫기","qpu.refresh_cal":"↻ 캘 새로고침","qpu.deep_analysis":"QPU 심층 분석","qpu.performance_radar":"성능 레이더","qpu.distribution_box":"분포 (박스 플롯)","qpu.log_scale":"로그 스케일","qpu.all_qpus":"전체 QPU","qpu.auto_recommended":"자동 (추천)","qpu.online":"온라인","qpu.offline":"오프라인","qpu.photonic":"포토닉","qpu.no_modality":"모달리티 미선택","qpu.no_distribution":"선택한 모달리티의 분포 데이터 없음.","qpu.boxplot_desc":"Box = 중간 50% 큐비트 분포 (Q1–Q3)<br>Whisker = 이상치 제외 최소/최대","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ 업로드","pipeline.dgx":"📂 DGX","pipeline.drop_hint":".py 파일을 여기에 놓거나 클릭하여 찾아보기","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"논리적 복잡도 — 큐비트, 게이트, 깊이, T-게이트 비율","pipeline.analyze.run":"분석 실행","pipeline.analyze.running":"분석 중...","pipeline.analyze.empty":"분석을 실행하여 결과를 확인하세요","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"대상 QPU에 대한 물리적 매핑 — 자동 트랜스파일로 게이트/깊이 감소","pipeline.optimize.run":"최적화 실행","pipeline.optimize.running":"최적화 중...","pipeline.optimize.combination":"조합","pipeline.optimize.options":"옵션","pipeline.optimize.verify":"동등성 검증","pipeline.optimize.empty":"최적화를 실행하여 결과를 확인하세요","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU 충실도 추정 — 최적화된 회로에 캘리브레이션 기반 노이즈 모델","pipeline.noise.run":"노이즈 시뮬레이션 실행","pipeline.noise.running":"시뮬레이션 중...","pipeline.noise.empty":"노이즈 시뮬레이션을 실행하여 결과를 확인하세요","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"오류 정정 필요성 — T2 비율, 충실도, 추천 코드","pipeline.qec_analyze.run":"QEC 분析 실행","pipeline.qec_analyze.running":"분析 중...","pipeline.qec_analyze.empty":"QEC 분析을 실행하여 결과를 확인하세요","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"QEC 코드로 회로 인코딩 — 적용 전후 충실도 비교","pipeline.qec_apply.run":"QEC 적용 실행","pipeline.qec_apply.running":"적용 중...","pipeline.qec_apply.empty":"QEC 적용을 실행하여 결과를 확인하세요","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU 시뮬레이션 속도 — 상태벡터 처리량 비교","pipeline.gpu.run":"벤치마크 실행","pipeline.gpu.running":"벤치마킹 중...","pipeline.gpu.empty":"벤치마크를 실행하여 결과를 확인하세요","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"실제 양자 하드웨어에 제출 — 트랜스파일 후 실제 QPU에서 실행","pipeline.qpu.run":"QPU에 제출","pipeline.qpu.running":"제출 중...","pipeline.qpu.confirm":"제출 확인","pipeline.qpu.empty":"먼저 분석을 실행한 후 확인하여 제출하세요","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"제출된 QPU 작업 모니터링 및 관리 — 상태 확인, 결과 조회, 작업 취소","pipeline.job_manager.refresh":"↻ 새로고침","pipeline.job_manager.refreshing":"↻ 새로고침 중...","pipeline.job_manager.empty":"새로고침을 클릭하여 작업 목록 로드","pipeline.job_manager.status_label":"상태","pipeline.job_manager.period_label":"기간","pipeline.job_manager.show_label":"표시","pipeline.job_manager.all":"전체","pipeline.job_manager.active":"진행 중","pipeline.job_manager.done":"완료","pipeline.job_manager.cancelled":"취소됨","pipeline.job_manager.error":"오류","pipeline.job_manager.all_time":"전체 기간","pipeline.job_manager.today":"오늘","pipeline.job_manager.last_7d":"최근 7일","pipeline.job_manager.last_30d":"최근 30일","job.status.checking":"확인 중...","job.status.check":"↻ 상태 확인","job.status.last_checked":"마지막 확인:","job.status.error_badge":"오류","job.status.cancelled_badge":"취소됨","job.status.done_badge":"✓ 완료","job.status.cancelled_msg":"작업이 취소되었습니다.","job.status.running_msg":"QPU 큐에서 실행 중입니다.","job.status.cancel":"✕ 작업 취소","job.status.cancelling":"취소 중...","job.results.title":"측정 결과","job.results.total_shots":"총 샷 수","job.results.unique_states":"고유 상태 수","step.badge.done":"✓ 완료","step.badge.error":"✗ 오류","btn.loading":"...","btn.uploading":"⟳ 업로드 중...","btn.upload_fail":"업로드 실패","btn.view":"👁 보기","btn.refresh_list":"↻ 새로고침","cache.badge":"⚡ 이전 실행의 캐시된 결과를 불러왔습니다.","cache.invalidate":"↺ 캐시 무효화","cache.invalidated_msg":"캐시가 무효화되었습니다 ({deleted}개 삭제)\n재실행하여 새 결과를 가져오세요.","cache.fail":"실패","cache.stale":"· 새로고침 권장","alert.select_file":"알고리즘 파일을 선택하거나 업로드하세요","alert.select_file_first":"먼저 파일을 선택하세요","alert.only_py":"Python (.py) 파일만 허용됩니다","knowledge.title":"Knowledge Base","knowledge.query_type":"쿼리 유형","knowledge.semantic_query":"시맨틱 쿼리","knowledge.qpu_filter":"QPU 필터","knowledge.sdk_filter":"SDK 필터","knowledge.limit":"제한","knowledge.run_search":"검색 실행","knowledge.searching":"검색 중...","knowledge.semantic_title":"⚛ 시맨틱 검색","knowledge.run_semantic":"시맨틱 검색 실행","knowledge.results_count":"결과: {count}개","knowledge.click_details":"클릭하여 상세 보기","knowledge.no_results":"검색을 실행하여 결과를 확인하세요","rag.type.stats":"통계 개요","rag.type.recent":"최근 항목","rag.type.best_combination":"최적 최적화","rag.type.suspicious_optimizations":"의심스러운 최적화","rag.type.pipeline_issues":"파이프라인 이슈","rag.type.transpile_patterns":"트랜스파일 패턴","rag.type.qec_results":"QEC 결과","rag.type.gpu_benchmark":"GPU 벤치마크","rag.type.security_block":"보안 차단","pipeline.noise.engine":"시뮬레이션 엔진","pipeline.qec_apply.code":"QEC 코드","pipeline.shots":"샷 수","pipeline.qpu.warn":"<strong>실제 QPU</strong>에 제출되며 <strong>비용이 발생</strong>합니다. 확인 전 \"분석 (제출 없음)\"으로 트랜스파일된 회로를 미리 확인하세요.","pipeline.qpu.analyze_btn":"분석 (제출 없음)","pipeline.qpu.confirm_btn":"⚡ 확인 후 QPU에 제출","knowledge.structured_results":"구조화 검색 결과","knowledge.semantic_results":"⚛ 시맨틱 검색 결과","knowledge.semantic_hint":"Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색","rag.type_desc.stats":"지식베이스 전체 레코드 수 및 유형별 통계","rag.type_desc.recent":"최근 저장된 이력 (최신 순)","rag.type_desc.best_combination":"게이트 감소율 순으로 정렬된 최적화 이력 — QPU 또는 큐비트 수로 필터","rag.type_desc.pipeline_issues":"SDK/QPU별 파이프라인 오류 이력 및 해결책","rag.type_desc.transpile_patterns":"트랜스파일 성공/실패 패턴 및 해결 방법","rag.type_desc.qec_results":"QEC 실험 결과 (인코딩 전후 충실도)","rag.type_desc.suspicious_optimizations":"의심스러운 최적화 결과 (빈 회로 / 비동등 / 미검증 100% 감소)","rag.type_desc.gpu_benchmark":"CPU vs GPU 시뮬레이션 벤치마크 결과","rag.type_desc.security_block":"보안 정책 위반 차단 이력 (정적 분석)","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"회로 최적화 실행 — 조합 및 QPU별 게이트/깊이 감소 결과","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU 작업 실행 기록 — 샷 수, 충실도, 작업 ID, 결과 메타데이터","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU 시뮬레이션 성능 비교","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"파이프라인 단계별 오류 및 실패, 근본 원인 포함","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"SDK 및 QPU별 트랜스파일 성공/실패 패턴 및 해결 방법","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"양자 오류 정정 실험 결과 — 인코딩 전후 충실도","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"시간별 QPU 온라인/오프라인 상태 스냅샷","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"정적 보안 정책에 의해 차단된 요청 — 의심스러운 임포트 또는 패턴","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"양자 프레임워크 간 회로 변환 패턴 (예: Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"성능 최적화를 위한 내부 캐시된 연산 결과"};
+
+_LOCALES.en = _LOCALE_EN;
+_LOCALES.ko = _LOCALE_KO;
+
+let _lang = localStorage.getItem('uqi_lang') || 'en';
+
+function t(key, params={}) {
+  const locale = _LOCALES[_lang] || _LOCALES.en;
+  let str = (locale && locale[key]) || (_LOCALES.en && _LOCALES.en[key]) || key;
+  Object.entries(params).forEach(([k,v]) => { str = str.replace(new RegExp(`\\{${k}\\}`, 'g'), v); });
+  return str;
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+  // lang 피커 버튼 레이블 + 선택 항목 active 표시
+  const langBtn = document.getElementById('btn-lang-toggle');
+  if (langBtn) langBtn.textContent = _lang === 'en' ? 'EN' : 'KO';
+  document.querySelectorAll('#lang-picker-popup .lang-picker-item').forEach((el, i) => {
+    const langs = ['en', 'ko'];
+    el.classList.toggle('active', langs[i] === _lang);
+  });
+  // 연결 상태 텍스트 재갱신
+  _refreshStatus();
+  // QPU 캐시 타임스탬프 로케일 재갱신
+  if (_lastQPUCache) _renderCacheTimestamp(_lastQPUCache);
+}
+
+function toggleLangPicker(e) {
+  e.stopPropagation();
+  const popup = document.getElementById('lang-picker-popup');
+  popup.classList.toggle('open');
+}
+function selectLang(lang) {
+  _lang = lang;
+  localStorage.setItem('uqi_lang', _lang);
+  document.getElementById('lang-picker-popup').classList.remove('open');
+  applyI18n();
+}
+document.addEventListener('click', () => {
+  const popup = document.getElementById('lang-picker-popup');
+  if (popup) popup.classList.remove('open');
+});
+
+// ─────────────────────────────────────────────────────────
+// Theme (light / dark)
+// ─────────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('uqi_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  _updateThemeIcon(saved);
+}
+function toggleTheme() {
+  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('uqi_theme', next);
+  _updateThemeIcon(next);
+}
+function _updateThemeIcon(theme) {
+  // 현재 테마 표시 — dark면 ☾, light면 ☀
+  const btn = document.getElementById('btn-theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? t('header.theme_toggle_to_dark') : t('header.theme_toggle_to_light');
+}
+
+// 현재 언어 설정에 맞는 로케일 문자열 반환
+function _uiLocale() { return _lang === 'ko' ? 'ko-KR' : 'en-US'; }
+function _fmtDate(ts) { return new Date(ts).toLocaleString(_uiLocale()); }
+function _fmtDateShort(ts) { return new Date(ts).toLocaleDateString(_uiLocale()); }
+function _fmtTime(ts) { return new Date(ts).toLocaleTimeString(_uiLocale()); }
+
 // ─────────────────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────────────────
@@ -928,12 +1054,13 @@ async function unlock() {
   } else {
     const inp = document.getElementById('pwInput');
     inp.classList.add('error');
-    document.getElementById('lockErr').textContent='Incorrect password';
+    document.getElementById('lockErr').textContent=t('lock.incorrect_password');
     setTimeout(()=>{inp.classList.remove('error');inp.value='';},1000);
   }
 }
 function logout() { sessionStorage.removeItem('uqi_auth'); location.reload(); }
 window.addEventListener('load',()=>{
+  initTheme();  // 로그인 전에도 테마 적용
   if (sessionStorage.getItem('uqi_auth')==='1') {
     document.getElementById('lockScreen').style.display='none';
     document.getElementById('mainApp').style.display='block';
@@ -948,9 +1075,20 @@ window.addEventListener('load',()=>{
 const NGROK_HEADER = {'ngrok-skip-browser-warning':'true'};
 let msgUrl=null, reqId=0, pendingResolvers={}, _activeES=null;
 
+let _statusKey = 'status.disconnected';
 function setStatus(text,ok,err) {
   document.getElementById('statusText').textContent=text;
   document.getElementById('statusDot').className='status-dot'+(ok?' connected':err?' error':'');
+}
+function _refreshStatus() {
+  const el = document.getElementById('statusText');
+  if (!el) return;
+  // 상태 키에 해당하는 번역으로 갱신 (suffix는 보존)
+  const cur = el.textContent;
+  const base = t(_statusKey);
+  // "disconnected — some error" 처럼 suffix가 있으면 보존
+  const suffix = cur.startsWith(t(_statusKey)) ? cur.slice(t(_statusKey).length) : '';
+  el.textContent = base + suffix;
 }
 async function connectSSE(url) {
   if(_activeES){_activeES.close();_activeES=null;msgUrl=null;}
@@ -973,7 +1111,7 @@ async function connectSSE(url) {
     });
     es.onerror=()=>{
       if(!resolved){clearTimeout(timeout);_activeES=null;reject(new Error('SSE error'));return;}
-      setStatus('reconnecting...',false,false);
+      _statusKey='status.reconnecting'; setStatus(t('status.reconnecting'),false,false);
       // 자동 재연결 (3초 후)
       setTimeout(async ()=>{
         if(_activeES===es){  // 아직 같은 세션이면
@@ -982,9 +1120,9 @@ async function connectSSE(url) {
             const url=document.getElementById('serverUrl').value.trim().replace(/\/$/,'');
             await connectSSE(url);
             await initializeMCP();
-            setStatus('connected',true,false);
+            _statusKey='status.connected'; setStatus(t('status.connected'),true,false);
           } catch(e) {
-            setStatus('disconnected — '+e.message,false,true);
+            _statusKey='status.disconnected'; setStatus(t('status.disconnected')+' — '+e.message,false,true);
           }
         }
       }, 3000);
@@ -1015,21 +1153,23 @@ function getResultText(res) {
 }
 async function testConnection() {
   const url=document.getElementById('serverUrl').value.trim().replace(/\/$/,'');
-  setStatus('connecting...',false,false);
+  _statusKey='status.connecting'; setStatus(t('status.connecting'),false,false);
   try {
     await connectSSE(url);
     await initializeMCP();
-    setStatus('connected',true,false);
+    _statusKey='status.connected'; setStatus(t('status.connected'),true,false);
     loadQPUDashboard(false);
     loadQPUSelectors();
     loadDGXFiles();
-  } catch(e) { setStatus('failed — '+e.message,false,true); }
+  } catch(e) { _statusKey='status.disconnected'; setStatus(t('status.disconnected')+' — '+e.message,false,true); }
 }
 
 // ─────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────
 function initApp() {
+  initTheme();
+  applyI18n();
   setTimeout(()=>testConnection(),300);
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>e.preventDefault());
@@ -1039,7 +1179,7 @@ function switchMain(name,el) {
   document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if (name === 'knowledge') onRagTypeChange();
+  if (name === 'knowledge') { onRagTypeChange(); runRAG(); }
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1071,12 +1211,14 @@ function _qpuCacheAge(cache) {
   return Date.now() - cache.ts;
 }
 
+let _lastQPUCache = null;
 function _renderCacheTimestamp(cache) {
   const el = document.getElementById('qpu-cache-ts');
   if (!el || !cache?.ts) return;
+  _lastQPUCache = cache;
   const age = _qpuCacheAge(cache);
   const ageH = (age / 3600000).toFixed(1);
-  const time = new Date(cache.ts).toLocaleString();
+  const time = _fmtDate(cache.ts);
   const isStale = age > _QPU_CACHE_TTL;
   el.innerHTML = `Cache: ${time} (${ageH}h ago)${isStale ? ' <span style="color:var(--warn)">· Refresh recommended</span>' : ''}`;
 }
@@ -1110,9 +1252,9 @@ async function loadQPUDashboard(forceRefresh) {
   }
 
   // 캐시 없거나 forceRefresh
-  container.innerHTML = '<div class="empty-state"><span class="spinner"></span>Loading QPU status...</div>';
+  container.innerHTML = `<div class="empty-state"><span class="spinner"></span>${t('qpu.loading')}</div>`;
   const tsEl = document.getElementById('qpu-cache-ts');
-  if (tsEl && forceRefresh) tsEl.innerHTML = '<span class="spinner"></span>Refreshing...';
+  if (tsEl && forceRefresh) tsEl.innerHTML = `<span class="spinner"></span>${t('qpu.refreshing')}`;
   await _fetchQPUData(forceRefresh ? 'refresh' : 'init');
 }
 
@@ -1218,13 +1360,13 @@ async function _fetchQPUData(isBackground) {
     })();
   } catch(e) {
     if (!isBackground)
-      container.innerHTML = `<div class="error-state">⚠ Failed to load QPU list: ${escHtml(e.message)}</div>`;
+      container.innerHTML = `<div class="error-state">⚠ ${t('qpu.load_fail')}: ${escHtml(e.message)}</div>`;
   }
 }
 
 function renderQPUGrid(qpus) {
   const container = document.getElementById('qpu-grid-container');
-  if (!qpus.length) { container.innerHTML='<div class="empty-state">No QPUs available</div>'; return; }
+  if (!qpus.length) { container.innerHTML=`<div class="empty-state">${t('qpu.no_qpus')}</div>`; return; }
 
   let html = '<div class="qpu-grid">';
   for (const qpu of qpus) {
@@ -1301,7 +1443,7 @@ function renderQPUGrid(qpus) {
           <div class="qpu-metric"><div class="qpu-metric-label">Qubits</div><div class="qpu-metric-value neutral">${d.num_qubits ?? '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">2Q Error</div><div class="qpu-metric-value ${q2e != null ? (q2e < 0.002 ? 'good' : 'warn') : 'dim'}">${q2e != null ? (q2e*100).toFixed(3)+'%' : '—'}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Memory Err</div><div class="qpu-metric-value ${mem != null ? (mem < 0.0003 ? 'good' : 'warn') : 'dim'}" style="font-size:11px">${mem != null ? (mem*100).toFixed(4)+'%' : '—'}</div></div>
-          <div class="qpu-metric"><div class="qpu-metric-label">QV</div><div class="qpu-metric-value good" style="font-size:11px">${qv != null ? qv.toLocaleString() : '—'}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">QV</div><div class="qpu-metric-value good" style="font-size:11px">${qv != null ? qv.toLocaleString(_uiLocale()) : '—'}</div></div>
         </div>`;
     } else if (d._loading) {
       metricsHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:4px">${[1,2,3,4].map(()=>`
@@ -1369,7 +1511,7 @@ async function showQPUDetail(qpu, el) {
   if (el) el.classList.add('selected');
 
   const container = document.getElementById('qpu-detail-container');
-  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Loading calibration...</div></div>`;
+  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>${t('qpu.loading_calibration')}</div></div>`;
 
   const isPhotonic = qpu.startsWith('qpu:');
   try {
@@ -1383,7 +1525,7 @@ async function showQPUDetail(qpu, el) {
       const clock   = d.clock_mhz   != null ? d.clock_mhz.toFixed(2) + ' MHz' : '—';
       const modes   = d.max_mode_count   != null ? d.max_mode_count   : '—';
       const photons = d.max_photon_count != null ? d.max_photon_count : '—';
-      const updated = d.last_updated ? new Date(d.last_updated).toLocaleString() : '—';
+      const updated = d.last_updated ? _fmtDate(d.last_updated) : '—';
       container.innerHTML = `
         <div class="qpu-detail">
           <div class="qpu-detail-header">
@@ -2166,7 +2308,7 @@ function renderQPUDetail(container, qpu, d) {
       <div class="cal-item"><div class="cal-label">2Q Error</div><div class="cal-value ${q2e.cls}">${q2e.text}</div></div>
       <div class="cal-item"><div class="cal-label">RO Error</div><div class="cal-value ${roe.cls}">${roe.text}</div></div>
       <div class="cal-item"><div class="cal-label">Memory Err</div><div class="cal-value ${memCls}">${mem != null ? (mem*100).toFixed(4)+'%' : '—'}</div></div>
-      <div class="cal-item"><div class="cal-label">Quantum Volume</div><div class="cal-value good" style="font-size:13px">${qv != null ? qv.toLocaleString() : '—'}</div></div>
+      <div class="cal-item"><div class="cal-label">Quantum Volume</div><div class="cal-value good" style="font-size:13px">${qv != null ? qv.toLocaleString(_uiLocale()) : '—'}</div></div>
       <div class="cal-item"><div class="cal-label">Topology</div><div class="cal-value neutral" style="font-size:11px">All-to-All</div></div>
       ${d.noise_date ? `<div class="cal-item"><div class="cal-label">Cal. Date</div><div class="cal-value neutral" style="font-size:11px">${d.noise_date}</div></div>` : ''}`;
   } else {
@@ -2276,7 +2418,7 @@ function renderQPUDetail(container, qpu, d) {
       <div class="cal-grid">${calGridHtml}</div>
       <div class="topo-dist-grid">${topoLeftHtml}${distRightHtml}</div>
       ${d.basis_gates ? `<div class="gates-list" style="margin-top:12px">${d.basis_gates.map(g=>`<span class="gate-tag">${g}</span>`).join('')}</div>` : ''}
-      <div style="margin-top:8px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? new Date(d.last_updated).toLocaleString() : '—'}</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3)">Updated: ${d.last_updated ? _fmtDate(d.last_updated) : '—'}</div>
     </div>`;
 
   if (hasPerQubit) {
@@ -2292,7 +2434,7 @@ function renderQPUDetail(container, qpu, d) {
 
 async function refreshQPUDetail(qpu) {
   const container = document.getElementById('qpu-detail-container');
-  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>Refreshing...</div></div>`;
+  container.innerHTML = `<div class="qpu-detail"><div class="empty-state"><span class="spinner"></span>${t('qpu.refreshing')}</div></div>`;
   const r = await callTool('uqi_calibration_info', { qpu_name: qpu, refresh: true, detail: true });
   const d = JSON.parse(getResultText(r));
   const _vendor = qpu.startsWith('iqm') ? 'iqm'
@@ -2449,14 +2591,14 @@ function _reRenderBoxplot() {
   if (!el) return;
   if (_activeModalities.size === 0) {
     if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">No modality selected</div>';
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">${t('qpu.no_modality')}</div>`;
     return;
   }
   const qpus = _getBoxplotQpus();
   const relevant = _getRelevantBoxplotMetrics();
   if (relevant.length === 0) {
     if (_boxplotChart) { _boxplotChart.dispose(); _boxplotChart = null; }
-    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">No distribution data for selected modality.</div>';
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text3);font-size:11px;text-align:center;padding:20px">${t('qpu.no_distribution')}</div>`;
     return;
   }
   if (el.innerHTML.trim() && !_boxplotChart) el.innerHTML = '';
@@ -2779,7 +2921,7 @@ function _populateQPUSelectors(qpus) {
   const qpuSel = document.getElementById('qpu-qpu');
   if (qpuSel) {
     const cur = qpuSel.value;
-    qpuSel.innerHTML = '<option value="auto">Auto (Recommended)</option>' + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+    qpuSel.innerHTML = `<option value="auto">${t('qpu.auto_recommended')}</option>` + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
     if ([...qpuSel.options].some(o=>o.value===cur)) qpuSel.value=cur;
   }
 }
@@ -2817,9 +2959,9 @@ function onDrop(e) {
 function onFileChange(e) { const f=e.target.files[0]; if(f) handleFile(f); }
 
 function handleFile(file) {
-  if (!file.name.endsWith('.py')) { alert('Only Python (.py) files are allowed'); return; }
+  if (!file.name.endsWith('.py')) { alert(t('alert.only_py')); return; }
   const fname = document.getElementById('global-fname');
-  fname.textContent='⟳ Uploading...'; fname.className='file-name-display ok'; fname.style.display='block';
+  fname.textContent=t('btn.uploading'); fname.className='file-name-display ok'; fname.style.display='block';
   const reader = new FileReader();
   reader.onload = async ev => {
     try {
@@ -2830,7 +2972,7 @@ function handleFile(file) {
         fname.textContent = `✓ ${file.name}`;
         fname.className = 'file-name-display ok';
       } else {
-        fname.textContent = `✗ ${d.error||'Upload failed'}`;
+        fname.textContent = `✗ ${d.error||t('btn.upload_fail')}`;
         fname.className = 'file-name-display err';
       }
     } catch(e) { fname.textContent=`✗ ${e.message}`; fname.className='file-name-display err'; }
@@ -2893,7 +3035,7 @@ function toggleStep(name) {
     body.classList.add('open');
     chev.classList.add('open');
     // Auto-load job history when opening that panel
-    if (name === 'job-history') { _jhLoadDistinct(); loadJobHistory(); }
+    if (name === 'job-history') { _jobHistoryBusy = false; _jhLoadDistinct(); loadJobHistory(); }
   }
 }
 // Open analyze by default
@@ -2915,7 +3057,7 @@ function setBadge(step, status) {
   if (!status) { b.style.display='none'; return; }
   b.style.display='inline';
   b.className='step-badge '+status;
-  b.textContent = status==='done' ? '✓ Done' : '✗ Error';
+  b.textContent = status==='done' ? t('step.badge.done') : t('step.badge.error');
 }
 function setStepResult(step, html) {
   document.getElementById('result-'+step).innerHTML = html;
@@ -2928,16 +3070,16 @@ function _addCacheBadge(step, file, qpu, cached) {
   if (!result) return;
   const badge = document.createElement('div');
   badge.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:rgba(240,136,62,0.08);border:1px solid rgba(240,136,62,0.25);border-radius:6px;font-size:10px;color:var(--warn)';
-  badge.innerHTML = `⚡ Cached result loaded from previous run.
+  badge.innerHTML = `${t('cache.badge')}
     <button onclick="_invalidateCache('${step}','${file}','${qpu}')"
       style="margin-left:auto;background:rgba(240,136,62,0.15);border:1px solid rgba(240,136,62,0.4);border-radius:4px;padding:2px 8px;color:var(--warn);font-family:var(--font-mono);font-size:10px;cursor:pointer;font-weight:600">
-      ↺ Invalidate Cache
+      ${t('cache.invalidate')}
     </button>`;
   result.prepend(badge);
 }
 
 async function _invalidateCache(step, file, qpu) {
-  if (!file) { alert('Please select a file first'); return; }
+  if (!file) { alert(t('alert.select_file_first')); return; }
   try {
     const res = await callTool('uqi_invalidate_cache', { algorithm_file: file, qpu_name: qpu, stage: step });
     const d = JSON.parse(getResultText(res));
@@ -2960,7 +3102,7 @@ let _lastOptimizeData = null;
 
 async function runAnalyze() {
   const f = getSelectedFile();
-  if (!f) { alert('Please select or upload an algorithm file'); return; }
+  if (!f) { alert(t('alert.select_file')); return; }
   setBtnLoading('btn-analyze','Analyzing...');
   setStepResult('analyze','<div class="empty-state"><span class="spinner"></span>Analyzing...</div>');
   const t0 = Date.now();
@@ -3479,7 +3621,7 @@ function renderQPUSubmitResult(data, el, qpuName) {
         <div class="metric-grid">
           <div class="metric-item"><div class="metric-label">Backend</div><div class="metric-value neutral" style="font-size:12px">${escHtml(r.backend||'—')}</div></div>
           <div class="metric-item"><div class="metric-label">Exec Time</div><div class="metric-value neutral">${r.exec_time != null ? r.exec_time+'s' : '—'}</div></div>
-          <div class="metric-item"><div class="metric-label">Unique States</div><div class="metric-value neutral">${Object.keys(counts).length}</div></div>
+          <div class="metric-item"><div class="metric-label">${t('job.results.unique_states')}</div><div class="metric-value neutral">${Object.keys(counts).length}</div></div>
         </div>
         ${sorted.length ? `<div style="margin-top:8px">${sorted.map(([k,v])=>{
           const pct=(v/total*100).toFixed(1);
@@ -3497,16 +3639,16 @@ async function _pollJobStatus(jobId, cardId) {
   const ts  = document.getElementById(`poll-ts-${cardId}`);
   const res_el = document.getElementById(`poll-result-${cardId}`);
   const badge  = document.getElementById(`status-badge-${cardId}`);
-  if (btn) { btn.disabled=true; btn.textContent='Checking...'; }
+  if (btn) { btn.disabled=true; btn.textContent=t('job.status.checking'); }
   try {
     const res  = await callTool('uqi_job_status', { job_id: jobId });
     const data = JSON.parse(getResultText(res));
-    const now  = new Date().toLocaleTimeString();
-    if (ts) ts.textContent = `Last checked: ${now}`;
+    const now  = _fmtTime(Date.now());
+    if (ts) ts.textContent = `${t('job.status.last_checked')} ${now}`;
 
     if (data.error) {
       if (res_el) res_el.innerHTML = `<div class="error-state" style="margin-top:0">⚠ ${escHtml(data.error)}</div>`;
-      if (badge) badge.innerHTML = 'ERROR';
+      if (badge) badge.innerHTML = t('job.status.error_badge');
       return;
     }
 
@@ -3515,10 +3657,10 @@ async function _pollJobStatus(jobId, cardId) {
       _stopAutoPoll(jobId);
       const autoCb = document.getElementById(`auto-poll-${cardId}`);
       if (autoCb) autoCb.checked = false;
-      if (badge) { badge.innerHTML='CANCELLED'; badge.style.background='rgba(110,118,129,0.2)'; badge.style.borderColor='rgba(110,118,129,0.4)'; badge.style.color='var(--text3)'; }
+      if (badge) { badge.innerHTML=t('job.status.cancelled_badge'); badge.style.background='rgba(110,118,129,0.2)'; badge.style.borderColor='rgba(110,118,129,0.4)'; badge.style.color='var(--text3)'; }
       const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
       if (cancelBtn) cancelBtn.style.display='none';
-      if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3)">Job was cancelled.</div>`;
+      if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3)">${t('job.status.cancelled_msg')}</div>`;
       if (_openSteps.has('job-history')) loadJobHistory();
       return;
     }
@@ -3530,7 +3672,7 @@ async function _pollJobStatus(jobId, cardId) {
       const cancelBtn = document.getElementById(`cancel-btn-${cardId}`);
       if (cancelBtn) cancelBtn.style.display='none';
       if (_openSteps.has('job-history')) loadJobHistory();
-      if (badge) badge.innerHTML = `<span style="color:var(--success)">✓ DONE</span>`;
+      if (badge) badge.innerHTML = `<span style="color:var(--success)">${t('job.status.done_badge')}</span>`;
       badge.style.background='rgba(63,185,80,0.15)';
       badge.style.borderColor='rgba(63,185,80,0.3)';
 
@@ -3539,9 +3681,9 @@ async function _pollJobStatus(jobId, cardId) {
       const total  = Object.values(counts).reduce((s,v)=>s+v,0);
       const maxV   = sorted.length ? sorted[0][1] : 1;
       if (res_el) res_el.innerHTML = `
-        <div class="section-divider" style="margin-top:8px">Measurement Results</div>
+        <div class="section-divider" style="margin-top:8px">${t('job.results.title')}</div>
         <div class="metric-grid" style="margin-bottom:8px">
-          <div class="metric-item"><div class="metric-label">Total Shots</div><div class="metric-value neutral">${total}</div></div>
+          <div class="metric-item"><div class="metric-label">${t('job.results.total_shots')}</div><div class="metric-value neutral">${total}</div></div>
           <div class="metric-item"><div class="metric-label">Unique States</div><div class="metric-value neutral">${Object.keys(counts).length}</div></div>
         </div>
         <div>${sorted.map(([k,v])=>{
@@ -3552,12 +3694,12 @@ async function _pollJobStatus(jobId, cardId) {
         }).join('')}</div>`;
     } else {
       if (badge) badge.innerHTML = `<span class="spinner"></span> ${escHtml(statusRaw)}`;
-      if (res_el) res_el.innerHTML = `<div style="font-size:10px;color:var(--text3)">Status: <strong style="color:var(--warn)">${escHtml(statusRaw)}</strong> — job is running on QPU queue.</div>`;
+      if (res_el) res_el.innerHTML = `<div style="font-size:10px;color:var(--text3)">Status: <strong style="color:var(--warn)">${escHtml(statusRaw)}</strong> — ${t('job.status.running_msg')}</div>`;
     }
   } catch(e) {
     if (res_el) res_el.innerHTML = `<div class="error-state" style="margin-top:0">⚠ ${escHtml(e.message)}</div>`;
   } finally {
-    if (btn) { btn.disabled=false; btn.textContent='↻ Check Status'; }
+    if (btn) { btn.disabled=false; btn.textContent=t('job.status.check'); }
   }
 }
 
@@ -3575,7 +3717,7 @@ async function _cancelJob(jobId, cardId) {
   const badge     = document.getElementById(`status-badge-${cardId}`);
   const res_el    = document.getElementById(`poll-result-${cardId}`);
   if (!confirm(`Cancel job ${jobId}?\n\nCloud cancellation will be attempted. If unsupported, the job will be cancelled locally.`)) return;
-  if (cancelBtn) { cancelBtn.disabled=true; cancelBtn.textContent='Cancelling...'; }
+  if (cancelBtn) { cancelBtn.disabled=true; cancelBtn.textContent=t('job.status.cancelling'); }
   try {
     const res  = await callTool('uqi_job_cancel', { job_id: jobId });
     const data = JSON.parse(getResultText(res));
@@ -3589,7 +3731,7 @@ async function _cancelJob(jobId, cardId) {
       if (res_el) res_el.innerHTML=`<div style="font-size:10px;color:var(--text3);line-height:1.6">Job cancelled.<br>${cloudNote}</div>`;
     } else {
       if (res_el) res_el.innerHTML=`<div class="error-state" style="margin-top:0">⚠ Cancel failed: ${escHtml(data.error||'unknown')}</div>`;
-      if (cancelBtn) { cancelBtn.disabled=false; cancelBtn.textContent='✕ Cancel Job'; }
+      if (cancelBtn) { cancelBtn.disabled=false; cancelBtn.textContent=t('job.status.cancel'); }
     }
   } catch(e) {
     if (cancelBtn) { cancelBtn.disabled=false; cancelBtn.textContent='✕ Cancel Job'; }
@@ -3646,7 +3788,7 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   const btn = document.getElementById('btn-job-refresh');
   if (!el) return;
   _jobHistoryBusy = true;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('pipeline.job_manager.refreshing'); }
 
   const statusFilter  = document.getElementById('jh-status')?.value || '';
   const daysFilter    = parseInt(document.getElementById('jh-days')?.value  || '0');
@@ -3685,7 +3827,7 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
       }
 
       if (allActiveIds.size > 0) {
-        if (btn) btn.textContent = `Checking ${allActiveIds.size} active…`;
+        if (btn) btn.textContent = `↻ ${allActiveIds.size} active…`;
         await Promise.all([...allActiveIds].map(id =>
           callTool('uqi_job_status', { job_id: id }).catch(() => null)
         ));
@@ -3713,7 +3855,7 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   } catch(e) {
     // Not connected일 때는 초기 상태 유지 (조용히 무시)
     if (e.message === 'Not connected') {
-      if (!_jobHistoryLastHtml) el.innerHTML = '<div class="empty-state">Click Refresh to load jobs</div>';
+      if (!_jobHistoryLastHtml) el.innerHTML = `<div class="empty-state">${t('pipeline.job_manager.empty')}</div>`;
     } else if (_jobHistoryLastHtml) {
       el.innerHTML = _jobHistoryLastHtml;
     } else {
@@ -3721,7 +3863,7 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
     }
   } finally {
     _jobHistoryBusy = false;
-    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh'; }
+    if (btn) { btn.disabled = false; btn.textContent = t('pipeline.job_manager.refresh'); }
   }
 }
 
@@ -3792,7 +3934,7 @@ function renderJobHistory(jobs, filter = {}, total = null) {
     if (!iso) return '—';
     try {
       const d = new Date(iso);
-      return d.toLocaleString(undefined, {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+      return d.toLocaleString(_uiLocale(), {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
     } catch { return iso.slice(0,16); }
   };
 
@@ -3881,7 +4023,7 @@ function renderJobHistory(jobs, filter = {}, total = null) {
 const _expandedRows = new Set();
 
 async function checkJobInline(jobId, safeId, btn) {
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('job.status.checking'); }
   try {
     await callTool('uqi_job_status', { job_id: jobId });
     await loadJobHistory(true); // 이미 조회했으므로 cloud poll 중복 skip
@@ -3892,7 +4034,7 @@ async function checkJobInline(jobId, safeId, btn) {
 
 async function cancelJobInline(jobId, safeId, btn) {
   if (!confirm(`Cancel job?\n${jobId}`)) return;
-  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  if (btn) { btn.disabled = true; btn.textContent = t('job.status.cancelling'); }
   try {
     const res  = await callTool('uqi_job_cancel', { job_id: jobId });
     const data = JSON.parse(getResultText(res));
@@ -4151,17 +4293,19 @@ function renderQPUAnalysis(data, el) {
 // ─────────────────────────────────────────────────────────
 // Knowledge
 // ─────────────────────────────────────────────────────────
-const _RAG_TYPE_DESC = {
-  'stats':             'Total knowledge base record count and per-type statistics',
-  'recent':            'Recently saved history (latest first)',
-  'best_combination':  'Optimization history ranked by gate reduction — filter by QPU or qubit count',
-  'pipeline_issues':   'Pipeline error history and solutions per SDK/QPU',
-  'transpile_patterns':'Transpile success/failure patterns and workarounds',
-  'qec_results':       'QEC experiment results (fidelity before/after encoding)',
-  'suspicious_optimizations': 'Optimization results flagged as suspicious (empty circuit / not equivalent / unverified 100% reduction)',
-  'gpu_benchmark':     'CPU vs GPU simulation benchmark results',
-  'security_block':    'Security policy violation block history (static analysis)',
-};
+function _getRagTypeDesc() {
+  return {
+    'stats':                      t('rag.type_desc.stats'),
+    'recent':                     t('rag.type_desc.recent'),
+    'best_combination':           t('rag.type_desc.best_combination'),
+    'pipeline_issues':            t('rag.type_desc.pipeline_issues'),
+    'transpile_patterns':         t('rag.type_desc.transpile_patterns'),
+    'qec_results':                t('rag.type_desc.qec_results'),
+    'suspicious_optimizations':   t('rag.type_desc.suspicious_optimizations'),
+    'gpu_benchmark':              t('rag.type_desc.gpu_benchmark'),
+    'security_block':             t('rag.type_desc.security_block'),
+  };
+}
 
 function onRagTypeChange() {
   const t = document.getElementById('rag-type').value;
@@ -4171,13 +4315,13 @@ function onRagTypeChange() {
   });
   document.getElementById('rag-semantic-input').style.display = 'none';
   const desc = document.getElementById('rag-type-desc');
-  if (desc) desc.textContent = _RAG_TYPE_DESC[t] ? '— ' + _RAG_TYPE_DESC[t] : '';
+  if (desc) desc.textContent = _getRagTypeDesc()[t] ? '— ' + _getRagTypeDesc()[t] : '';
 }
 
 async function runRAG() {
   setBtnLoading('btn-rag','Searching...');
   const body = document.getElementById('rag-result-body');
-  body.innerHTML='<div class="empty-state"><span class="spinner"></span>Searching...</div>';
+  body.innerHTML=`<div class="empty-state"><span class="spinner"></span>${t('knowledge.searching')}</div>`;
   const t0 = Date.now();
   try {
     const args = {
@@ -4194,7 +4338,7 @@ async function runRAG() {
     const text = getResultText(res);
     renderRAG(body, text, args.query_type);
   } catch(e) { body.innerHTML=`<div class="error-state">⚠ ${escHtml(e.message)}</div>`; }
-  finally { setBtnDone('btn-rag','RUN SEARCH'); }
+  finally { setBtnDone('btn-rag', t('knowledge.run_search')); }
 }
 
 function onSemanticKeydown(e) {
@@ -4287,16 +4431,16 @@ function _renderRAGStats(body, d) {
   }
 
   const TYPE_META = {
-    optimization:       { icon: '⚡', label: 'Optimizations',       desc: 'Circuit optimization runs — gate/depth reduction results per combination & QPU' },
-    execution:          { icon: '🚀', label: 'Executions',           desc: 'QPU job execution records — shots, fidelity, job IDs, and result metadata' },
-    gpu_benchmark:      { icon: '🖥', label: 'GPU Benchmarks',       desc: 'CPU vs GPU simulation performance comparisons' },
-    pipeline_issue:     { icon: '🔧', label: 'Pipeline Issues',      desc: 'Errors and failures encountered during pipeline stages, with root causes' },
-    transpile_pattern:  { icon: '🔄', label: 'Transpile Patterns',   desc: 'Transpilation success/failure patterns and workarounds per SDK & QPU' },
-    qec_experiment:     { icon: '🛡', label: 'QEC Experiments',      desc: 'Quantum error correction experiment results — fidelity before/after encoding' },
-    qpu_availability:   { icon: '📡', label: 'QPU Availability',     desc: 'QPU online/offline status snapshots over time' },
-    security_block:     { icon: '🔒', label: 'Security Blocks',      desc: 'Requests blocked by static security policy — suspicious imports or patterns' },
-    conversion_pattern: { icon: '🔀', label: 'Conversion Patterns',  desc: 'Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)' },
-    cache:              { icon: '💾', label: 'Cache',                 desc: 'Internally cached computation results for performance optimization' },
+    optimization:       { icon: '⚡', label: t('rag.meta.optimization.label'),       desc: t('rag.meta.optimization.desc') },
+    execution:          { icon: '🚀', label: t('rag.meta.execution.label'),           desc: t('rag.meta.execution.desc') },
+    gpu_benchmark:      { icon: '🖥', label: t('rag.meta.gpu_benchmark.label'),       desc: t('rag.meta.gpu_benchmark.desc') },
+    pipeline_issue:     { icon: '🔧', label: t('rag.meta.pipeline_issue.label'),      desc: t('rag.meta.pipeline_issue.desc') },
+    transpile_pattern:  { icon: '🔄', label: t('rag.meta.transpile_pattern.label'),   desc: t('rag.meta.transpile_pattern.desc') },
+    qec_experiment:     { icon: '🛡', label: t('rag.meta.qec_experiment.label'),      desc: t('rag.meta.qec_experiment.desc') },
+    qpu_availability:   { icon: '📡', label: t('rag.meta.qpu_availability.label'),    desc: t('rag.meta.qpu_availability.desc') },
+    security_block:     { icon: '🔒', label: t('rag.meta.security_block.label'),      desc: t('rag.meta.security_block.desc') },
+    conversion_pattern: { icon: '🔀', label: t('rag.meta.conversion_pattern.label'),  desc: t('rag.meta.conversion_pattern.desc') },
+    cache:              { icon: '💾', label: t('rag.meta.cache.label'),               desc: t('rag.meta.cache.desc') },
   };
 
   const byType   = d.by_type || {};
@@ -4326,12 +4470,12 @@ function _renderRAGStats(body, d) {
         </div>`;
     }).join('');
 
-  const updatedStr = d.last_updated ? new Date(d.last_updated).toLocaleString() : '—';
+  const updatedStr = d.last_updated ? _fmtDate(d.last_updated) : '—';
 
   body.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;align-items:baseline;gap:12px">
-        <span style="font-size:36px;font-weight:700;color:var(--accent)">${total.toLocaleString()}</span>
+        <span style="font-size:36px;font-weight:700;color:var(--accent)">${total.toLocaleString(_uiLocale())}</span>
         <span style="font-size:12px;color:var(--text3)">total records</span>
         <span style="margin-left:auto;font-size:10px;color:var(--text3)">Updated ${updatedStr}</span>
       </div>
@@ -4370,7 +4514,7 @@ function _renderSuspiciousOptimizations(body, rows) {
         <td style="padding:8px 10px;font-size:11px;color:var(--accent)">${escHtml(r.combination||'—')}</td>
         <td style="padding:8px 10px;font-size:11px;color:var(--text2)">${pct(r.gate_reduction)}</td>
         <td style="padding:8px 10px">${badges}</td>
-        <td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3)">${r.timestamp ? new Date(r.timestamp).toLocaleDateString() : '—'}</td>
+        <td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3)">${r.timestamp ? _fmtDateShort(r.timestamp) : '—'}</td>
       </tr>`;
   }).join('');
 
@@ -4451,7 +4595,7 @@ function _renderRAGBestCombination(body, rows) {
 
 function _showOptDetail(r) {
   const pct  = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
-  const num  = v => v != null ? v.toLocaleString() : '—';
+  const num  = v => v != null ? v.toLocaleString(_uiLocale()) : '—';
   const sec  = v => v != null ? v.toFixed(2) + 's' : '—';
   const badge = (ok, tLabel, fLabel) => ok == null ? '' :
     `<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;
@@ -4469,7 +4613,7 @@ function _showOptDetail(r) {
         <span style="font-size:11px;color:var(--accent);background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">${escHtml(r.qpu_name||'—')}</span>
         ${badge(r.equivalent, '≡ Equiv', '≠ Not Equiv')}
         ${badge(r.t2_ok, 'T2 OK', 'T2 WARN')}
-        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ''}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r.timestamp ? _fmtDate(r.timestamp) : ''}</span>
       </div>
       ${r.algorithm_file ? `<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono)">${escHtml(r.algorithm_file.split('/').pop())}</div>` : ''}
 
@@ -4537,13 +4681,13 @@ function renderRAG(body, text, queryType) {
   if (queryType === 'suspicious_optimizations') { _renderSuspiciousOptimizations(body, data); return; }
   if (queryType === 'stats') { _renderRAGStats(body, data); return; }
   if (queryType==='recent' && Array.isArray(data)) {
-    body.innerHTML=`<div class="stats-row"><div class="stat-chip">Results: <strong>${data.length}</strong></div></div>
+    body.innerHTML=`<div class="stats-row"><div class="stat-chip">${t('knowledge.results_count', {count: data.length})}</div></div>
       <div class="rag-items">${data.map((item,idx)=>`
         <div class="rag-item" style="cursor:pointer" onclick="_showRagDetail(_ragDetailCache[${idx}])">
           <div class="rag-item-header">
             <span class="rag-item-type">${item.type||'—'}</span>
-            <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
-            <span style="font-size:9px;color:var(--text3);margin-left:auto">Click for details</span>
+            <span class="rag-item-time">${item.timestamp?_fmtDate(item.timestamp):''}</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:auto">${t('knowledge.click_details')}</span>
           </div>
           <div class="rag-item-content">${escHtml(item.summary||JSON.stringify(item).slice(0,120))}</div>
         </div>`).join('')}</div>`;
@@ -4557,7 +4701,7 @@ function renderRAG(body, text, queryType) {
         <div class="rag-item" style="cursor:pointer" onclick="_showRagDetail(_ragDetailCache2[${idx}])">
           <div class="rag-item-header">
             <span class="rag-item-type">${item.type || _qt || '—'}</span>
-            <span class="rag-item-time">${item.timestamp?new Date(item.timestamp).toLocaleString():''}</span>
+            <span class="rag-item-time">${item.timestamp?_fmtDate(item.timestamp):''}</span>
             <span style="font-size:9px;color:var(--text3);margin-left:auto">Click for details</span>
           </div>
           <div class="rag-item-content">${escHtml((item.stage||item.sdk||item.circuit_name||item.qpu_name) ? 

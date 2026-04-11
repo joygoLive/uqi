@@ -4,6 +4,12 @@
 
 from typing import Optional
 from uqi_qir_converter import UQIQIRConverter
+from uqi_messages import (
+    IBM_BACKEND_INACCESSIBLE,
+    IBM_NO_CIRCUIT,
+    IBM_ESTIMATOR_NO_CIRCUIT,
+    IBM_NO_QASM,
+)
 
 
 class UQIExecutorIBM:
@@ -37,7 +43,7 @@ class UQIExecutorIBM:
                 self.results[name] = {
                     "ok": False, "counts": None, "probs": None,
                     "backend": backend_name, "via": None,
-                    "error": "백엔드 접근 불가 (이전 회로 동일 오류) — 스킵",
+                    "error": IBM_BACKEND_INACCESSIBLE,
                 }
                 continue
 
@@ -109,7 +115,7 @@ class UQIExecutorIBM:
                 print(f"    ✓ QASM → Qiskit circuit")
 
             if circuit is None:
-                result["error"] = "회로 변환 실패 (QIR/QASM 모두 없음)"
+                result["error"] = IBM_NO_CIRCUIT
                 return result
 
             # ── 측정 추가 (없으면 SamplerV2 실행 불가) ──
@@ -223,7 +229,7 @@ class UQIExecutorIBM:
                 circuit = QuantumCircuit.from_qasm_str(filtered)
                 result["via"] = "QASM"
             else:
-                result["error"] = "회로 없음 (QASM/원본 모두 없음)"
+                result["error"] = IBM_ESTIMATOR_NO_CIRCUIT
                 return result
 
             if not circuit.cregs:
@@ -378,7 +384,7 @@ class UQIExecutorIBM:
             from qiskit import QuantumCircuit, transpile
 
             if qasm is None:
-                result["error"] = "QASM 없음"
+                result["error"] = IBM_NO_QASM
                 return result
 
             circuit = QuantumCircuit.from_qasm_str(qasm)

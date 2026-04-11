@@ -3,6 +3,13 @@
 # UQIExtractor 기반
 
 from typing import Optional
+from uqi_messages import (
+    PERCEVAL_NO_CIRCUIT,
+    PERCEVAL_NO_TOKEN,
+    PERCEVAL_EMPTY_RESULT,
+    perceval_modes_exceeded,
+    perceval_photons_exceeded,
+)
 
 
 class UQIExecutorPerceval:
@@ -58,7 +65,7 @@ class UQIExecutorPerceval:
             import numpy as np
 
             if circuit is None:
-                result["error"] = "회로 없음"
+                result["error"] = PERCEVAL_NO_CIRCUIT
                 print(f"    ✗ {result['error']}")
                 return result
 
@@ -78,7 +85,7 @@ class UQIExecutorPerceval:
             # ── Step 3: RemoteProcessor 설정 ──
             token = getattr(self, '_token', None)
             if not token:
-                result["error"] = "QUANDELA_TOKEN 없음"
+                result["error"] = PERCEVAL_NO_TOKEN
                 print(f"    ✗ {result['error']}")
                 return result
 
@@ -94,14 +101,14 @@ class UQIExecutorPerceval:
             max_photons = specs.get('constraints', {}).get('max_photon_count', 6)
 
             if circuit_m > max_modes:
-                result["error"] = f"모드 수 초과 ({circuit_m} > {max_modes})"
+                result["error"] = perceval_modes_exceeded(circuit_m, max_modes)
                 print(f"    ✗ {result['error']}")
                 session.stop()
                 return result
 
             n_photons = sum(input_state) if input_state else 1
             if n_photons > max_photons:
-                result["error"] = f"광자 수 초과 ({n_photons} > {max_photons})"
+                result["error"] = perceval_photons_exceeded(n_photons, max_photons)
                 print(f"    ✗ {result['error']}")
                 session.stop()
                 return result
@@ -122,7 +129,7 @@ class UQIExecutorPerceval:
             probs = {k: v / total for k, v in counts.items()} if total > 0 else {}
 
             if total == 0:
-                result["error"] = "결과 없음 (빈 counts) - 회로/입력 상태 확인 필요"
+                result["error"] = PERCEVAL_EMPTY_RESULT
                 print(f"    ✗ {result['error']}")
                 return result
 

@@ -960,16 +960,16 @@ async def uqi_rag_search(
                 return _safe_json(rows)
             elif query_type == "pipeline_issues":
                 records = _rag.search_pipeline_issues(sdk=sdk or None)
-                return _safe_json([r["data"] for r in records[:limit]])
+                return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records[:limit]])
             elif query_type == "transpile_patterns":
                 records = _rag.search_transpile_patterns(sdk=sdk or None)
-                return _safe_json([r["data"] for r in records[:limit]])
+                return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records[:limit]])
             elif query_type == "qec_results":
                 records = _rag.search_qec_results(qpu_name=qpu_name or None)
-                return _safe_json([r["data"] for r in records[:limit]])
+                return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records[:limit]])
             elif query_type == "gpu_benchmark":
                 records = _rag.search(record_type="gpu_benchmark", limit=limit)
-                return _safe_json([r["data"] for r in records])
+                return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records])
             elif query_type == "semantic":
                 if not query:
                     return json.dumps({"error": MCP_SEMANTIC_NO_QUERY})

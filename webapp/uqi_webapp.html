@@ -1018,6 +1018,8 @@ function _reapplyDynamic() {
   if (langChanged && typeof renderQPUGrid === 'function' && _lastQPUCache && _lastQPUCache.qpus) {
     renderQPUGrid(_lastQPUCache.qpus);
   }
+  // Re-render upload error message with updated locale
+  _applyFnameState();
   // Re-render knowledge base current view
   const body = document.getElementById('rag-result-body');
   if (!body) return;
@@ -1295,6 +1297,15 @@ function initApp() {
   document.addEventListener('drop',e=>e.preventDefault());
 }
 function switchMain(name,el) {
+  // Clear upload error message when leaving pipeline tab
+  if (name !== 'pipeline') {
+    const fname = document.getElementById('global-fname');
+    if (fname && fname.classList.contains('err')) {
+      fname.style.display = 'none';
+      fname.className = 'file-name-display';
+      _fnameState = null;
+    }
+  }
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
@@ -3056,6 +3067,15 @@ async function loadQPUSelectors() {
 // ─────────────────────────────────────────────────────────
 let _uploadedPath = null;
 let _dgxFiles = [];
+let _fnameState = null;  // { key, params } for i18n re-render on lang change, null when ok/clear
+
+function _applyFnameState() {
+  if (!_fnameState) return;
+  const fname = document.getElementById('global-fname');
+  if (fname && fname.classList.contains('err')) {
+    fname.textContent = `✗ ${t(_fnameState.key, _fnameState.params)}`;
+  }
+}
 
 function setFileSource(mode, btn) {
   document.querySelectorAll('.file-source-btn').forEach(b=>b.classList.remove('active'));
@@ -3089,17 +3109,23 @@ function handleFile(file) {
       const d = JSON.parse(getResultText(res));
       if (d.ok) {
         _uploadedPath = d.path;
+        _fnameState = null;
         fname.textContent = `✓ ${file.name}`;
         fname.className = 'file-name-display ok';
       } else if (d.conflict) {
-        fname.textContent = `✗ ${t('alert.file_exists', {name: file.name})}`;
-        fname.className = 'file-name-display err';
         _uploadedPath = null;
+        _fnameState = { key: 'alert.file_exists', params: { name: file.name } };
+        fname.textContent = `✗ ${t(_fnameState.key, _fnameState.params)}`;
+        fname.className = 'file-name-display err';
       } else {
-        fname.textContent = `✗ ${d.error||t('btn.upload_fail')}`;
+        _fnameState = { key: 'btn.upload_fail', params: {} };
+        fname.textContent = `✗ ${t('btn.upload_fail')}`;
         fname.className = 'file-name-display err';
       }
-    } catch(e) { fname.textContent=`✗ ${e.message}`; fname.className='file-name-display err'; }
+    } catch(e) {
+      _fnameState = null;
+      fname.textContent=`✗ ${e.message}`; fname.className='file-name-display err';
+    }
   };
   reader.readAsText(file);
 }

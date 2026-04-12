@@ -3078,6 +3078,13 @@ function _applyFnameState() {
 }
 
 function setFileSource(mode, btn) {
+  // Clear upload error when switching between Upload / DGX
+  const fname = document.getElementById('global-fname');
+  if (fname && fname.classList.contains('err')) {
+    fname.style.display = 'none';
+    fname.className = 'file-name-display';
+    _fnameState = null;
+  }
   document.querySelectorAll('.file-source-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('upload-area').style.display = mode==='upload' ? '' : 'none';

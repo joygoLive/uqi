@@ -875,7 +875,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="knowledge-form-title" data-i18n="knowledge.title">Search Knowledge Base</div>
           <div class="form-group">
             <label class="form-label" data-i18n="knowledge.query_type">Query Type</label>
-            <select class="form-select" id="rag-type" onchange="onRagTypeChange()">
+            <select class="form-select" id="rag-type" onchange="onRagTypeChange(); runRAG()">
               <option value="stats" data-i18n="rag.type.stats">Stats Overview</option>
               <option value="best_combination" data-i18n="rag.type.best_combination">Best Optimizations</option>
               <option value="suspicious_optimizations" data-i18n="rag.type.suspicious_optimizations">Optimization Alerts</option>
@@ -4451,7 +4451,6 @@ function onRagTypeChange() {
 
   const desc = document.getElementById('rag-type-desc');
   if (desc) desc.textContent = _getRagTypeDesc()[type] ? '— ' + _getRagTypeDesc()[type] : '';
-  runRAG();
 }
 
 const _RANKING_TYPES = new Set(['best_combination','gpu_benchmark','qec_results','noise_simulation','suspicious_optimizations','pipeline_issues','security_block']);
@@ -4480,7 +4479,9 @@ async function runRAG() {
     document.getElementById('rag-meta').textContent = elapsed(t0);
     const text = getResultText(res);
     renderRAG(body, text, queryType);
-  } catch(e) { body.innerHTML=`<div class="error-state">⚠ ${escHtml(e.message)}</div>`; }
+  } catch(e) {
+    body.innerHTML=`<div class="error-state" onclick="runRAG()" style="cursor:pointer" title="Click to retry">⚠ ${escHtml(e.message)}</div>`;
+  }
 }
 
 function onSemanticKeydown(e) {

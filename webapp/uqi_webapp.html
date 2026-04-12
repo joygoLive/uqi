@@ -1310,6 +1310,17 @@ function switchMain(name,el) {
   document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
+  // QPU 탭 복귀 시: pending 차트 렌더 또는 기존 차트 resize
+  if (name === 'qpus') {
+    requestAnimationFrame(() => {
+      if (_deepAnalysisPending) {
+        renderQPUDeepAnalysis();
+      } else {
+        if (_radarChart)   _radarChart.resize();
+        if (_boxplotChart) _boxplotChart.resize();
+      }
+    });
+  }
   if (name === 'knowledge') {
     onRagTypeChange();
     // 캐시가 있으면 재렌더, 없을 때만 서버 요청
@@ -2787,6 +2798,8 @@ function _reRenderRadar() {
   _renderRadarChart(qpus);
 }
 
+let _deepAnalysisPending = false;  // QPU 탭이 숨겨진 상태에서 요청된 경우 플래그
+
 function renderQPUDeepAnalysis() {
   const section = document.getElementById('qpu-analysis-section');
   if (!section) return;
@@ -2795,6 +2808,14 @@ function renderQPUDeepAnalysis() {
   if (validQpus.length < 2) { section.style.display = 'none'; return; }
   section.style.display = 'block';
 
+  // QPU 패널이 숨겨진 상태면 chart-radar/chart-boxplot의 크기가 0
+  // → ECharts가 0x0으로 초기화됨. 탭 복귀 시 렌더링하도록 플래그만 세움
+  const panel = document.getElementById('panel-qpus');
+  if (!panel || !panel.classList.contains('active')) {
+    _deepAnalysisPending = true;
+    return;
+  }
+  _deepAnalysisPending = false;
   _updateBoxplotTabs();
   _reRenderRadar();
   _reRenderBoxplot();

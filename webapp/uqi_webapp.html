@@ -1310,7 +1310,21 @@ function switchMain(name,el) {
   document.querySelectorAll('.main-panel').forEach(p=>p.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('panel-'+name).classList.add('active');
-  if (name === 'knowledge') { onRagTypeChange(); if (msgUrl) runRAG(); }
+  if (name === 'knowledge') {
+    onRagTypeChange();
+    // 캐시가 있으면 재렌더, 없을 때만 서버 요청
+    if (msgUrl) {
+      const selType = document.getElementById('rag-type')?.value;
+      const _ragShortMap = {
+        'best_combination':'bestComb','suspicious_optimizations':'suspicious',
+        'qec_results':'qec','gpu_benchmark':'gpu','pipeline_issues':'pipeline',
+        'noise_simulation':'noise','security_block':'security'
+      };
+      const cacheKey   = selType === 'stats' ? 'stats' : _ragShortMap[selType];
+      const hasCached  = window._rankCache && window._rankCache[cacheKey];
+      if (hasCached) _reapplyDynamic(); else runRAG();
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────

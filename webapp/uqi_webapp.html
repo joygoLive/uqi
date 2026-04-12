@@ -112,7 +112,13 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 
 /* ── Main Nav Tabs ── */
 .main-nav { display:flex; gap:3px; margin-bottom:28px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; }
-.nav-btn { flex:1; background:none; border:none; padding:10px 16px; color:var(--text2); font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; border-radius:7px; transition:all 0.2s; letter-spacing:0.5px; white-space:nowrap; }
+/* ── Expert / Beginner mode ── */
+body.mode-expert .hint-beginner { display:none !important; }
+.btn-mode-toggle { background:none; border:1px solid var(--border); border-radius:6px; padding:5px 10px; color:var(--text3); font-family:var(--font-mono); font-size:10px; font-weight:600; cursor:pointer; transition:all 0.2s; letter-spacing:0.5px; white-space:nowrap; }
+.btn-mode-toggle:hover { border-color:var(--accent); color:var(--accent); }
+body.mode-expert .btn-mode-toggle { border-color:var(--accent); color:var(--accent); }
+.nav-btn { flex:1; background:none; border:none; padding:10px 16px; color:var(--text2); font-family:var(--font-mono); font-size:12px; font-weight:600; cursor:pointer; border-radius:7px; transition:all 0.2s; letter-spacing:0.5px; white-space:nowrap; display:inline-flex; align-items:center; justify-content:center; gap:7px; }
+.nav-icon { width:15px; height:15px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
 .nav-btn:hover { color:var(--text); background:var(--surface2); }
 .nav-btn.active { background:var(--surface2); color:var(--accent); border:1px solid rgba(0,212,255,0.2); }
 .main-panel { display:none; }
@@ -211,7 +217,7 @@ header { padding:28px 0 20px; border-bottom:1px solid var(--border); margin-bott
 .step-header:hover { background:rgba(255,255,255,0.02); }
 .step-header-left { display:flex; align-items:center; gap:10px; }
 .step-header-title { display:flex; flex-direction:column; gap:2px; }
-.step-icon { font-size:14px; }
+.step-icon { width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; color:var(--accent); opacity:.8; flex-shrink:0; }
 .step-name { font-size:12px; font-weight:600; color:var(--text2); }
 .step-desc { font-size:10px; color:var(--text3); line-height:1.4; }
 .step-badge { font-size:10px; padding:2px 8px; border-radius:10px; }
@@ -435,6 +441,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
             <div class="lang-picker-item" onclick="selectLang('ko')"><span class="lang-check">✓</span> KO · 한국어</div>
           </div>
         </div>
+        <button class="btn-mode-toggle" id="btn-mode-toggle" onclick="toggleMode()" data-i18n="header.mode_expert">PRO</button>
         <button class="btn-logout" onclick="logout()" data-i18n="header.lock">LOCK</button>
       </div>
     </div>
@@ -447,9 +454,18 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
   </div>
 
   <div class="main-nav">
-    <button class="nav-btn active" onclick="switchMain('qpus',this)" data-i18n="nav.qpus">⚛ QPUs</button>
-    <button class="nav-btn" onclick="switchMain('pipeline',this)" data-i18n="nav.pipeline">⚙ Pipeline</button>
-    <button class="nav-btn" onclick="switchMain('knowledge',this)" data-i18n="nav.knowledge">🔍 Knowledge</button>
+    <button class="nav-btn active" onclick="switchMain('qpus',this)">
+      <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7.5" cy="7.5" r="1.8" fill="currentColor" stroke="none"/><ellipse cx="7.5" cy="7.5" rx="6.5" ry="2.6"/><ellipse cx="7.5" cy="7.5" rx="6.5" ry="2.6" transform="rotate(60 7.5 7.5)"/><ellipse cx="7.5" cy="7.5" rx="6.5" ry="2.6" transform="rotate(120 7.5 7.5)"/></svg></span>
+      <span data-i18n="nav.qpus">QPUs</span>
+    </button>
+    <button class="nav-btn" onclick="switchMain('pipeline',this)">
+      <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="4" x2="14" y2="4"/><line x1="1" y1="8" x2="14" y2="8"/><line x1="1" y1="12" x2="14" y2="12"/><circle cx="5" cy="4" r="1.5" fill="currentColor" stroke="none"/><circle cx="10" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg></span>
+      <span data-i18n="nav.pipeline">Pipeline</span>
+    </button>
+    <button class="nav-btn" onclick="switchMain('knowledge',this)">
+      <span class="nav-icon"><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="9.8" y1="9.8" x2="14" y2="14"/><line x1="5" y1="6.5" x2="8" y2="6.5"/><line x1="6.5" y1="5" x2="6.5" y2="8"/></svg></span>
+      <span data-i18n="nav.knowledge">Knowledge</span>
+    </button>
   </div>
 
   <!-- ══════════════ QPUs PANEL ══════════════ -->
@@ -571,7 +587,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
 
       <!-- Pipeline Steps -->
       <div class="pipeline-steps">
-        <div data-i18n-html="pipeline.steps_hint" style="font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:4px;line-height:1.6">
+        <div data-i18n-html="pipeline.steps_hint" class="hint-beginner" style="font-size:10px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:4px;line-height:1.6">
           Each step runs <strong style="color:var(--text2)">independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.
         </div>
 
@@ -579,7 +595,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-analyze">
           <div class="step-header" onclick="toggleStep('analyze')">
             <div class="step-header-left">
-              <span class="step-icon">🔬</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="3" height="3" rx="0.5"/><rect x="5" y="11" width="3" height="3" rx="0.5"/><rect x="11" y="6" width="3" height="4" rx="0.5"/><line x1="1" y1="3.5" x2="5" y2="3.5"/><line x1="8" y1="3.5" x2="11" y2="6"/><line x1="1" y1="12.5" x2="5" y2="12.5"/><line x1="8" y1="12.5" x2="11" y2="10"/><line x1="6.5" y1="5" x2="6.5" y2="11"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.analyze.name">Circuit Analysis</span>
@@ -600,7 +616,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-optimize">
           <div class="step-header" onclick="toggleStep('optimize')">
             <div class="step-header-left">
-              <span class="step-icon">⚙️</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,4 8,8 13,4"/><polyline points="3,8 8,12 13,8"/><line x1="3" y1="14" x2="13" y2="14"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.optimize.name">Optimization</span>
@@ -640,7 +656,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-noise">
           <div class="step-header" onclick="toggleStep('noise')">
             <div class="step-header-left">
-              <span class="step-icon">📡</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1,9 C3,9 3,4 5.5,4 C8,4 8,14 10.5,14 C13,14 13,4 15,4"/><line x1="1" y1="14" x2="15" y2="14" stroke-opacity="0.3"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.noise.name">Noise Simulation</span>
@@ -674,7 +690,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-qec-analyze">
           <div class="step-header" onclick="toggleStep('qec-analyze')">
             <div class="step-header-left">
-              <span class="step-icon">🛡</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8,2 L14,4.5 L14,8.5 C14,11.5 11,13.5 8,15 C5,13.5 2,11.5 2,8.5 L2,4.5 Z"/><polyline points="5.5,8 7.5,10 11,6"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.qec_analyze.name">QEC Analysis</span>
@@ -701,7 +717,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-qec-apply">
           <div class="step-header" onclick="toggleStep('qec-apply')">
             <div class="step-header-left">
-              <span class="step-icon">🔧</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,2 2,2 2,14 5,14"/><polyline points="11,2 14,2 14,14 11,14"/><line x1="6" y1="8" x2="10" y2="8"/><polyline points="8,6 10,8 8,10"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.qec_apply.name">QEC Apply</span>
@@ -735,7 +751,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-gpu">
           <div class="step-header" onclick="toggleStep('gpu')">
             <div class="step-header-left">
-              <span class="step-icon">🚀</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="10" rx="1.5"/><line x1="5" y1="1" x2="5" y2="3"/><line x1="11" y1="1" x2="11" y2="3"/><line x1="5" y1="13" x2="5" y2="15"/><line x1="11" y1="13" x2="11" y2="15"/><line x1="1" y1="5" x2="3" y2="5"/><line x1="1" y1="11" x2="3" y2="11"/><line x1="13" y1="5" x2="15" y2="5"/><line x1="13" y1="11" x2="15" y2="11"/><rect x="6" y="6" width="4" height="4" rx="0.5" fill="currentColor" stroke="none" opacity="0.4"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.gpu.name">GPU Benchmark</span>
@@ -756,7 +772,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card step-danger" id="step-qpu">
           <div class="step-header" onclick="toggleStep('qpu')">
             <div class="step-header-left">
-              <span class="step-icon">🌐</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="1.8" fill="currentColor" stroke="none"/><ellipse cx="8" cy="8" rx="7" ry="2.8"/><ellipse cx="8" cy="8" rx="7" ry="2.8" transform="rotate(60 8 8)"/><ellipse cx="8" cy="8" rx="7" ry="2.8" transform="rotate(120 8 8)"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.qpu.name">QPU Submit</span>
@@ -796,7 +812,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="step-card" id="step-job-history">
           <div class="step-header" onclick="toggleStep('job-history')">
             <div class="step-header-left">
-              <span class="step-icon">🖥️</span>
+              <span class="step-icon"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2" width="13" height="10" rx="1.5"/><line x1="4" y1="14" x2="12" y2="14"/><line x1="8" y1="12" x2="8" y2="14"/><line x1="4.5" y1="6" x2="7" y2="6"/><circle cx="9.5" cy="6" r="0.8" fill="currentColor" stroke="none"/><line x1="4.5" y1="9" x2="9" y2="9"/></svg></span>
               <div class="step-header-title">
                 <div style="display:flex;align-items:center;gap:6px">
                   <span class="step-name" data-i18n="pipeline.job_manager.name">QPU Job Manager</span>
@@ -865,6 +881,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <option value="qec_results" data-i18n="rag.type.qec_results">QEC Results</option>
               <option value="gpu_benchmark" data-i18n="rag.type.gpu_benchmark">GPU Benchmarks</option>
               <option value="pipeline_issues" data-i18n="rag.type.pipeline_issues">Pipeline Errors</option>
+              <option value="noise_simulation" data-i18n="rag.type.noise_simulation">Noise Simulation</option>
               <option value="security_block" data-i18n="rag.type.security_block">Security Blocks</option>
             </select>
           </div>
@@ -873,7 +890,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <label class="form-label" data-i18n="knowledge.semantic_query">Semantic Query</label>
               <textarea id="rag-query" class="form-input"
                 style="resize:vertical;min-height:72px;line-height:1.5"
-                placeholder="e.g. high fidelity experiment on iqm_garnet&#10;PennyLane circuit optimization success&#10;High speedup result in GPU benchmark"></textarea>
+                data-i18n-placeholder="knowledge.rag_query_placeholder"></textarea>
             </div>
           </div>
           <div class="form-group" id="rag-group-qpu">
@@ -905,7 +922,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="form-group">
             <textarea id="semantic-input" class="form-input"
               style="resize:vertical;min-height:80px;line-height:1.5"
-              placeholder="Search in natural language...&#10;e.g. high gate reduction optimization on ibm_fez&#10;PennyLane fidelity above 0.9"
+              data-i18n-placeholder="knowledge.semantic_placeholder"
               onkeydown="onSemanticKeydown(event)"></textarea>
           </div>
           <div class="form-group">
@@ -917,7 +934,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
             </select>
           </div>
           <button class="btn-run" id="btn-semantic" data-i18n="knowledge.run_semantic" onclick="runSemantic()">SEMANTIC SEARCH</button>
-          <div style="font-size:10px;color:var(--text3);margin-top:8px">
+          <div class="hint-beginner" style="font-size:10px;color:var(--text3);margin-top:8px">
             <span data-i18n-html="knowledge.semantic_hint">Press Enter to search · Shift+Enter for new line<br>Chroma vector similarity search</span>
           </div>
         </div>
@@ -926,7 +943,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
         <div class="knowledge-result">
           <div class="knowledge-result-header">
             <span class="knowledge-result-title" data-i18n="knowledge.structured_results">Structured Search Results</span>
-            <span id="rag-type-desc" style="font-size:10px;color:var(--accent);opacity:0.8;margin-left:8px"></span>
+            <span id="rag-type-desc" class="hint-beginner" style="font-size:10px;color:var(--accent);opacity:0.8;margin-left:8px"></span>
             <span class="knowledge-result-meta" id="rag-meta">—</span>
           </div>
           <div class="knowledge-result-body" id="rag-result-body">
@@ -957,8 +974,8 @@ const _LOCALES = {
   ko: null,
 };
 // 인라인 폴백 로케일 (fetch 실패 시 또는 file:// 프로토콜)
-const _LOCALE_EN = {"nav.qpus":"⚛ QPUs","nav.pipeline":"⚙ Pipeline","nav.knowledge":"🔍 Knowledge","header.server_label":"Server","header.connect":"Connect","header.lock":"LOCK","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"disconnected","status.connected":"connected","status.connecting":"Connecting...","status.reconnecting":"Reconnecting...","status.not_connected":"Not connected","lock.subtitle":"QUANTUM INTELLIGENCE","lock.unlock":"UNLOCK","lock.incorrect_password":"Incorrect password","footer.text":"UQI · Universal Quantum Intelligence · Internal Tool","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ Refresh","qpu.loading":"Loading QPU status...","qpu.refreshing":"Refreshing...","qpu.no_qpus":"No QPUs available","qpu.load_fail":"Failed to load QPU list","qpu.loading_calibration":"Loading calibration...","qpu.cache_refresh_recommended":"· Refresh recommended","qpu.close":"Close","qpu.refresh_cal":"↻ Refresh Cal","qpu.deep_analysis":"QPU Deep Analysis","qpu.performance_radar":"Performance Radar","qpu.distribution_box":"Distribution (Box Plot)","qpu.log_scale":"log scale","qpu.all_qpus":"All QPUs","qpu.auto_recommended":"Auto (Recommended)","qpu.online":"Online","qpu.offline":"Offline","qpu.photonic":"Photonic","qpu.no_modality":"No modality selected","qpu.no_distribution":"No distribution data for selected modality.","qpu.boxplot_desc":"Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ Upload","pipeline.dgx":"📂 DGX","pipeline.drop_hint":"Drop .py here or click to browse","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"Logical complexity — qubits, gates, depth, T-gate ratio","pipeline.analyze.run":"RUN ANALYSIS","pipeline.analyze.running":"Analyzing...","pipeline.analyze.empty":"Run analysis to see results","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"Physical mapping to target QPU — gate/depth reduction via auto transpile","pipeline.optimize.run":"RUN OPTIMIZATION","pipeline.optimize.running":"Optimizing...","pipeline.optimize.combination":"Combination","pipeline.optimize.options":"Options","pipeline.optimize.verify":"Verify equivalence","pipeline.optimize.empty":"Run optimization to see results","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU-realistic fidelity — calibration-based noise model on optimized circuit","pipeline.noise.run":"RUN NOISE SIMULATION","pipeline.noise.running":"Simulating...","pipeline.noise.empty":"Run noise simulation to see results","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"Error correction necessity — T2 ratio, fidelity, recommended codes","pipeline.qec_analyze.run":"RUN QEC ANALYSIS","pipeline.qec_analyze.running":"Analyzing...","pipeline.qec_analyze.empty":"Run QEC analysis to see results","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"Encode circuit with QEC code — compare fidelity before/after","pipeline.qec_apply.run":"RUN QEC APPLY","pipeline.qec_apply.running":"Applying...","pipeline.qec_apply.empty":"Run QEC apply to see results","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU simulation speed — statevector throughput comparison","pipeline.gpu.run":"RUN BENCHMARK","pipeline.gpu.running":"Benchmarking...","pipeline.gpu.empty":"Run benchmark to see results","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"Submit to real quantum hardware — transpiles & executes on actual QPU","pipeline.qpu.run":"SUBMIT TO QPU","pipeline.qpu.running":"Submitting...","pipeline.qpu.confirm":"CONFIRM SUBMIT","pipeline.qpu.empty":"Run analysis first, then confirm to submit","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"Monitor & manage submitted QPU jobs — check status, view results, cancel jobs","pipeline.job_manager.refresh":"↻ Refresh","pipeline.job_manager.refreshing":"↻ Refreshing...","pipeline.job_manager.empty":"Click Refresh to load jobs","pipeline.job_manager.status_label":"Status","pipeline.job_manager.period_label":"Period","pipeline.job_manager.show_label":"Show","pipeline.job_manager.all":"All","pipeline.job_manager.active":"Active","pipeline.job_manager.done":"Done","pipeline.job_manager.cancelled":"Cancelled","pipeline.job_manager.error":"Error","pipeline.job_manager.all_time":"All time","pipeline.job_manager.today":"Today","pipeline.job_manager.last_7d":"Last 7 days","pipeline.job_manager.last_30d":"Last 30 days","job.status.checking":"Checking...","job.status.check":"↻ Check Status","job.status.last_checked":"Last checked:","job.status.error_badge":"ERROR","job.status.cancelled_badge":"CANCELLED","job.status.done_badge":"✓ DONE","job.status.cancelled_msg":"Job was cancelled.","job.status.running_msg":"job is running on QPU queue.","job.status.cancel":"✕ Cancel Job","job.status.cancelling":"Cancelling...","job.results.title":"Measurement Results","job.results.total_shots":"Total Shots","job.results.unique_states":"Unique States","step.badge.done":"✓ Done","step.badge.error":"✗ Error","btn.loading":"...","btn.uploading":"⟳ Uploading...","btn.upload_fail":"Upload failed","btn.view":"👁 View","btn.refresh_list":"↻ Refresh","cache.badge":"⚡ Cached result loaded from previous run.","cache.invalidate":"↺ Invalidate Cache","cache.invalidated_msg":"Cache invalidated ({deleted} entries deleted)\nRe-run to fetch fresh results.","cache.fail":"Failed","cache.stale":"· Refresh recommended","alert.select_file":"Please select or upload an algorithm file","alert.select_file_first":"Please select a file first","alert.only_py":"Only Python (.py) files are allowed","knowledge.title":"Search Knowledge Base","knowledge.query_type":"Query Type","knowledge.semantic_query":"Semantic Query","knowledge.qpu_filter":"QPU Filter","knowledge.sdk_filter":"SDK Filter","knowledge.framework_filter":"Framework Filter","knowledge.limit":"Limit","knowledge.run_search":"RUN SEARCH","knowledge.searching":"Searching...","knowledge.semantic_title":"⚛ Semantic Search","knowledge.run_semantic":"SEMANTIC SEARCH","knowledge.results_count":"Results: {count}","knowledge.click_details":"Click for details","knowledge.no_results":"Run a search to see results","rag.type.stats":"Stats Overview","rag.type.best_combination":"Best Optimizations","rag.type.suspicious_optimizations":"Optimization Alerts","rag.type.qec_results":"QEC Results","rag.type.gpu_benchmark":"GPU Benchmarks","rag.type.pipeline_issues":"Pipeline Errors","rag.type.security_block":"Security Blocks","pipeline.noise.engine":"Simulation Engine","pipeline.qec_apply.code":"QEC Code","pipeline.shots":"Shots","pipeline.qpu.warn":"This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use \"Analyze (No Submit)\" first to preview the transpiled circuit before confirming.","pipeline.qpu.analyze_btn":"ANALYZE (NO SUBMIT)","pipeline.qpu.confirm_btn":"⚡ CONFIRM & SUBMIT TO QPU","knowledge.structured_results":"Structured Search Results","knowledge.semantic_results":"⚛ Semantic Results","knowledge.semantic_hint":"Press Enter to search · Shift+Enter for new line\nChroma vector similarity search","rag.type_desc.stats":"Knowledge base record count and per-type breakdown","rag.type_desc.best_combination":"Optimization runs ranked by gate reduction — filter by QPU or qubit count","rag.type_desc.suspicious_optimizations":"Optimizations flagged for review: empty circuit, non-equivalence, or unverified 100% reduction","rag.type_desc.qec_results":"Top QEC experiments by fidelity improvement — effective cases only","rag.type_desc.gpu_benchmark":"GPU simulation speedup rankings — top CPU vs GPU acceleration results","rag.type_desc.pipeline_issues":"Pipeline error log — failures and root causes per stage & SDK","rag.type_desc.security_block":"Static analysis blocks — dangerous imports or patterns detected in algorithm files","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"Circuit optimization runs — gate/depth reduction results per combination & QPU","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU job execution records — shots, fidelity, job IDs, and result metadata","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU simulation performance comparisons","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"Errors and failures encountered during pipeline stages, with root causes","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"Transpilation success/failure patterns and workarounds per SDK & QPU","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"Quantum error correction experiment results — fidelity before/after encoding","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"QPU online/offline status snapshots over time","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"Requests blocked by static security policy — suspicious imports or patterns","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"Internally cached computation results for performance optimization"};
-const _LOCALE_KO = {"nav.qpus":"⚛ QPUs","nav.pipeline":"⚙ Pipeline","nav.knowledge":"🔍 Knowledge","header.server_label":"서버","header.connect":"연결","header.lock":"잠금","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"미연결","status.connected":"연결됨","status.connecting":"연결 중...","status.reconnecting":"재연결 중...","status.not_connected":"미연결","lock.subtitle":"퀀텀 인텔리전스","lock.unlock":"잠금 해제","lock.incorrect_password":"비밀번호가 틀렸습니다","footer.text":"UQI · Universal Quantum Intelligence · 내부 도구","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ 새로고침","qpu.loading":"QPU 상태 로딩 중...","qpu.refreshing":"새로고침 중...","qpu.no_qpus":"사용 가능한 QPU 없음","qpu.load_fail":"QPU 목록 로드 실패","qpu.loading_calibration":"캘리브레이션 로딩 중...","qpu.cache_refresh_recommended":"· 새로고침 권장","qpu.close":"닫기","qpu.refresh_cal":"↻ 캘 새로고침","qpu.deep_analysis":"QPU 심층 분석","qpu.performance_radar":"성능 레이더","qpu.distribution_box":"분포 (박스 플롯)","qpu.log_scale":"로그 스케일","qpu.all_qpus":"전체 QPU","qpu.auto_recommended":"자동 (추천)","qpu.online":"온라인","qpu.offline":"오프라인","qpu.photonic":"포토닉","qpu.no_modality":"모달리티 미선택","qpu.no_distribution":"선택한 모달리티의 분포 데이터 없음.","qpu.boxplot_desc":"Box = 중간 50% 큐비트 분포 (Q1–Q3)<br>Whisker = 이상치 제외 최소/최대","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ 업로드","pipeline.dgx":"📂 DGX","pipeline.drop_hint":".py 파일을 여기에 놓거나 클릭하여 찾아보기","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"논리적 복잡도 — 큐비트, 게이트, 깊이, T-게이트 비율","pipeline.analyze.run":"분석 실행","pipeline.analyze.running":"분석 중...","pipeline.analyze.empty":"분석을 실행하여 결과를 확인하세요","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"대상 QPU에 대한 물리적 매핑 — 자동 트랜스파일로 게이트/깊이 감소","pipeline.optimize.run":"최적화 실행","pipeline.optimize.running":"최적화 중...","pipeline.optimize.combination":"조합","pipeline.optimize.options":"옵션","pipeline.optimize.verify":"동등성 검증","pipeline.optimize.empty":"최적화를 실행하여 결과를 확인하세요","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU 충실도 추정 — 최적화된 회로에 캘리브레이션 기반 노이즈 모델","pipeline.noise.run":"노이즈 시뮬레이션 실행","pipeline.noise.running":"시뮬레이션 중...","pipeline.noise.empty":"노이즈 시뮬레이션을 실행하여 결과를 확인하세요","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"오류 정정 필요성 — T2 비율, 충실도, 추천 코드","pipeline.qec_analyze.run":"QEC 분析 실행","pipeline.qec_analyze.running":"분析 중...","pipeline.qec_analyze.empty":"QEC 분析을 실행하여 결과를 확인하세요","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"QEC 코드로 회로 인코딩 — 적용 전후 충실도 비교","pipeline.qec_apply.run":"QEC 적용 실행","pipeline.qec_apply.running":"적용 중...","pipeline.qec_apply.empty":"QEC 적용을 실행하여 결과를 확인하세요","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU 시뮬레이션 속도 — 상태벡터 처리량 비교","pipeline.gpu.run":"벤치마크 실행","pipeline.gpu.running":"벤치마킹 중...","pipeline.gpu.empty":"벤치마크를 실행하여 결과를 확인하세요","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"실제 양자 하드웨어에 제출 — 트랜스파일 후 실제 QPU에서 실행","pipeline.qpu.run":"QPU에 제출","pipeline.qpu.running":"제출 중...","pipeline.qpu.confirm":"제출 확인","pipeline.qpu.empty":"먼저 분석을 실행한 후 확인하여 제출하세요","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"제출된 QPU 작업 모니터링 및 관리 — 상태 확인, 결과 조회, 작업 취소","pipeline.job_manager.refresh":"↻ 새로고침","pipeline.job_manager.refreshing":"↻ 새로고침 중...","pipeline.job_manager.empty":"새로고침을 클릭하여 작업 목록 로드","pipeline.job_manager.status_label":"상태","pipeline.job_manager.period_label":"기간","pipeline.job_manager.show_label":"표시","pipeline.job_manager.all":"전체","pipeline.job_manager.active":"진행 중","pipeline.job_manager.done":"완료","pipeline.job_manager.cancelled":"취소됨","pipeline.job_manager.error":"오류","pipeline.job_manager.all_time":"전체 기간","pipeline.job_manager.today":"오늘","pipeline.job_manager.last_7d":"최근 7일","pipeline.job_manager.last_30d":"최근 30일","job.status.checking":"확인 중...","job.status.check":"↻ 상태 확인","job.status.last_checked":"마지막 확인:","job.status.error_badge":"오류","job.status.cancelled_badge":"취소됨","job.status.done_badge":"✓ 완료","job.status.cancelled_msg":"작업이 취소되었습니다.","job.status.running_msg":"QPU 큐에서 실행 중입니다.","job.status.cancel":"✕ 작업 취소","job.status.cancelling":"취소 중...","job.results.title":"측정 결과","job.results.total_shots":"총 샷 수","job.results.unique_states":"고유 상태 수","step.badge.done":"✓ 완료","step.badge.error":"✗ 오류","btn.loading":"...","btn.uploading":"⟳ 업로드 중...","btn.upload_fail":"업로드 실패","btn.view":"👁 보기","btn.refresh_list":"↻ 새로고침","cache.badge":"⚡ 이전 실행의 캐시된 결과를 불러왔습니다.","cache.invalidate":"↺ 캐시 무효화","cache.invalidated_msg":"캐시가 무효화되었습니다 ({deleted}개 삭제)\n재실행하여 새 결과를 가져오세요.","cache.fail":"실패","cache.stale":"· 새로고침 권장","alert.select_file":"알고리즘 파일을 선택하거나 업로드하세요","alert.select_file_first":"먼저 파일을 선택하세요","alert.only_py":"Python (.py) 파일만 허용됩니다","knowledge.title":"Knowledge Base","knowledge.query_type":"쿼리 유형","knowledge.semantic_query":"시맨틱 쿼리","knowledge.qpu_filter":"QPU 필터","knowledge.sdk_filter":"SDK 필터","knowledge.framework_filter":"Framework 필터","knowledge.limit":"제한","knowledge.run_search":"검색 실행","knowledge.searching":"검색 중...","knowledge.semantic_title":"⚛ 시맨틱 검색","knowledge.run_semantic":"시맨틱 검색 실행","knowledge.results_count":"결과: {count}개","knowledge.click_details":"클릭하여 상세 보기","knowledge.no_results":"검색을 실행하여 결과를 확인하세요","rag.type.stats":"통계 개요","rag.type.best_combination":"최적 최적화","rag.type.suspicious_optimizations":"최적화 경보","rag.type.qec_results":"QEC 결과","rag.type.gpu_benchmark":"GPU 벤치마크","rag.type.pipeline_issues":"파이프라인 오류","rag.type.security_block":"보안 차단","pipeline.noise.engine":"시뮬레이션 엔진","pipeline.qec_apply.code":"QEC 코드","pipeline.shots":"샷 수","pipeline.qpu.warn":"<strong>실제 QPU</strong>에 제출되며 <strong>비용이 발생</strong>합니다. 확인 전 \"분석 (제출 없음)\"으로 트랜스파일된 회로를 미리 확인하세요.","pipeline.qpu.analyze_btn":"분석 (제출 없음)","pipeline.qpu.confirm_btn":"⚡ 확인 후 QPU에 제출","knowledge.structured_results":"구조화 검색 결과","knowledge.semantic_results":"⚛ 시맨틱 검색 결과","knowledge.semantic_hint":"Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색","rag.type_desc.stats":"지식베이스 레코드 수 및 유형별 현황","rag.type_desc.best_combination":"게이트 감소율 순 최적화 이력 — QPU 또는 큐비트 수로 필터","rag.type_desc.suspicious_optimizations":"검토 필요 최적화: 빈 회로, 비동등, 미검증 100% 감소","rag.type_desc.qec_results":"충실도 개선율 상위 QEC 실험 — 효과적인 케이스만 표시","rag.type_desc.gpu_benchmark":"GPU 시뮬레이션 속도 향상 랭킹 — CPU 대비 최고 가속 결과","rag.type_desc.pipeline_issues":"파이프라인 오류 로그 — 단계·SDK별 실패 및 근본 원인","rag.type_desc.security_block":"정적 분석 차단 — 알고리즘 파일 내 위험 임포트·패턴 감지","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"회로 최적화 실행 — 조합 및 QPU별 게이트/깊이 감소 결과","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU 작업 실행 기록 — 샷 수, 충실도, 작업 ID, 결과 메타데이터","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU 시뮬레이션 성능 비교","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"파이프라인 단계별 오류 및 실패, 근본 원인 포함","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"SDK 및 QPU별 트랜스파일 성공/실패 패턴 및 해결 방법","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"양자 오류 정정 실험 결과 — 인코딩 전후 충실도","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"시간별 QPU 온라인/오프라인 상태 스냅샷","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"정적 보안 정책에 의해 차단된 요청 — 의심스러운 임포트 또는 패턴","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"양자 프레임워크 간 회로 변환 패턴 (예: Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"성능 최적화를 위한 내부 캐시된 연산 결과"};
+const _LOCALE_EN = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"BASIC","header.mode_expert":"PRO","header.server_label":"Server","header.connect":"Connect","header.lock":"LOCK","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"disconnected","status.connected":"connected","status.connecting":"Connecting...","status.reconnecting":"Reconnecting...","status.not_connected":"Not connected","lock.subtitle":"QUANTUM INTELLIGENCE","lock.unlock":"UNLOCK","lock.incorrect_password":"Incorrect password","footer.text":"UQI · Universal Quantum Intelligence · Internal Tool","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ Refresh","qpu.loading":"Loading QPU status...","qpu.refreshing":"Refreshing...","qpu.no_qpus":"No QPUs available","qpu.load_fail":"Failed to load QPU list","qpu.loading_calibration":"Loading calibration...","qpu.cache_refresh_recommended":"· Refresh recommended","qpu.close":"Close","qpu.refresh_cal":"↻ Refresh Cal","qpu.deep_analysis":"QPU Deep Analysis","qpu.performance_radar":"Performance Radar","qpu.distribution_box":"Distribution (Box Plot)","qpu.log_scale":"log scale","qpu.all_qpus":"All QPUs","qpu.auto_recommended":"Auto (Recommended)","qpu.online":"Online","qpu.offline":"Offline","qpu.photonic":"Photonic","qpu.no_modality":"No modality selected","qpu.no_distribution":"No distribution data for selected modality.","qpu.boxplot_desc":"Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ Upload","pipeline.dgx":"📂 DGX","pipeline.drop_hint":"Drop .py here or click to browse","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"Logical complexity — qubits, gates, depth, T-gate ratio","pipeline.analyze.run":"RUN ANALYSIS","pipeline.analyze.running":"Analyzing...","pipeline.analyze.empty":"Run analysis to see results","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"Physical mapping to target QPU — gate/depth reduction via auto transpile","pipeline.optimize.run":"RUN OPTIMIZATION","pipeline.optimize.running":"Optimizing...","pipeline.optimize.combination":"Combination","pipeline.optimize.options":"Options","pipeline.optimize.verify":"Verify equivalence","pipeline.optimize.empty":"Run optimization to see results","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU-realistic fidelity — calibration-based noise model on optimized circuit","pipeline.noise.run":"RUN NOISE SIMULATION","pipeline.noise.running":"Simulating...","pipeline.noise.empty":"Run noise simulation to see results","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"Error correction necessity — T2 ratio, fidelity, recommended codes","pipeline.qec_analyze.run":"RUN QEC ANALYSIS","pipeline.qec_analyze.running":"Analyzing...","pipeline.qec_analyze.empty":"Run QEC analysis to see results","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"Encode circuit with QEC code — compare fidelity before/after","pipeline.qec_apply.run":"RUN QEC APPLY","pipeline.qec_apply.running":"Applying...","pipeline.qec_apply.empty":"Run QEC apply to see results","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU simulation speed — statevector throughput comparison","pipeline.gpu.run":"RUN BENCHMARK","pipeline.gpu.running":"Benchmarking...","pipeline.gpu.empty":"Run benchmark to see results","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"Submit to real quantum hardware — transpiles & executes on actual QPU","pipeline.qpu.run":"SUBMIT TO QPU","pipeline.qpu.running":"Submitting...","pipeline.qpu.confirm":"CONFIRM SUBMIT","pipeline.qpu.empty":"Run analysis first, then confirm to submit","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"Monitor & manage submitted QPU jobs — check status, view results, cancel jobs","pipeline.job_manager.refresh":"↻ Refresh","pipeline.job_manager.refreshing":"↻ Refreshing...","pipeline.job_manager.empty":"Click Refresh to load jobs","pipeline.job_manager.status_label":"Status","pipeline.job_manager.period_label":"Period","pipeline.job_manager.show_label":"Show","pipeline.job_manager.all":"All","pipeline.job_manager.active":"Active","pipeline.job_manager.done":"Done","pipeline.job_manager.cancelled":"Cancelled","pipeline.job_manager.error":"Error","pipeline.job_manager.all_time":"All time","pipeline.job_manager.today":"Today","pipeline.job_manager.last_7d":"Last 7 days","pipeline.job_manager.last_30d":"Last 30 days","job.status.checking":"Checking...","job.status.check":"↻ Check Status","job.status.last_checked":"Last checked:","job.status.error_badge":"ERROR","job.status.cancelled_badge":"CANCELLED","job.status.done_badge":"✓ DONE","job.status.cancelled_msg":"Job was cancelled.","job.status.running_msg":"job is running on QPU queue.","job.status.cancel":"✕ Cancel Job","job.status.cancelling":"Cancelling...","job.results.title":"Measurement Results","job.results.total_shots":"Total Shots","job.results.unique_states":"Unique States","step.badge.done":"✓ Done","step.badge.error":"✗ Error","btn.loading":"...","btn.uploading":"⟳ Uploading...","btn.upload_fail":"Upload failed","btn.view":"👁 View","btn.refresh_list":"↻ Refresh","cache.badge":"⚡ Cached result loaded from previous run.","cache.invalidate":"↺ Invalidate Cache","cache.invalidated_msg":"Cache invalidated ({deleted} entries deleted)\nRe-run to fetch fresh results.","cache.fail":"Failed","cache.stale":"· Refresh recommended","alert.select_file":"Please select or upload an algorithm file","alert.select_file_first":"Please select a file first","alert.only_py":"Only Python (.py) files are allowed","knowledge.title":"Search Knowledge Base","knowledge.query_type":"Query Type","knowledge.semantic_query":"Semantic Query","knowledge.qpu_filter":"QPU Filter","knowledge.sdk_filter":"SDK Filter","knowledge.framework_filter":"Framework Filter","knowledge.limit":"Limit","knowledge.run_search":"RUN SEARCH","knowledge.searching":"Searching...","knowledge.semantic_title":"⚛ Semantic Search","knowledge.run_semantic":"SEMANTIC SEARCH","knowledge.results_count":"Results: {count}","knowledge.click_details":"Click for details","knowledge.no_results":"Run a search to see results","rag.type.stats":"Stats Overview","rag.type.best_combination":"Best Optimizations","rag.type.suspicious_optimizations":"Optimization Alerts","rag.type.qec_results":"QEC Results","rag.type.gpu_benchmark":"GPU Benchmarks","rag.type.pipeline_issues":"Pipeline Errors","rag.type.noise_simulation":"Noise Simulation","rag.type.security_block":"Security Blocks","pipeline.noise.engine":"Simulation Engine","pipeline.qec_apply.code":"QEC Code","pipeline.shots":"Shots","pipeline.qpu.warn":"This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use \"Analyze (No Submit)\" first to preview the transpiled circuit before confirming.","pipeline.qpu.analyze_btn":"ANALYZE (NO SUBMIT)","pipeline.qpu.confirm_btn":"⚡ CONFIRM & SUBMIT TO QPU","knowledge.structured_results":"Structured Search Results","knowledge.semantic_results":"⚛ Semantic Results","knowledge.semantic_hint":"Press Enter to search · Shift+Enter for new line\nChroma vector similarity search","rag.type_desc.stats":"Knowledge base record count and per-type breakdown","rag.type_desc.best_combination":"Optimization runs ranked by gate reduction — filter by QPU or qubit count","rag.type_desc.suspicious_optimizations":"Optimizations flagged for review: empty circuit, non-equivalence, or unverified 100% reduction","rag.type_desc.qec_results":"Top QEC experiments by fidelity improvement — effective cases only","rag.type_desc.gpu_benchmark":"GPU simulation speedup rankings — top CPU vs GPU acceleration results","rag.type_desc.pipeline_issues":"Pipeline error log — failures and root causes per stage & SDK","rag.type_desc.noise_simulation":"Calibration-based noise model results ranked by fidelity — best and worst circuit behavior on QPU noise","rag.type_desc.security_block":"Static analysis blocks — dangerous imports or patterns detected in algorithm files","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"Circuit optimization runs — gate/depth reduction results per combination & QPU","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU job execution records — shots, fidelity, job IDs, and result metadata","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU simulation performance comparisons","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"Errors and failures encountered during pipeline stages, with root causes","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"Transpilation success/failure patterns and workarounds per SDK & QPU","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"Quantum error correction experiment results — fidelity before/after encoding","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"QPU online/offline status snapshots over time","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"Requests blocked by static security policy — suspicious imports or patterns","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"Internally cached computation results for performance optimization","hint.opt.combination":"transpiler + qubit routing algorithm","hint.opt.opt_engine":"unitary synthesis","hint.opt.map_engine":"QPU topology routing","hint.opt.complexity":"Gate count & depth reduction through transpilation to QPU native gate set and qubit topology","hint.opt.profile":"T-ratio: T-gate fraction (costly on fault-tolerant hardware) · 2Q-ratio: two-qubit gate density (dominant error source on NISQ)","hint.opt.time":"Optimize: unitary synthesis & gate cancellation · Mapping: SABRE/routing to QPU connectivity graph","hint.noise.fidelity":"F = 1 − TVD · Fidelity near 1.0 means QPU noise barely perturbs the output distribution · TVD = max probability difference between ideal and noisy outcomes","hint.noise.dominant":"Most frequently measured bitstring — if noise shifts this state, the circuit's computational result is corrupted","hint.gpu.speedup":"Statevector simulation: GPU parallelizes 2ⁿ complex amplitudes simultaneously","hint.gpu.timing":"Wall-clock time for full statevector evolution — measures actual hardware throughput difference","hint.qec.fidelity":"F = 1 − TVD(ideal, noisy) — how well the QEC code restores the quantum state distribution corrupted by QPU noise","hint.qec.overhead":"Physical resource cost of encoding — QEC requires redundant qubits & ancilla gates to detect/correct errors","hint.security.reason":"Algorithm files run inside the QPU pipeline — unrestricted OS/network access could exfiltrate calibration data or manipulate results","hint.pipeline.analyze":"Circuit extraction & gate-level analysis — failure here usually means syntax error or unsupported gate set","hint.pipeline.optimize":"Transpilation to QPU native gate set + SABRE qubit routing — failure often means connectivity mismatch","hint.pipeline.noise":"Calibration-based noise model simulation — requires successful transpilation to physical circuit first","hint.pipeline.qec_analyze":"T2/fidelity threshold analysis to determine if QEC is needed for the target QPU","hint.pipeline.qec_apply":"Logical-to-physical encoding with QEC code — increases qubit/gate count significantly","hint.pipeline.gpu":"Statevector simulation on CPU vs CUDA GPU — GPU unavailability or OOM are common causes","hint.pipeline.qpu":"Real QPU job submission — transpile errors, qubit count exceeded, or cloud API failure","knowledge.rag_query_placeholder":"e.g. high fidelity experiment on iqm_garnet\nPennyLane circuit optimization success\nHigh speedup result in GPU benchmark","knowledge.semantic_placeholder":"Search in natural language...\ne.g. high gate reduction optimization on ibm_fez\nPennyLane fidelity above 0.9"};
+const _LOCALE_KO = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"기초","header.mode_expert":"전문","header.server_label":"서버","header.connect":"연결","header.lock":"잠금","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","status.disconnected":"미연결","status.connected":"연결됨","status.connecting":"연결 중...","status.reconnecting":"재연결 중...","status.not_connected":"미연결","lock.subtitle":"퀀텀 인텔리전스","lock.unlock":"잠금 해제","lock.incorrect_password":"비밀번호가 틀렸습니다","footer.text":"UQI · Universal Quantum Intelligence · 내부 도구","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ 새로고침","qpu.loading":"QPU 상태 로딩 중...","qpu.refreshing":"새로고침 중...","qpu.no_qpus":"사용 가능한 QPU 없음","qpu.load_fail":"QPU 목록 로드 실패","qpu.loading_calibration":"캘리브레이션 로딩 중...","qpu.cache_refresh_recommended":"· 새로고침 권장","qpu.close":"닫기","qpu.refresh_cal":"↻ 캘 새로고침","qpu.deep_analysis":"QPU 심층 분석","qpu.performance_radar":"성능 레이더","qpu.distribution_box":"분포 (박스 플롯)","qpu.log_scale":"로그 스케일","qpu.all_qpus":"전체 QPU","qpu.auto_recommended":"자동 (추천)","qpu.online":"온라인","qpu.offline":"오프라인","qpu.photonic":"포토닉","qpu.no_modality":"모달리티 미선택","qpu.no_distribution":"선택한 모달리티의 분포 데이터 없음.","qpu.boxplot_desc":"Box = 중간 50% 큐비트 분포 (Q1–Q3)<br>Whisker = 이상치 제외 최소/최대","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ 업로드","pipeline.dgx":"📂 DGX","pipeline.drop_hint":".py 파일을 여기에 놓거나 클릭하여 찾아보기","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"논리적 복잡도 — 큐비트, 게이트, 깊이, T-게이트 비율","pipeline.analyze.run":"분석 실행","pipeline.analyze.running":"분석 중...","pipeline.analyze.empty":"분석을 실행하여 결과를 확인하세요","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"대상 QPU에 대한 물리적 매핑 — 자동 트랜스파일로 게이트/깊이 감소","pipeline.optimize.run":"최적화 실행","pipeline.optimize.running":"최적화 중...","pipeline.optimize.combination":"조합","pipeline.optimize.options":"옵션","pipeline.optimize.verify":"동등성 검증","pipeline.optimize.empty":"최적화를 실행하여 결과를 확인하세요","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU 충실도 추정 — 최적화된 회로에 캘리브레이션 기반 노이즈 모델","pipeline.noise.run":"노이즈 시뮬레이션 실행","pipeline.noise.running":"시뮬레이션 중...","pipeline.noise.empty":"노이즈 시뮬레이션을 실행하여 결과를 확인하세요","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"오류 정정 필요성 — T2 비율, 충실도, 추천 코드","pipeline.qec_analyze.run":"QEC 분析 실행","pipeline.qec_analyze.running":"분析 중...","pipeline.qec_analyze.empty":"QEC 분析을 실행하여 결과를 확인하세요","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"QEC 코드로 회로 인코딩 — 적용 전후 충실도 비교","pipeline.qec_apply.run":"QEC 적용 실행","pipeline.qec_apply.running":"적용 중...","pipeline.qec_apply.empty":"QEC 적용을 실행하여 결과를 확인하세요","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU 시뮬레이션 속도 — 상태벡터 처리량 비교","pipeline.gpu.run":"벤치마크 실행","pipeline.gpu.running":"벤치마킹 중...","pipeline.gpu.empty":"벤치마크를 실행하여 결과를 확인하세요","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"실제 양자 하드웨어에 제출 — 트랜스파일 후 실제 QPU에서 실행","pipeline.qpu.run":"QPU에 제출","pipeline.qpu.running":"제출 중...","pipeline.qpu.confirm":"제출 확인","pipeline.qpu.empty":"먼저 분석을 실행한 후 확인하여 제출하세요","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"제출된 QPU 작업 모니터링 및 관리 — 상태 확인, 결과 조회, 작업 취소","pipeline.job_manager.refresh":"↻ 새로고침","pipeline.job_manager.refreshing":"↻ 새로고침 중...","pipeline.job_manager.empty":"새로고침을 클릭하여 작업 목록 로드","pipeline.job_manager.status_label":"상태","pipeline.job_manager.period_label":"기간","pipeline.job_manager.show_label":"표시","pipeline.job_manager.all":"전체","pipeline.job_manager.active":"진행 중","pipeline.job_manager.done":"완료","pipeline.job_manager.cancelled":"취소됨","pipeline.job_manager.error":"오류","pipeline.job_manager.all_time":"전체 기간","pipeline.job_manager.today":"오늘","pipeline.job_manager.last_7d":"최근 7일","pipeline.job_manager.last_30d":"최근 30일","job.status.checking":"확인 중...","job.status.check":"↻ 상태 확인","job.status.last_checked":"마지막 확인:","job.status.error_badge":"오류","job.status.cancelled_badge":"취소됨","job.status.done_badge":"✓ 완료","job.status.cancelled_msg":"작업이 취소되었습니다.","job.status.running_msg":"QPU 큐에서 실행 중입니다.","job.status.cancel":"✕ 작업 취소","job.status.cancelling":"취소 중...","job.results.title":"측정 결과","job.results.total_shots":"총 샷 수","job.results.unique_states":"고유 상태 수","step.badge.done":"✓ 완료","step.badge.error":"✗ 오류","btn.loading":"...","btn.uploading":"⟳ 업로드 중...","btn.upload_fail":"업로드 실패","btn.view":"👁 보기","btn.refresh_list":"↻ 새로고침","cache.badge":"⚡ 이전 실행의 캐시된 결과를 불러왔습니다.","cache.invalidate":"↺ 캐시 무효화","cache.invalidated_msg":"캐시가 무효화되었습니다 ({deleted}개 삭제)\n재실행하여 새 결과를 가져오세요.","cache.fail":"실패","cache.stale":"· 새로고침 권장","alert.select_file":"알고리즘 파일을 선택하거나 업로드하세요","alert.select_file_first":"먼저 파일을 선택하세요","alert.only_py":"Python (.py) 파일만 허용됩니다","knowledge.title":"Knowledge Base","knowledge.query_type":"쿼리 유형","knowledge.semantic_query":"시맨틱 쿼리","knowledge.qpu_filter":"QPU 필터","knowledge.sdk_filter":"SDK 필터","knowledge.framework_filter":"Framework 필터","knowledge.limit":"제한","knowledge.run_search":"검색 실행","knowledge.searching":"검색 중...","knowledge.semantic_title":"⚛ 시맨틱 검색","knowledge.run_semantic":"시맨틱 검색 실행","knowledge.results_count":"결과: {count}개","knowledge.click_details":"클릭하여 상세 보기","knowledge.no_results":"검색을 실행하여 결과를 확인하세요","rag.type.stats":"통계 개요","rag.type.best_combination":"회로 최적화","rag.type.suspicious_optimizations":"최적화 경보","rag.type.qec_results":"QEC 결과","rag.type.gpu_benchmark":"GPU 벤치마크","rag.type.pipeline_issues":"파이프라인 오류","rag.type.noise_simulation":"노이즈 시뮬레이션","rag.type.security_block":"보안 차단","pipeline.noise.engine":"시뮬레이션 엔진","pipeline.qec_apply.code":"QEC 코드","pipeline.shots":"샷 수","pipeline.qpu.warn":"<strong>실제 QPU</strong>에 제출되며 <strong>비용이 발생</strong>합니다. 확인 전 \"분석 (제출 없음)\"으로 트랜스파일된 회로를 미리 확인하세요.","pipeline.qpu.analyze_btn":"분석 (제출 없음)","pipeline.qpu.confirm_btn":"⚡ 확인 후 QPU에 제출","knowledge.structured_results":"구조화 검색 결과","knowledge.semantic_results":"⚛ 시맨틱 검색 결과","knowledge.semantic_hint":"Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색","rag.type_desc.stats":"지식베이스 레코드 수 및 유형별 현황","rag.type_desc.best_combination":"게이트 감소율 순 최적화 이력 — QPU 또는 큐비트 수로 필터","rag.type_desc.suspicious_optimizations":"검토 필요 최적화: 빈 회로, 비동등, 미검증 100% 감소","rag.type_desc.qec_results":"충실도 개선율 상위 QEC 실험 — 효과적인 케이스만 표시","rag.type_desc.gpu_benchmark":"GPU 시뮬레이션 속도 향상 랭킹 — CPU 대비 최고 가속 결과","rag.type_desc.pipeline_issues":"파이프라인 오류 로그 — 단계·SDK별 실패 및 근본 원인","rag.type_desc.noise_simulation":"캘리브레이션 기반 노이즈 모델 결과 — 충실도 순 랭킹, QPU 노이즈 환경의 최상/최악 회로 동작","rag.type_desc.security_block":"정적 분석 차단 — 알고리즘 파일 내 위험 임포트·패턴 감지","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"회로 최적화 실행 — 조합 및 QPU별 게이트/깊이 감소 결과","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU 작업 실행 기록 — 샷 수, 충실도, 작업 ID, 결과 메타데이터","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU 시뮬레이션 성능 비교","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"파이프라인 단계별 오류 및 실패, 근본 원인 포함","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"SDK 및 QPU별 트랜스파일 성공/실패 패턴 및 해결 방법","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"양자 오류 정정 실험 결과 — 인코딩 전후 충실도","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"시간별 QPU 온라인/오프라인 상태 스냅샷","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"정적 보안 정책에 의해 차단된 요청 — 의심스러운 임포트 또는 패턴","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"양자 프레임워크 간 회로 변환 패턴 (예: Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"성능 최적화를 위한 내부 캐시된 연산 결과","hint.opt.combination":"트랜스파일러 + 큐비트 라우팅 알고리즘","hint.opt.opt_engine":"유니터리 합성","hint.opt.map_engine":"QPU 토폴로지 라우팅","hint.opt.complexity":"QPU 네이티브 게이트셋 및 큐비트 토폴로지로의 트랜스파일을 통한 게이트 수 및 깊이 감소","hint.opt.profile":"T-비율: T-게이트 비율 (내결함성 하드웨어에서 비용 높음) · 2Q-비율: 2큐비트 게이트 밀도 (NISQ 주요 오류 원인)","hint.opt.time":"최적화: 유니터리 합성 및 게이트 소거 · 매핑: QPU 연결 그래프에 SABRE/라우팅 적용","hint.noise.fidelity":"F = 1 − TVD · 충실도가 1.0에 가까울수록 QPU 노이즈가 출력 분포에 미치는 영향이 작음 · TVD = 이상적 결과와 노이즈 결과 간 최대 확률 차이","hint.noise.dominant":"가장 자주 측정되는 비트열 — 노이즈로 인해 이 상태가 변하면 회로의 계산 결과가 손상됨","hint.gpu.speedup":"상태벡터 시뮬레이션: GPU는 2ⁿ개의 복소 진폭을 병렬로 처리","hint.gpu.timing":"전체 상태벡터 전개의 실제 실행 시간 — 실제 하드웨어 처리량 차이를 측정","hint.qec.fidelity":"F = 1 − TVD(이상, 노이즈) — QEC 코드가 QPU 노이즈로 인해 손상된 양자 상태 분포를 얼마나 잘 복원하는지","hint.qec.overhead":"인코딩의 물리적 자원 비용 — QEC는 오류 감지/정정을 위해 중복 큐비트 및 앤실라 게이트 필요","hint.security.reason":"알고리즘 파일은 QPU 파이프라인 내부에서 실행됨 — OS/네트워크 무제한 접근 시 캘리브레이션 데이터 유출 또는 결과 조작 가능","hint.pipeline.analyze":"회로 추출 및 게이트 수준 분석 — 실패 시 주로 문법 오류 또는 지원되지 않는 게이트셋","hint.pipeline.optimize":"QPU 네이티브 게이트셋으로 트랜스파일 + SABRE 큐비트 라우팅 — 실패 시 주로 연결성 불일치","hint.pipeline.noise":"캘리브레이션 기반 노이즈 모델 시뮬레이션 — 물리 회로로의 트랜스파일 성공 후 실행 가능","hint.pipeline.qec_analyze":"T2/충실도 임계값 분석으로 대상 QPU에 QEC 필요 여부 판단","hint.pipeline.qec_apply":"QEC 코드로 논리→물리 인코딩 — 큐비트/게이트 수 대폭 증가","hint.pipeline.gpu":"CPU vs CUDA GPU 상태벡터 시뮬레이션 — GPU 미사용 또는 메모리 부족(OOM)이 주요 원인","hint.pipeline.qpu":"실제 QPU 작업 제출 — 트랜스파일 오류, 큐비트 수 초과, 또는 클라우드 API 장애","knowledge.rag_query_placeholder":"예: iqm_garnet에서 고충실도 실험\nPennyLane 회로 최적화 성공\nGPU 벤치마크 고속도 결과","knowledge.semantic_placeholder":"자연어로 검색...\n예: ibm_fez에서 고게이트 감소 최적화\nPennyLane 충실도 0.9 이상"};
 
 _LOCALES.en = _LOCALE_EN;
 _LOCALES.ko = _LOCALE_KO;
@@ -972,11 +989,29 @@ function t(key, params={}) {
   return str;
 }
 
+// ── Expert / Beginner mode ────────────────────────────────────────────────
+let _uiMode = localStorage.getItem('uqi_mode') || 'beginner'; // 'beginner' | 'expert'
+
+function _applyMode() {
+  document.body.classList.toggle('mode-expert',  _uiMode === 'expert');
+  document.body.classList.toggle('mode-beginner', _uiMode !== 'expert');
+  const btn = document.getElementById('btn-mode-toggle');
+  if (btn) btn.textContent = _uiMode === 'expert' ? t('header.mode_expert') : t('header.mode_beginner');
+}
+
+function toggleMode() {
+  _uiMode = _uiMode === 'expert' ? 'beginner' : 'expert';
+  localStorage.setItem('uqi_mode', _uiMode);
+  _applyMode();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function applyI18n() {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
   document.querySelectorAll('[data-i18n-html]').forEach(el => { el.innerHTML = t(el.getAttribute('data-i18n-html')); });
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { el.placeholder = t(el.getAttribute('data-i18n-placeholder')); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => { el.title = t(el.getAttribute('data-i18n-title')); });
+  _applyMode();
   // lang 피커 버튼 레이블 + 선택 항목 active 표시
   const langBtn = document.getElementById('btn-lang-toggle');
   if (langBtn) langBtn.textContent = _lang === 'en' ? 'EN' : 'KO';
@@ -1035,6 +1070,33 @@ function _fmtTime(ts) { return new Date(ts).toLocaleTimeString(_uiLocale()); }
 
 // 파일 절대경로 → 파일명만 추출 (보안)
 function _baseName(p) { return p ? p.replace(/\\/g, '/').split('/').pop() : ''; }
+// 랭킹 테이블 공통 메타 정보 줄: QPU · SDK/Framework · filename (있는 것만)
+function _metaLine(r) {
+  const parts = [];
+  if (r.qpu_name)  parts.push(`<span style="color:var(--accent)">${escHtml(r.qpu_name)}</span>`);
+  const fw = r.framework || r.sdk;
+  if (fw)          parts.push(escHtml(fw));
+  const fn = _baseName(r.algorithm_file);
+  if (fn)          parts.push(`<span style="font-family:var(--font-mono)">${escHtml(fn)}</span>`);
+  return parts.length
+    ? `<div style="font-size:10px;color:var(--text3);margin-top:2px;display:flex;flex-wrap:wrap;gap:4px;align-items:center">${parts.join('<span style="opacity:.4"> · </span>')}</div>`
+    : '';
+}
+// 정규식 패턴 → 사용자 친화적 표시 (메타문자 제거)
+function _cleanRegexPattern(p) {
+  if (!p) return '—';
+  let s = p;
+  s = s.replace(/\\b/g, '');            // \b 단어경계 제거
+  s = s.replace(/\\s\*/g, '');          // \s* 공백매처 제거
+  s = s.replace(/\(\?![^)]*\)/g, '');  // (?!...) 부정 전방탐색 제거
+  s = s.replace(/\\\./g, '.');          // \. → .
+  s = s.replace(/\\\(/g, '(');          // \( → (
+  s = s.replace(/\\\)/g, ')');          // \) → )
+  s = s.replace(/\.\*/g, '…');          // .* → …
+  s = s.replace(/\[[^\]]+\]/g, '');     // ['"'] 등 문자클래스 제거
+  s = s.trim();
+  return s || '—';
+}
 // RAG 레코드 내 절대경로 필드 마스킹 (상세 뷰용)
 function _sanitizeRecordPaths(obj) {
   if (typeof obj !== 'object' || obj === null) return obj;
@@ -4314,6 +4376,7 @@ function _getRagTypeDesc() {
     'qec_results':                t('rag.type_desc.qec_results'),
     'gpu_benchmark':              t('rag.type_desc.gpu_benchmark'),
     'pipeline_issues':            t('rag.type_desc.pipeline_issues'),
+    'noise_simulation':           t('rag.type_desc.noise_simulation'),
     'security_block':             t('rag.type_desc.security_block'),
   };
 }
@@ -4324,11 +4387,12 @@ function onRagTypeChange() {
   // 유형별 표시할 필터 정의
   const FILTERS = {
     stats:                    { qpu: false, sdk: false, limit: false },
-    best_combination:         { qpu: true,  sdk: false, limit: true  },
+    best_combination:         { qpu: true,  sdk: false, limit: false },
     suspicious_optimizations: { qpu: true,  sdk: false, limit: false },
-    qec_results:              { qpu: true,  sdk: false, limit: true  },
-    gpu_benchmark:            { qpu: false, sdk: true,  limit: true, sdkLabel: 'knowledge.framework_filter' },
-    pipeline_issues:          { qpu: false, sdk: true,  limit: true  },
+    qec_results:              { qpu: true,  sdk: false, limit: false },
+    gpu_benchmark:            { qpu: false, sdk: true,  limit: false, sdkLabel: 'knowledge.framework_filter' },
+    pipeline_issues:          { qpu: false, sdk: true,  limit: false },
+    noise_simulation:         { qpu: true,  sdk: true,  limit: false },
     security_block:           { qpu: false, sdk: false, limit: false },
   };
   const f = FILTERS[type] || { qpu: false, sdk: false, limit: false };
@@ -4345,25 +4409,33 @@ function onRagTypeChange() {
   if (desc) desc.textContent = _getRagTypeDesc()[type] ? '— ' + _getRagTypeDesc()[type] : '';
 }
 
+const _RANKING_TYPES = new Set(['best_combination','gpu_benchmark','qec_results','noise_simulation','suspicious_optimizations','pipeline_issues','security_block']);
+
 async function runRAG() {
   setBtnLoading('btn-rag','Searching...');
   const body = document.getElementById('rag-result-body');
   body.innerHTML=`<div class="empty-state"><span class="spinner"></span>${t('knowledge.searching')}</div>`;
   const t0 = Date.now();
+  // reset sort/show/page state on fresh query
+  window._rankSort = {};
+  window._rankShow = {};
+  window._rankPage = {};
   try {
+    const queryType = document.getElementById('rag-type').value;
     const args = {
-      query_type: document.getElementById('rag-type').value,
-      limit: parseInt(document.getElementById('rag-limit').value)||10,
+      query_type: queryType,
+      limit: _RANKING_TYPES.has(queryType) ? 200 : (parseInt(document.getElementById('rag-limit').value)||10),
     };
     const qpu = document.getElementById('rag-qpu').value;
     const sdk = document.getElementById('rag-sdk').value;
     if (qpu) args.qpu_name=qpu;
     if (sdk) args.sdk=sdk;
 
-    const res = await callTool('uqi_rag_search', args);
+    const _ragTimeout = new Promise((_,rej) => setTimeout(() => rej(new Error('Search timed out — server busy, click to retry')), 15000));
+    const res = await Promise.race([callTool('uqi_rag_search', args), _ragTimeout]);
     document.getElementById('rag-meta').textContent = elapsed(t0);
     const text = getResultText(res);
-    renderRAG(body, text, args.query_type);
+    renderRAG(body, text, queryType);
   } catch(e) { body.innerHTML=`<div class="error-state">⚠ ${escHtml(e.message)}</div>`; }
   finally { setBtnDone('btn-rag', t('knowledge.run_search')); }
 }
@@ -4459,17 +4531,18 @@ function _renderRAGStats(body, d) {
     return;
   }
 
+  const _SVG = (path) => `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">${path}</svg>`;
   const TYPE_META = {
-    optimization:       { icon: '⚡', label: t('rag.meta.optimization.label'),       desc: t('rag.meta.optimization.desc') },
-    execution:          { icon: '🚀', label: t('rag.meta.execution.label'),           desc: t('rag.meta.execution.desc') },
-    gpu_benchmark:      { icon: '🖥', label: t('rag.meta.gpu_benchmark.label'),       desc: t('rag.meta.gpu_benchmark.desc') },
-    pipeline_issue:     { icon: '🔧', label: t('rag.meta.pipeline_issue.label'),      desc: t('rag.meta.pipeline_issue.desc') },
-    transpile_pattern:  { icon: '🔄', label: t('rag.meta.transpile_pattern.label'),   desc: t('rag.meta.transpile_pattern.desc') },
-    qec_experiment:     { icon: '🛡', label: t('rag.meta.qec_experiment.label'),      desc: t('rag.meta.qec_experiment.desc') },
-    qpu_availability:   { icon: '📡', label: t('rag.meta.qpu_availability.label'),    desc: t('rag.meta.qpu_availability.desc') },
-    security_block:     { icon: '🔒', label: t('rag.meta.security_block.label'),      desc: t('rag.meta.security_block.desc') },
-    conversion_pattern: { icon: '🔀', label: t('rag.meta.conversion_pattern.label'),  desc: t('rag.meta.conversion_pattern.desc') },
-    cache:              { icon: '💾', label: t('rag.meta.cache.label'),               desc: t('rag.meta.cache.desc') },
+    optimization:       { icon: _SVG('<polyline points="2,4 7,7 12,4"/><polyline points="2,7 7,10 12,7"/><line x1="2" y1="12" x2="12" y2="12"/>'), label: t('rag.meta.optimization.label'),       desc: t('rag.meta.optimization.desc') },
+    execution:          { icon: _SVG('<circle cx="7" cy="7" r="1.6" fill="currentColor" stroke="none"/><ellipse cx="7" cy="7" rx="6" ry="2.4"/><ellipse cx="7" cy="7" rx="6" ry="2.4" transform="rotate(60 7 7)"/><ellipse cx="7" cy="7" rx="6" ry="2.4" transform="rotate(120 7 7)"/>'), label: t('rag.meta.execution.label'),           desc: t('rag.meta.execution.desc') },
+    gpu_benchmark:      { icon: _SVG('<rect x="1.5" y="3" width="11" height="8" rx="1.5"/><line x1="3.5" y1="1" x2="3.5" y2="3"/><line x1="7" y1="1" x2="7" y2="3"/><line x1="10.5" y1="1" x2="10.5" y2="3"/><line x1="3.5" y1="11" x2="3.5" y2="13"/><line x1="7" y1="11" x2="7" y2="13"/><line x1="10.5" y1="11" x2="10.5" y2="13"/><rect x="4" y="5" width="6" height="4" rx="0.5" fill="currentColor" stroke="none" opacity="0.3"/>'), label: t('rag.meta.gpu_benchmark.label'),       desc: t('rag.meta.gpu_benchmark.desc') },
+    pipeline_issue:     { icon: _SVG('<line x1="7" y1="2" x2="7" y2="8"/><circle cx="7" cy="11" r="1" fill="currentColor" stroke="none"/><path d="M1,13 L7,2 L13,13 Z"/>'), label: t('rag.meta.pipeline_issue.label'),      desc: t('rag.meta.pipeline_issue.desc') },
+    transpile_pattern:  { icon: _SVG('<polyline points="1,4 5,4"/><polyline points="9,4 13,4"/><path d="M5,4 C6,4 6,10 7,10"/><path d="M9,10 C8,10 8,4 7,4"/><polyline points="1,10 5,10"/><polyline points="9,10 13,10"/>'), label: t('rag.meta.transpile_pattern.label'),   desc: t('rag.meta.transpile_pattern.desc') },
+    qec_experiment:     { icon: _SVG('<path d="M7,1 L13,3.5 L13,7.5 C13,10.5 10,12.5 7,14 C4,12.5 1,10.5 1,7.5 L1,3.5 Z"/><polyline points="4.5,7 6.5,9 10,5"/>'), label: t('rag.meta.qec_experiment.label'),      desc: t('rag.meta.qec_experiment.desc') },
+    qpu_availability:   { icon: _SVG('<path d="M1,8 C3,8 3,3 5.5,3 C8,3 8,13 10.5,13 C13,13 13,3 14,3"/><line x1="1" y1="13" x2="13" y2="13" stroke-opacity="0.3"/>'), label: t('rag.meta.qpu_availability.label'),    desc: t('rag.meta.qpu_availability.desc') },
+    security_block:     { icon: _SVG('<rect x="3" y="6" width="8" height="7" rx="1"/><path d="M5,6 L5,4 C5,2.9 5.9,2 7,2 C8.1,2 9,2.9 9,4 L9,6"/><circle cx="7" cy="9.5" r="0.8" fill="currentColor" stroke="none"/>'), label: t('rag.meta.security_block.label'),      desc: t('rag.meta.security_block.desc') },
+    conversion_pattern: { icon: _SVG('<line x1="2" y1="5" x2="12" y2="5"/><polyline points="9,2 12,5 9,8"/><line x1="12" y1="9" x2="2" y2="9"/><polyline points="5,6 2,9 5,12"/>'), label: t('rag.meta.conversion_pattern.label'),  desc: t('rag.meta.conversion_pattern.desc') },
+    cache:              { icon: _SVG('<ellipse cx="7" cy="4" rx="5" ry="2"/><path d="M2,4 L2,10 C2,11.1 4.2,12 7,12 C9.8,12 12,11.1 12,10 L12,4"/><path d="M2,7 C2,8.1 4.2,9 7,9 C9.8,9 12,8.1 12,7"/>'), label: t('rag.meta.cache.label'),               desc: t('rag.meta.cache.desc') },
   };
 
   const byType   = d.by_type || {};
@@ -4479,16 +4552,16 @@ function _renderRAGStats(body, d) {
   const typeRows = Object.entries(byType)
     .sort((a, b) => b[1] - a[1])
     .map(([type, count]) => {
-      const { icon, label, desc } = TYPE_META[type] || { icon: '📄', label: type, desc: '' };
+      const { icon, label, desc } = TYPE_META[type] || { icon: _SVG('<rect x="2" y="2" width="10" height="12" rx="1"/><line x1="4" y1="5" x2="10" y2="5"/><line x1="4" y1="8" x2="10" y2="8"/><line x1="4" y1="11" x2="8" y2="11"/>'), label: type, desc: '' };
       const barW = ((count / maxCount) * 100).toFixed(1);
       const pct  = ((count / total) * 100).toFixed(1);
       return `
         <div style="padding:8px 0;border-bottom:1px solid var(--border)">
           <div style="display:flex;align-items:center;gap:10px">
-            <span style="font-size:14px;width:22px;text-align:center">${icon}</span>
+            <span style="width:22px;display:inline-flex;align-items:center;justify-content:center;color:var(--accent);opacity:.75;flex-shrink:0">${icon}</span>
             <div style="flex:1">
               <div style="font-size:11px;font-weight:600;color:var(--text2)">${label}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:1px">${desc}</div>
+              <div class="hint-beginner" style="font-size:10px;color:var(--text3);margin-top:1px">${desc}</div>
             </div>
             <span style="font-size:12px;font-weight:700;color:var(--text1);min-width:36px;text-align:right">${count}</span>
             <span style="font-size:10px;color:var(--text3);min-width:38px;text-align:right">${pct}%</span>
@@ -4519,6 +4592,11 @@ function _renderSuspiciousOptimizations(body, rows) {
     body.innerHTML = `<div class="empty-state">No optimization alerts found.</div>`;
     return;
   }
+  window._rankCache.suspicious = rows;
+  const showRaw     = (window._rankShow.suspicious) || 50;
+  const currentPage = (window._rankPage.suspicious)  || 1;
+  const start       = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed   = showRaw >= 9999 ? rows : rows.slice(start, start + showRaw);
   const pct = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
   const REASON_LABEL = {
     'empty_circuit':              { text: 'Empty Circuit',          color: 'var(--bad)' },
@@ -4526,7 +4604,7 @@ function _renderSuspiciousOptimizations(body, rows) {
     'unverified_full_reduction':  { text: 'Unverified 100% Reduction', color: '#f59e0b' },
   };
 
-  const rowsHtml = rows.map(r => {
+  const rowsHtml = displayed.map(r => {
     const json   = escHtml(JSON.stringify(r));
     const badges = (r._suspicious_reasons || []).map(k => {
       const l = REASON_LABEL[k] || { text: k, color: 'var(--text3)' };
@@ -4538,7 +4616,7 @@ function _renderSuspiciousOptimizations(body, rows) {
           onmouseenter="this.style.background='rgba(239,68,68,.04)'" onmouseleave="this.style.background=''">
         <td style="padding:8px 10px">
           <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.circuit_name||'—')}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(r.qpu_name||'—')}</div>
+          ${_metaLine(r)}
         </td>
         <td style="padding:8px 10px;font-size:11px;color:var(--accent)">${escHtml(r.combination||'—')}</td>
         <td style="padding:8px 10px;font-size:11px;color:var(--text2)">${pct(r.gate_reduction)}</td>
@@ -4548,22 +4626,20 @@ function _renderSuspiciousOptimizations(body, rows) {
   }).join('');
 
   body.innerHTML = `
-    <div style="margin-bottom:8px;font-size:11px;color:var(--bad)">
-      ⚠ ${rows.length} optimization alert${rows.length>1?'s':''} — click a row for details
-    </div>
+    ${_rankShowBar('suspicious', showRaw, rows.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border)">
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Circuit</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Combination</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Gate Red.</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Reasons</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Date</th>
-          </tr>
-        </thead>
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="${_TH}">Circuit · QPU</th>
+          <th style="${_TH}">Combination</th>
+          <th style="${_TH}">Gate Red.</th>
+          <th style="${_TH}">Reasons</th>
+          <th style="${_TH_R}">Date</th>
+        </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">⚠ ${rows.length} alert${rows.length>1?'s':''} · click row for details</div>
+      ${_rankPagBar('suspicious', showRaw, currentPage, rows.length)}
     </div>`;
 }
 
@@ -4571,24 +4647,29 @@ function _renderGPUBenchmarkBest(body, rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     body.innerHTML = `<div class="empty-state">No GPU benchmark records found.</div>`; return;
   }
-  const best = rows.filter(r => r.ok && r.speedup != null && r.speedup > 1)
-                   .sort((a, b) => (b.speedup||0) - (a.speedup||0));
-  if (best.length === 0) {
+  const valid = rows.filter(r => r.ok && r.speedup != null && r.speedup > 1);
+  if (valid.length === 0) {
     body.innerHTML = `<div class="empty-state">No successful GPU acceleration records yet.<br><small>Run the GPU Benchmark step to collect data.</small></div>`; return;
   }
-  window._gpuDetailCache = best;
-  const medals = ['🥇','🥈','🥉'];
-  const maxSpeedup = best[0].speedup || 1;
-  const rowsHtml = best.map((r, i) => {
-    const rank = medals[i] ?? `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
+  window._rankCache.gpu = rows;
+  const sortAsc     = !!window._rankSort.gpu;
+  const showRaw     = (window._rankShow.gpu) || 50;
+  const currentPage = (window._rankPage.gpu)  || 1;
+  const sorted = [...valid].sort((a, b) =>
+    sortAsc ? (a.speedup||0) - (b.speedup||0) : (b.speedup||0) - (a.speedup||0));
+  const start     = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed = showRaw >= 9999 ? sorted : sorted.slice(start, start + showRaw);
+  const maxSpeedup = Math.max(...sorted.map(r => r.speedup||0), 1);
+  window._gpuDetailCache = sorted;
+  const rowsHtml = displayed.map((r, i) => {
     const barW = Math.min((r.speedup / maxSpeedup) * 100, 100).toFixed(1);
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showGPUDetail(_gpuDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(99,102,241,.06)'" onmouseleave="this.style.background=''">
-        <td style="padding:8px 10px;font-size:16px;text-align:center">${rank}</td>
+        <td style="padding:8px 10px;font-size:16px;text-align:center">${_medals(i)}</td>
         <td style="padding:8px 10px">
           <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.circuit_name||'—')}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(r.framework||'—')}</div>
+          ${_metaLine(r)}
         </td>
         <td style="padding:8px 10px;min-width:140px">
           <div style="display:flex;align-items:center;gap:6px">
@@ -4604,21 +4685,23 @@ function _renderGPUBenchmarkBest(body, rows) {
       </tr>`;
   }).join('');
   body.innerHTML = `
+    ${_rankShowBar('gpu', showRaw, sorted.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid var(--border)">
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:center">#</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Circuit · Framework</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">GPU Speedup</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">CPU Time</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">GPU Time</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Date</th>
+          <th style="${_TH_C}">#</th>
+          <th style="${_TH}">Circuit · Framework</th>
+          ${_SORT_TH('GPU Speedup', 'gpu', sortAsc)}
+          <th style="${_TH}">CPU Time</th>
+          <th style="${_TH}">GPU Time</th>
+          <th style="${_TH_R}">Date</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">
-        GPU-accelerated only · ${rows.length - best.length} non-accelerated excluded · Click row for details
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">
+        GPU-accelerated only · ${rows.length - valid.length} non-accelerated excluded · click row for details
       </div>
+      ${_rankPagBar('gpu', showRaw, currentPage, sorted.length)}
     </div>`;
 }
 
@@ -4626,25 +4709,30 @@ function _renderQECBestResults(body, rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     body.innerHTML = `<div class="empty-state">No QEC experiment records found.</div>`; return;
   }
-  const effective = rows.filter(r => r.effective && r.improvement != null && r.improvement > 0)
-                        .sort((a, b) => (b.improvement||0) - (a.improvement||0));
-  if (effective.length === 0) {
+  const valid = rows.filter(r => r.effective && r.improvement != null && r.improvement > 0);
+  if (valid.length === 0) {
     body.innerHTML = `<div class="empty-state">No effective QEC experiments yet.<br><small>Run QEC Apply step to collect data.</small></div>`; return;
   }
-  window._qecDetailCache = effective;
-  const medals = ['🥇','🥈','🥉'];
-  const maxImp = effective[0].improvement || 1;
+  window._rankCache.qec = rows;
+  const sortAsc     = !!window._rankSort.qec;
+  const showRaw     = (window._rankShow.qec) || 50;
+  const currentPage = (window._rankPage.qec)  || 1;
   const pct = v => v != null ? (v*100).toFixed(1)+'%' : '—';
-  const rowsHtml = effective.map((r, i) => {
-    const rank = medals[i] ?? `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
+  const sorted = [...valid].sort((a, b) =>
+    sortAsc ? (a.improvement||0) - (b.improvement||0) : (b.improvement||0) - (a.improvement||0));
+  const start     = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed = showRaw >= 9999 ? sorted : sorted.slice(start, start + showRaw);
+  const maxImp = Math.max(...sorted.map(r => r.improvement||0), 1);
+  window._qecDetailCache = sorted;
+  const rowsHtml = displayed.map((r, i) => {
     const barW = Math.min((r.improvement / maxImp) * 100, 100).toFixed(1);
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showQECDetail(_qecDetailCache[${i}])"
           onmouseenter="this.style.background='rgba(74,222,128,.04)'" onmouseleave="this.style.background=''">
-        <td style="padding:8px 10px;font-size:16px;text-align:center">${rank}</td>
+        <td style="padding:8px 10px;font-size:16px;text-align:center">${_medals(i)}</td>
         <td style="padding:8px 10px">
           <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.circuit_name||'—')}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(r.qpu_name||'—')}</div>
+          ${_metaLine(r)}
         </td>
         <td style="padding:8px 10px;font-size:11px;font-weight:600;color:var(--accent)">${escHtml(r.code||'—')}</td>
         <td style="padding:8px 10px;font-size:11px">
@@ -4664,21 +4752,23 @@ function _renderQECBestResults(body, rows) {
       </tr>`;
   }).join('');
   body.innerHTML = `
+    ${_rankShowBar('qec', showRaw, sorted.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid var(--border)">
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:center">#</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Circuit · QPU</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">QEC Code</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Fidelity</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Improvement</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Date</th>
+          <th style="${_TH_C}">#</th>
+          <th style="${_TH}">Circuit · QPU</th>
+          <th style="${_TH}">QEC Code</th>
+          <th style="${_TH}">Fidelity</th>
+          ${_SORT_TH('Improvement', 'qec', sortAsc)}
+          <th style="${_TH_R}">Date</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">
-        Effective cases only · ${rows.length - effective.length} ineffective excluded · Click row for details
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">
+        Effective only · ${rows.length - valid.length} ineffective excluded · click row for details
       </div>
+      ${_rankPagBar('qec', showRaw, currentPage, sorted.length)}
     </div>`;
 }
 
@@ -4691,8 +4781,13 @@ function _renderPipelineIssues(body, rows) {
     warn:  { color:'#f59e0b',     bg:'rgba(245,158,11,.15)' },
     info:  { color:'var(--text3)',bg:'rgba(99,102,241,.10)' },
   };
+  window._rankCache.pipeline = rows;
+  const showRaw     = (window._rankShow.pipeline) || 50;
+  const currentPage = (window._rankPage.pipeline)  || 1;
+  const start       = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed   = showRaw >= 9999 ? rows : rows.slice(start, start + showRaw);
   window._pipelineDetailCache = rows;
-  const rowsHtml = rows.map((r, i) => {
+  const rowsHtml = displayed.map((r, i) => {
     const sev = SEV[r.severity] || SEV.warn;
     const badge = `<span style="padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;
       background:${sev.bg};color:${sev.color};border:1px solid ${sev.color}55">${escHtml((r.severity||'warn').toUpperCase())}</span>`;
@@ -4711,27 +4806,161 @@ function _renderPipelineIssues(body, rows) {
       </tr>`;
   }).join('');
   body.innerHTML = `
+    ${_rankShowBar('pipeline', showRaw, rows.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid var(--border)">
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Stage · SDK</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Severity</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Issue</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Solution</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Date</th>
+          <th style="${_TH}">Stage · SDK</th>
+          <th style="${_TH}">Severity</th>
+          <th style="${_TH}">Issue</th>
+          <th style="${_TH}">Solution</th>
+          <th style="${_TH_R}">Date</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">Click a row to view details</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">click row for details</div>
+      ${_rankPagBar('pipeline', showRaw, currentPage, rows.length)}
     </div>`;
+}
+
+function _renderNoiseSimResults(body, rows) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    body.innerHTML = `<div class="empty-state">No noise simulation records found.<br><small>Run the Noise Simulation step to collect data.</small></div>`; return;
+  }
+  const valid = rows.filter(r => r.fidelity != null);
+  if (valid.length === 0) {
+    body.innerHTML = `<div class="empty-state">No noise simulation records with fidelity data.</div>`; return;
+  }
+  window._rankCache.noise = rows;
+  const sortAsc     = !!window._rankSort.noise;
+  const showRaw     = (window._rankShow.noise) || 50;
+  const currentPage = (window._rankPage.noise)  || 1;
+  const pct = v => v != null ? (v * 100).toFixed(2) + '%' : '—';
+
+  const sorted = [...valid].sort((a, b) =>
+    sortAsc ? (a.fidelity||0) - (b.fidelity||0) : (b.fidelity||0) - (a.fidelity||0));
+  const start     = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed = showRaw >= 9999 ? sorted : sorted.slice(start, start + showRaw);
+  window._noiseDetailCache = sorted;
+
+  const rowsHtml = displayed.map((r, i) => {
+    const barW     = Math.min((r.fidelity||0) * 100, 100).toFixed(1);
+    const fidColor = r.fidelity >= 0.7 ? 'var(--good)' : r.fidelity >= 0.4 ? '#f59e0b' : 'var(--bad)';
+    return `
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer"
+          onclick="_showNoiseDetail(_noiseDetailCache[${i}])"
+          onmouseenter="this.style.background='rgba(99,102,241,.06)'" onmouseleave="this.style.background=''">
+        <td style="padding:8px 10px;font-size:16px;text-align:center">${_medals(i)}</td>
+        <td style="padding:8px 10px">
+          <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.circuit_name||'—')}</div>
+          ${_metaLine(r)}
+        </td>
+        <td style="padding:8px 10px;min-width:140px">
+          <div style="display:flex;align-items:center;gap:6px">
+            <div style="flex:1;background:rgba(74,222,128,.15);border-radius:3px;height:6px;overflow:hidden">
+              <div style="width:${barW}%;height:100%;background:${fidColor};border-radius:3px"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;color:${fidColor};min-width:52px">${pct(r.fidelity)}</span>
+          </div>
+        </td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--text3)">${r.tvd != null ? r.tvd.toFixed(4) : '—'}</td>
+        <td style="padding:8px 10px;font-size:11px;color:var(--text3)">${r.shots != null ? r.shots.toLocaleString(_uiLocale()) : '—'}</td>
+        <td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3)">${r._ts ? _fmtDateShort(r._ts) : '—'}</td>
+      </tr>`;
+  }).join('');
+
+  const sortLabel = sortAsc ? 'worst first' : 'best first';
+  body.innerHTML = `
+    ${_rankShowBar('noise', showRaw, sorted.length, currentPage)}
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="${_TH_C}">#</th>
+          <th style="${_TH}">Circuit · File · QPU</th>
+          ${_SORT_TH('Fidelity', 'noise', sortAsc)}
+          <th style="${_TH}">TVD</th>
+          <th style="${_TH}">Shots</th>
+          <th style="${_TH_R}">Date</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">${sortLabel} · click row for details</div>
+      ${_rankPagBar('noise', showRaw, currentPage, sorted.length)}
+    </div>`;
+}
+
+function _showNoiseDetail(r) {
+  if (!r) return;
+  const pct    = v => v != null ? (v * 100).toFixed(2) + '%' : '—';
+  const fidColor = r.fidelity >= 0.7 ? 'var(--good)' : r.fidelity >= 0.4 ? '#f59e0b' : 'var(--bad)';
+  const tvdColor = r.tvd != null ? (r.tvd <= 0.3 ? 'var(--good)' : r.tvd <= 0.7 ? '#f59e0b' : 'var(--bad)') : 'var(--text3)';
+
+  document.getElementById('codeModalTitle').textContent = (r.circuit_name || 'Noise Sim') + ' · ' + (r.qpu_name || '—');
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
+
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--accent);background:rgba(99,102,241,.12);padding:2px 8px;border-radius:4px">${escHtml(r.qpu_name||'—')}</span>
+        <span style="font-size:11px;color:var(--text2);background:var(--surface2);padding:2px 8px;border-radius:4px">${escHtml(r.sdk||'—')}</span>
+        ${r.shots != null ? `<span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 8px;border-radius:4px">${r.shots.toLocaleString(_uiLocale())} shots</span>` : ''}
+        <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r._ts ? _fmtDate(r._ts) : ''}</span>
+      </div>
+
+      <div style="background:var(--surface2);border-radius:8px;padding:14px 18px">
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:10px">${t('hint.noise.fidelity')}</div>
+        <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Fidelity</div>
+            <div style="font-size:38px;font-weight:800;color:${fidColor};line-height:1">${pct(r.fidelity)}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${r.fidelity >= 0.7 ? '✓ Good' : r.fidelity >= 0.4 ? '⚠ Moderate' : '✗ Poor'}</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">TVD</div>
+            <div style="font-size:38px;font-weight:800;color:${tvdColor};line-height:1">${r.tvd != null ? r.tvd.toFixed(3) : '—'}</div>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">${r.tvd != null ? (r.tvd <= 0.3 ? '✓ Low noise' : r.tvd <= 0.7 ? '⚠ Moderate' : '✗ High noise') : ''}</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;background:rgba(99,102,241,.1);border-radius:4px;height:8px;overflow:hidden">
+          <div style="width:${r.fidelity != null ? (r.fidelity*100).toFixed(1) : 0}%;height:100%;background:${fidColor};border-radius:4px"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:4px"><span>0%</span><span>Fidelity</span><span>100%</span></div>
+      </div>
+
+      ${(r.dominant_ideal || r.dominant_noise) ? `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Dominant Output State</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:10px">${t('hint.noise.dominant')}</div>
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px">
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Ideal</div>
+            <div style="font-size:16px;font-weight:700;font-family:var(--font-mono);color:var(--good);background:rgba(74,222,128,.08);border-radius:5px;padding:6px 10px">${escHtml(r.dominant_ideal||'—')}</div>
+          </div>
+          <div style="font-size:20px;color:var(--text3)">→</div>
+          <div style="text-align:center">
+            <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Noise</div>
+            <div style="font-size:16px;font-weight:700;font-family:var(--font-mono);color:${r.dominant_ideal===r.dominant_noise?'var(--good)':'var(--bad)'};background:rgba(239,68,68,.08);border-radius:5px;padding:6px 10px">${escHtml(r.dominant_noise||'—')}</div>
+          </div>
+        </div>
+        ${r.dominant_ideal === r.dominant_noise
+          ? `<div style="margin-top:8px;font-size:10px;color:var(--good);text-align:center">✓ Dominant state preserved under noise</div>`
+          : `<div style="margin-top:8px;font-size:10px;color:var(--bad);text-align:center">✗ Dominant state shifted by noise</div>`
+        }
+      </div>` : ''}
+    </div>`;
+  document.getElementById('codeModal').classList.add('open');
 }
 
 function _renderSecurityBlocks(body, rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     body.innerHTML = `<div class="empty-state">No security blocks recorded.</div>`; return;
   }
+  window._rankCache.security = rows;
+  const showRaw     = (window._rankShow.security) || 50;
+  const currentPage = (window._rankPage.security)  || 1;
+  const start       = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed   = showRaw >= 9999 ? rows : rows.slice(start, start + showRaw);
   window._securityDetailCache = rows;
-  const rowsHtml = rows.map((item, i) => {
+  const rowsHtml = displayed.map((item, i) => {
     const r = item.data || item;
     const ts = item.timestamp || r._ts;
     return `
@@ -4742,80 +4971,179 @@ function _renderSecurityBlocks(body, rows) {
           <div style="font-size:10px;color:var(--text3);margin-top:2px">${escHtml(r.tool||'—')}</div>
         </td>
         <td style="padding:8px 10px;font-size:11px;color:var(--bad)">${escHtml(r.reason||'—')}</td>
-        <td style="padding:8px 10px;font-size:10px;font-family:var(--font-mono);color:var(--text3)">${escHtml(r.pattern||'—')}</td>
+        <td style="padding:8px 10px;font-size:10px;font-family:var(--font-mono);color:var(--text3)">${escHtml(_cleanRegexPattern(r.pattern))}</td>
         <td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3)">${ts?_fmtDateShort(ts):'—'}</td>
       </tr>`;
   }).join('');
   body.innerHTML = `
-    <div style="margin-bottom:8px;font-size:11px;color:var(--bad)">
-      🔒 ${rows.length} security block${rows.length>1?'s':''} recorded
-    </div>
+    ${_rankShowBar('security', showRaw, rows.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1px solid var(--border)">
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">File · Tool</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Reason</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Pattern</th>
-          <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Date</th>
+          <th style="${_TH}">File · Tool</th>
+          <th style="${_TH}">Reason</th>
+          <th style="${_TH}">Pattern</th>
+          <th style="${_TH_R}">Date</th>
         </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">Click a row to view details</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">🔒 ${rows.length} block${rows.length>1?'s':''} · click row for details</div>
+      ${_rankPagBar('security', showRaw, currentPage, rows.length)}
     </div>`;
 }
+
+// ── Ranking table helpers ────────────────────────────────────────────────────
+if (!window._rankSort)  window._rankSort  = {};
+if (!window._rankCache) window._rankCache = {};
+if (!window._rankShow)  window._rankShow  = {};
+if (!window._rankPage)  window._rankPage  = {};
+
+function _toggleRankSort(type) {
+  window._rankSort[type] = !window._rankSort[type];
+  window._rankPage[type] = 1; // reset page on sort change
+  _rerenderRank(type);
+}
+function _setRankShow(type, n) {
+  window._rankShow[type] = parseInt(n);
+  window._rankPage[type] = 1; // reset to first page
+  _rerenderRank(type);
+}
+function _setRankPage(type, page) {
+  window._rankPage[type] = page;
+  _rerenderRank(type);
+}
+function _rerenderRank(type) {
+  const body = document.getElementById('rag-result-body');
+  const rows = window._rankCache[type];
+  if (!rows) return;
+  if (type === 'bestComb')   _renderRAGBestCombination(body, rows);
+  if (type === 'gpu')        _renderGPUBenchmarkBest(body, rows);
+  if (type === 'qec')        _renderQECBestResults(body, rows);
+  if (type === 'noise')      _renderNoiseSimResults(body, rows);
+  if (type === 'suspicious') _renderSuspiciousOptimizations(body, rows);
+  if (type === 'pipeline')   _renderPipelineIssues(body, rows);
+  if (type === 'security')   _renderSecurityBlocks(body, rows);
+}
+// Show-N bar + pagination: shared UI for all knowledge base tables
+function _rankShowBar(type, showRaw, total, page) {
+  const opts = [20, 50, 100].map(n =>
+    `<option value="${n}"${showRaw===n?` selected`:''}>${n}</option>`).join('');
+  const allSel = showRaw >= 9999 ? ' selected' : '';
+  let rangeText;
+  if (showRaw >= 9999 || total === 0) {
+    rangeText = `${total} records`;
+  } else {
+    const from = (page - 1) * showRaw + 1;
+    const to   = Math.min(page * showRaw, total);
+    rangeText  = `${from}–${to} of ${total}`;
+  }
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <span style="font-size:10px;color:var(--text3)">Show</span>
+    <select class="form-select" style="padding:2px 6px;font-size:10px;min-width:0;width:auto"
+      onchange="_setRankShow('${type}',this.value)">
+      ${opts}<option value="9999"${allSel}>All</option>
+    </select>
+    <span style="font-size:10px;color:var(--text3)">${rangeText}</span>
+  </div>`;
+}
+function _rankPagBar(type, showRaw, page, total) {
+  if (showRaw >= 9999 || total === 0) return '';
+  const totalPages = Math.ceil(total / showRaw);
+  if (totalPages <= 1) return '';
+  const btnBase     = 'font-family:var(--font-mono);font-size:10px;border-radius:4px;padding:3px 8px;cursor:pointer;transition:all 0.15s;border:1px solid var(--border);background:var(--surface2);color:var(--text2)';
+  const btnActive   = 'background:var(--accent);color:#000;border-color:var(--accent)';
+  const btnDisabled = 'opacity:0.3;cursor:not-allowed';
+  let pageNums = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pageNums.push(i);
+  } else {
+    const set = new Set([1, 2, page-1, page, page+1, totalPages-1, totalPages].filter(p => p>=1 && p<=totalPages));
+    const sorted2 = [...set].sort((a,b)=>a-b);
+    let prev = null;
+    for (const p of sorted2) { if (prev !== null && p-prev > 1) pageNums.push('…'); pageNums.push(p); prev = p; }
+  }
+  const pageBtn = (p) => p === '…'
+    ? `<span style="font-size:10px;color:var(--text3);padding:0 3px">…</span>`
+    : `<button onclick="_setRankPage('${type}',${p})" style="${btnBase};${p===page?btnActive:''}" ${p===page?'disabled':''}>${p}</button>`;
+  return `<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px;flex-wrap:wrap">
+    <button onclick="_setRankPage('${type}',${page-1})" ${page===1?'disabled':''} style="${btnBase};${page===1?btnDisabled:''}">← Prev</button>
+    ${pageNums.map(pageBtn).join('')}
+    <button onclick="_setRankPage('${type}',${page+1})" ${page===totalPages?'disabled':''} style="${btnBase};${page===totalPages?btnDisabled:''}">Next →</button>
+  </div>`;
+}
+
+// Shared style constants for ranking tables
+const _TH = `padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px`;
+const _TH_R = _TH + `;text-align:right`;
+const _TH_C = _TH + `;text-align:center`;
+const _SORT_TH = (label, type, sortAsc) =>
+  `<th style="${_TH};cursor:pointer;user-select:none;white-space:nowrap" onclick="_toggleRankSort('${type}')"
+      onmouseenter="this.style.color='var(--text1)'" onmouseleave="this.style.color='var(--text3)'">
+    ${label} <span style="font-size:8px">${sortAsc ? '▲' : '▼'}</span>
+  </th>`;
+const _medals = (i) => i < 3 ? ['🥇','🥈','🥉'][i] : `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
+// ─────────────────────────────────────────────────────────────────────────────
 
 function _renderRAGBestCombination(body, rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     body.innerHTML = `<div class="empty-state">No optimization history found.<br><small>Run the Optimize step first to save results.</small></div>`;
     return;
   }
-  const pct  = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
-  const medals = ['🥇', '🥈', '🥉'];
+  window._rankCache.bestComb = rows;
+  const sortAsc     = !!window._rankSort.bestComb;
+  const showRaw     = (window._rankShow.bestComb) || 50;
+  const currentPage = (window._rankPage.bestComb)  || 1;
+  const pct = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
 
-  const rowsHtml = rows.map((r, i) => {
-    const barW = r.gate_reduction != null ? (r.gate_reduction * 100).toFixed(1) : 0;
-    const rank = medals[i] ?? `<span style="font-size:11px;color:var(--text3)">${i+1}</span>`;
+  const sorted = [...rows].sort((a, b) =>
+    sortAsc ? (a.gate_reduction||0) - (b.gate_reduction||0)
+            : (b.gate_reduction||0) - (a.gate_reduction||0));
+  const start     = showRaw >= 9999 ? 0 : (currentPage - 1) * showRaw;
+  const displayed = showRaw >= 9999 ? sorted : sorted.slice(start, start + showRaw);
+
+  const rowsHtml = displayed.map((r, i) => {
+    const barW = r.gate_reduction != null ? Math.min(r.gate_reduction * 100, 100).toFixed(1) : 0;
     const json = escHtml(JSON.stringify(r));
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="_showOptDetail(${json})"
           onmouseenter="this.style.background='rgba(99,102,241,.06)'" onmouseleave="this.style.background=''">
-        <td style="padding:8px 10px;font-size:16px;text-align:center">${rank}</td>
+        <td style="padding:8px 10px;font-size:16px;text-align:center">${_medals(i)}</td>
         <td style="padding:8px 10px">
           <div style="font-size:12px;font-weight:600;color:var(--text1)">${escHtml(r.circuit_name||'—')}</div>
-          <div style="font-size:10px;color:var(--text3);margin-top:2px">${r.algorithm_file ? escHtml(r.algorithm_file.split('/').pop()) : ''}${r.algorithm_file ? ' · ' : ''}${escHtml(r.qpu_name||'—')}</div>
+          ${_metaLine(r)}
         </td>
         <td style="padding:8px 10px">
           <div style="font-size:11px;font-weight:600;color:var(--accent)">${escHtml(r.combination||'—')}</div>
         </td>
-        <td style="padding:8px 10px;min-width:130px">
+        <td style="padding:8px 10px;min-width:140px">
           <div style="display:flex;align-items:center;gap:6px">
-            <div style="flex:1;background:rgba(74,222,128,.2);border-radius:3px;height:6px;overflow:hidden;position:relative">
-              <div style="position:absolute;right:0;width:${(100-barW).toFixed(1)}%;height:100%;background:var(--surface3,#111)"></div>
+            <div style="flex:1;background:rgba(74,222,128,.2);border-radius:3px;height:6px;overflow:hidden">
+              <div style="width:${barW}%;height:100%;background:var(--good);border-radius:3px"></div>
             </div>
             <span style="font-size:12px;font-weight:700;color:var(--good);min-width:42px">${pct(r.gate_reduction)}</span>
           </div>
         </td>
         <td style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text3)">${pct(r.depth_reduction)}</td>
-        <td style="padding:8px 10px;text-align:right;font-size:10px;color:var(--text3)">${r.num_qubits != null ? r.num_qubits+'q' : '—'}</td>
+        <td style="padding:8px 10px;text-align:right;font-size:11px;color:var(--text3)">${r.num_qubits != null ? r.num_qubits+'q' : '—'}</td>
       </tr>`;
   }).join('');
 
   body.innerHTML = `
+    ${_rankShowBar('bestComb', showRaw, sorted.length, currentPage)}
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead>
-          <tr style="border-bottom:1px solid var(--border)">
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:center">#</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Circuit Name</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Combination</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px">Gate Reduction</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Depth Red.</th>
-            <th style="padding:6px 10px;font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;text-align:right">Qubits</th>
-          </tr>
-        </thead>
+        <thead><tr style="border-bottom:1px solid var(--border)">
+          <th style="${_TH_C}">#</th>
+          <th style="${_TH}">Circuit · File · QPU</th>
+          <th style="${_TH}">Combination</th>
+          ${_SORT_TH('Gate Reduction', 'bestComb', sortAsc)}
+          <th style="${_TH_R}">Depth Red.</th>
+          <th style="${_TH_R}">Qubits</th>
+        </tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
-      <div style="font-size:10px;color:var(--text3);margin-top:8px;text-align:right">Click a row to view details</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right">click row for details</div>
+      ${_rankPagBar('bestComb', showRaw, currentPage, sorted.length)}
     </div>`;
 }
 
@@ -4841,45 +5169,52 @@ function _showOptDetail(r) {
         ${badge(r.t2_ok, 'T2 OK', 'T2 WARN')}
         <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r.timestamp ? _fmtDate(r.timestamp) : ''}</span>
       </div>
-      ${r.algorithm_file ? `<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono)">${escHtml(r.algorithm_file.split('/').pop())}</div>` : ''}
+      ${r.algorithm_file ? `<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono)">${escHtml(_baseName(r.algorithm_file))}</div>` : ''}
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px;display:flex;gap:24px;flex-wrap:wrap">
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Combination</div>
-          <div style="font-size:13px;font-weight:700;color:var(--accent)">${escHtml(r.combination||'—')}</div></div>
+          <div style="font-size:13px;font-weight:700;color:var(--accent)">${escHtml(r.combination||'—')}</div>
+          <div class="hint-beginner" style="font-size:9px;color:var(--text3);margin-top:3px;font-style:italic">${t('hint.opt.combination')}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Opt Engine</div>
-          <div style="font-size:12px;color:var(--text1)">${escHtml(r.opt_engine||'—')}</div></div>
+          <div style="font-size:12px;color:var(--text1)">${escHtml(r.opt_engine||'—')}</div>
+          <div class="hint-beginner" style="font-size:9px;color:var(--text3);margin-top:3px;font-style:italic">${t('hint.opt.opt_engine')}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Map Engine</div>
-          <div style="font-size:12px;color:var(--text1)">${escHtml(r.map_engine||'—')}</div></div>
+          <div style="font-size:12px;color:var(--text1)">${escHtml(r.map_engine||'—')}</div>
+          <div class="hint-beginner" style="font-size:9px;color:var(--text3);margin-top:3px;font-style:italic">${t('hint.opt.map_engine')}</div></div>
         <div><div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:3px">Qubits</div>
           <div style="font-size:12px;color:var(--text1)">${num(r.num_qubits)}</div></div>
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Circuit Complexity</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Circuit Complexity</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:8px">${t('hint.opt.complexity')}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
             <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Gates</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:15px;font-weight:700;color:var(--text2)">${num(r.orig_gates)}</span>
-              <span style="color:var(--text3)">→</span>
-              <span style="font-size:15px;font-weight:700;color:var(--good)">${num(r.opt1_gates)}</span>
-              ${gateRed != null ? `<span style="font-size:13px;font-weight:700;color:var(--good)">▼${gateRed}%</span>` : ''}
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:14px;font-weight:700;color:var(--text2)">${num(r.orig_gates)}</span>
+              ${r.opt1_gates != null ? `<span style="color:var(--text3)">→</span><span style="font-size:14px;font-weight:700;color:var(--accent)" title="After optimization (pre-map)">${num(r.opt1_gates)}</span>` : ''}
+              ${r.opt_gates  != null ? `<span style="color:var(--text3)">→</span><span style="font-size:14px;font-weight:700;color:var(--good)"  title="After QPU mapping">${num(r.opt_gates)}</span>` : ''}
+              ${gateRed != null ? `<span style="font-size:12px;font-weight:700;color:var(--good)">▼${gateRed}%</span>` : ''}
             </div>
+            ${(r.opt1_gates != null || r.opt_gates != null) ? `<div style="font-size:9px;color:var(--text3);margin-top:3px">logical → optimized${r.opt_gates!=null?' → mapped':''}</div>` : ''}
           </div>
           <div>
             <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Depth</div>
-            <div style="display:flex;align-items:center;gap:8px">
-              <span style="font-size:15px;font-weight:700;color:var(--text2)">${num(r.orig_depth)}</span>
-              <span style="color:var(--text3)">→</span>
-              <span style="font-size:15px;font-weight:700;color:var(--good)">${num(r.opt1_depth)}</span>
-              ${depthRed != null ? `<span style="font-size:13px;font-weight:700;color:var(--good)">▼${depthRed}%</span>` : ''}
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-size:14px;font-weight:700;color:var(--text2)">${num(r.orig_depth)}</span>
+              ${r.opt1_depth != null ? `<span style="color:var(--text3)">→</span><span style="font-size:14px;font-weight:700;color:var(--accent)" title="After optimization (pre-map)">${num(r.opt1_depth)}</span>` : ''}
+              ${r.opt_depth  != null ? `<span style="color:var(--text3)">→</span><span style="font-size:14px;font-weight:700;color:var(--good)"  title="After QPU mapping">${num(r.opt_depth)}</span>` : ''}
+              ${depthRed != null ? `<span style="font-size:12px;font-weight:700;color:var(--good)">▼${depthRed}%</span>` : ''}
             </div>
+            ${(r.opt1_depth != null || r.opt_depth != null) ? `<div style="font-size:9px;color:var(--text3);margin-top:3px">logical → optimized${r.opt_depth!=null?' → mapped':''}</div>` : ''}
           </div>
         </div>
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Circuit Profile</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Circuit Profile</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:8px">${t('hint.opt.profile')}</div>
         <div style="display:flex;gap:20px;flex-wrap:wrap">
           <div><span style="font-size:10px;color:var(--text3)">T-ratio </span><span style="font-size:12px;color:var(--text1)">${pct(r.t_ratio)}</span></div>
           <div><span style="font-size:10px;color:var(--text3)">2Q-ratio </span><span style="font-size:12px;color:var(--text1)">${pct(r.two_q_ratio)}</span></div>
@@ -4889,7 +5224,8 @@ function _showOptDetail(r) {
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Processing Time</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Processing Time</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:8px">${t('hint.opt.time')}</div>
         <div style="display:flex;gap:24px;flex-wrap:wrap">
           <div><div style="font-size:9px;color:var(--text3)">Optimize</div><div style="font-size:13px;font-weight:600;color:var(--text1)">${sec(r.opt_time_sec)}</div></div>
           <div><div style="font-size:9px;color:var(--text3)">Mapping</div><div style="font-size:13px;font-weight:600;color:var(--text1)">${sec(r.map_time_sec)}</div></div>
@@ -4923,7 +5259,8 @@ function _showGPUDetail(r) {
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:14px 18px;text-align:center">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">GPU Speedup</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">GPU Speedup</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:8px">${t('hint.gpu.speedup')}</div>
         <div style="font-size:42px;font-weight:800;color:var(--accent);line-height:1">
           ${r.speedup != null ? r.speedup.toFixed(2) + '×' : '—'}
         </div>
@@ -4934,7 +5271,8 @@ function _showGPUDetail(r) {
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Timing Comparison</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Timing Comparison</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:10px">${t('hint.gpu.timing')}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
           <div style="text-align:center">
             <div style="font-size:9px;color:var(--text3);margin-bottom:4px">CPU Time</div>
@@ -4978,7 +5316,8 @@ function _showQECDetail(r) {
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:14px 18px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Fidelity</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Fidelity</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:10px">${t('hint.qec.fidelity')}</div>
         <div style="display:flex;align-items:center;justify-content:center;gap:20px">
           <div style="text-align:center">
             <div style="font-size:9px;color:var(--text3);margin-bottom:4px">Before</div>
@@ -5002,7 +5341,8 @@ function _showQECDetail(r) {
       </div>
 
       <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
-        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Overhead</div>
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Overhead</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:8px">${t('hint.qec.overhead')}</div>
         <div style="display:flex;gap:24px;flex-wrap:wrap">
           <div><div style="font-size:9px;color:var(--text3)">Original Qubits</div><div style="font-size:16px;font-weight:700;color:var(--text1)">${num(r.orig_qubits)}</div></div>
           <div><div style="font-size:9px;color:var(--text3)">Qubit Overhead</div><div style="font-size:16px;font-weight:700;color:var(--warn,#f59e0b)">${num(r.qubit_overhead)}×</div></div>
@@ -5020,6 +5360,16 @@ function _showPipelineDetail(r) {
     info:  { color:'var(--text3)',bg:'rgba(99,102,241,.10)' },
   };
   const sev = SEV[r.severity] || SEV.warn;
+  const STAGE_HINT = {
+    'uqi_analyze':        t('hint.pipeline.analyze'),
+    'uqi_optimize':       t('hint.pipeline.optimize'),
+    'uqi_noise_simulate': t('hint.pipeline.noise'),
+    'uqi_qec_analyze':    t('hint.pipeline.qec_analyze'),
+    'uqi_qec_apply':      t('hint.pipeline.qec_apply'),
+    'uqi_gpu_benchmark':  t('hint.pipeline.gpu'),
+    'uqi_qpu_submit':     t('hint.pipeline.qpu'),
+  };
+  const stageHint = STAGE_HINT[r.stage] || '';
 
   document.getElementById('codeModalTitle').textContent = 'Pipeline Error · ' + (r.stage || '—');
   document.getElementById('codeModalBody').innerHTML = `
@@ -5033,6 +5383,14 @@ function _showPipelineDetail(r) {
         <span style="margin-left:auto;font-size:10px;color:var(--text3)">${r._ts ? _fmtDate(r._ts) : ''}</span>
       </div>
 
+      ${(r.algorithm_file || r.file) ? `
+      <div style="background:var(--surface2);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px">
+        <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;white-space:nowrap">File</span>
+        <span style="font-size:12px;font-family:var(--font-mono);color:var(--text2)">${escHtml(_baseName(r.algorithm_file||r.file))}</span>
+      </div>` : ''}
+
+      ${stageHint ? `<div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;padding:0 2px">${escHtml(stageHint)}</div>` : ''}
+
       <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
         <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Issue</div>
         <div style="font-size:13px;color:var(--text1);line-height:1.5">${escHtml(String(r.issue||'—'))}</div>
@@ -5042,6 +5400,12 @@ function _showPipelineDetail(r) {
       <div style="background:rgba(74,222,128,.06);border:1px solid rgba(74,222,128,.2);border-radius:8px;padding:12px 14px">
         <div style="font-size:9px;color:var(--good);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Solution</div>
         <div style="font-size:12px;color:var(--text1);line-height:1.5">${escHtml(String(r.solution))}</div>
+      </div>` : ''}
+
+      ${r.traceback ? `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Traceback</div>
+        <pre style="margin:0;font-size:10px;font-family:var(--font-mono);color:var(--text3);white-space:pre-wrap;word-break:break-all;max-height:130px;overflow-y:auto;line-height:1.5">${escHtml(String(r.traceback).slice(-600))}</pre>
       </div>` : ''}
     </div>`;
   document.getElementById('codeModal').classList.add('open');
@@ -5067,14 +5431,23 @@ function _showSecurityDetail(item) {
       </div>
 
       <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:12px 14px">
-        <div style="font-size:9px;color:var(--bad);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Reason</div>
+        <div style="font-size:9px;color:var(--bad);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Reason</div>
+        <div class="hint-beginner" style="font-size:9px;color:var(--text3);font-style:italic;margin-bottom:6px">${t('hint.security.reason')}</div>
         <div style="font-size:13px;color:var(--text1);line-height:1.5">${escHtml(String(r.reason||'—'))}</div>
       </div>
 
-      <div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
         <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Detected Pattern</div>
-        <div style="font-size:12px;font-family:var(--font-mono);color:var(--accent);background:rgba(99,102,241,.08);padding:6px 10px;border-radius:5px">${escHtml(r.pattern||'—')}</div>
+        <div style="font-size:12px;font-family:var(--font-mono);color:var(--accent);background:rgba(99,102,241,.08);padding:6px 10px;border-radius:5px">${escHtml(_cleanRegexPattern(r.pattern))}</div>
       </div>
+
+      ${r.match_lineno != null ? `
+      <div style="background:var(--surface2);border-radius:8px;padding:10px 14px">
+        <div style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">
+          Matched Line <span style="font-weight:400;letter-spacing:0;font-style:italic">#${r.match_lineno}</span>
+        </div>
+        <pre style="margin:0;font-size:12px;font-family:var(--font-mono);color:var(--bad);background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:5px;padding:8px 12px;overflow-x:auto;white-space:pre">${escHtml(r.match_line||'—')}</pre>
+      </div>` : ''}
     </div>`;
   document.getElementById('codeModal').classList.add('open');
 }
@@ -5088,6 +5461,7 @@ function renderRAG(body, text, queryType) {
   if (queryType === 'qec_results')              { _renderQECBestResults(body, data);         return; }
   if (queryType === 'gpu_benchmark')            { _renderGPUBenchmarkBest(body, data);       return; }
   if (queryType === 'pipeline_issues')          { _renderPipelineIssues(body, data);         return; }
+  if (queryType === 'noise_simulation')         { _renderNoiseSimResults(body, data);        return; }
   if (queryType === 'security_block')           { _renderSecurityBlocks(body, data);         return; }
   if (Array.isArray(data)) {
     const _qt = document.getElementById('rag-type')?.value || '';

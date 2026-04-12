@@ -495,13 +495,18 @@ class UQIRAG:
             "success" if data["ok"] else "failure",
         ])
 
-    def add_security_block(self, algorithm_file, reason, pattern, tool=None):
+    def add_security_block(self, algorithm_file, reason, pattern, tool=None,
+                            match_lineno=None, match_line=None):
         data = {
             "algorithm_file": algorithm_file,
             "file_abspath": str(Path(algorithm_file).resolve()) if Path(algorithm_file).exists() else algorithm_file,
             "file_name": Path(algorithm_file).name,
             "reason": reason, "pattern": pattern, "tool": tool,
         }
+        if match_lineno is not None:
+            data["match_lineno"] = match_lineno
+        if match_line is not None:
+            data["match_line"] = match_line
         return self.add("security_block", data, tags=["security_block", Path(algorithm_file).name, pattern])
 
     # ─────────────────────────────────────────────────────

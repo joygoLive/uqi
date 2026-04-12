@@ -102,7 +102,7 @@ class TestKeyNamingConventions:
     EXPECTED_NAMESPACES = {
         "nav", "header", "status", "lock", "footer",
         "qpu", "pipeline", "job", "step", "btn", "cache", "alert",
-        "knowledge", "rag",
+        "knowledge", "rag", "hint",
     }
 
     def test_all_keys_have_namespace(self, en):

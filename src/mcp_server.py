@@ -207,28 +207,28 @@ _ALLOWED_IMPORTS = {
 }
 
 _BLOCKED_PATTERNS = [
-    (r'\bos\.(?!getenv\b)', "os 모듈 직접 호출"),
-    (r'\bsubprocess\b', "subprocess 모듈"),
-    (r'\bsocket\b', "socket 모듈"),
-    (r'\beval\s*\(', "eval() 사용"),
-    (r'\bexec\s*\(', "exec() 사용"),
-    (r'\b__import__\s*\(', "__import__() 사용"),
-    (r'\bopen\s*\(.*["\']w["\']', "파일 쓰기(open write)"),
-    (r'\bshutil\b', "shutil 모듈"),
-    (r'\burllib\b', "urllib 모듈"),
-    (r'\brequests\b', "requests 모듈"),
-    (r'\bhttpx\b', "httpx 모듈"),
-    (r'\baiohttp\b', "aiohttp 모듈"),
-    (r'\bparamiko\b', "paramiko 모듈"),
-    (r'\bpickle\b', "pickle 모듈"),
-    (r'\bctypes\b', "ctypes 모듈"),
-    (r'\bcffi\b', "cffi 모듈"),
-    (r'\bimportlib\b', "importlib 모듈"),
-    (r'\bpty\b', "pty 모듈"),
-    (r'\bsignal\b', "signal 모듈"),
-    (r'\bmultiprocessing\b', "multiprocessing 모듈"),
-    (r'\bthreading\b', "threading 모듈"),
-    (r'\bconcurrent\b', "concurrent 모듈"),
+    (r'\bos\.(?!getenv\b)', "os module direct call"),
+    (r'\bsubprocess\b', "subprocess module"),
+    (r'\bsocket\b', "socket module"),
+    (r'\beval\s*\(', "eval() usage"),
+    (r'\bexec\s*\(', "exec() usage"),
+    (r'\b__import__\s*\(', "__import__() usage"),
+    (r'\bopen\s*\(.*["\']w["\']', "file write (open write)"),
+    (r'\bshutil\b', "shutil module"),
+    (r'\burllib\b', "urllib module"),
+    (r'\brequests\b', "requests module"),
+    (r'\bhttpx\b', "httpx module"),
+    (r'\baiohttp\b', "aiohttp module"),
+    (r'\bparamiko\b', "paramiko module"),
+    (r'\bpickle\b', "pickle module"),
+    (r'\bctypes\b', "ctypes module"),
+    (r'\bcffi\b', "cffi module"),
+    (r'\bimportlib\b', "importlib module"),
+    (r'\bpty\b', "pty module"),
+    (r'\bsignal\b', "signal module"),
+    (r'\bmultiprocessing\b', "multiprocessing module"),
+    (r'\bthreading\b', "threading module"),
+    (r'\bconcurrent\b', "concurrent module"),
 ]
 
 _MAX_QUBITS = 200
@@ -241,17 +241,22 @@ def _safe_file_check(algorithm_file: str, tool: str = None) -> Optional[str]:
     if not path.exists():
         return mcp_file_not_found(algorithm_file)
     if path.suffix != ".py":
-        return f"Python 파일(.py)만 허용됩니다: {algorithm_file}"
+        return f"Only Python (.py) files are allowed: {algorithm_file}"
     if path.stat().st_size > 1 * 1024 * 1024:
-        return f"파일 크기 초과 (최대 1MB): {algorithm_file}"
+        return f"File size exceeded (max 1MB): {algorithm_file}"
     try:
         source = path.read_text(encoding="utf-8")
     except Exception as e:
-        return f"파일 읽기 실패: {e}"
+        return f"Failed to read file: {e}"
+    _src_lines = source.splitlines()
     for pattern, desc in _BLOCKED_PATTERNS:
-        if _re.search(pattern, source):
-            msg = f"보안 정책 위반 - {desc} 감지됨 (패턴: {pattern})"
-            _rag.add_security_block(algorithm_file, reason=desc, pattern=pattern, tool=tool)
+        m = _re.search(pattern, source)
+        if m:
+            msg = f"Security policy violation - {desc} detected (pattern: {pattern})"
+            line_no    = source[:m.start()].count('\n') + 1
+            match_line = _src_lines[line_no - 1].strip() if _src_lines else ''
+            _rag.add_security_block(algorithm_file, reason=desc, pattern=pattern, tool=tool,
+                                    match_lineno=line_no, match_line=match_line)
             return msg
     import_lines = _re.findall(
         r'^\s*(?:import|from)\s+([\w\.]+)', source, _re.MULTILINE
@@ -259,8 +264,13 @@ def _safe_file_check(algorithm_file: str, tool: str = None) -> Optional[str]:
     for mod in import_lines:
         root = mod.split(".")[0]
         if root not in _ALLOWED_IMPORTS:
-            msg = f"허용되지 않은 모듈 import: '{root}' (허용 목록: {sorted(_ALLOWED_IMPORTS)})"
-            _rag.add_security_block(algorithm_file, reason=f"비허용 모듈 import: {root}", pattern=f"import {root}", tool=tool)
+            m2         = _re.search(rf'^\s*(?:import|from)\s+{_re.escape(root)}\b', source, _re.MULTILINE)
+            line_no    = (source[:m2.start()].count('\n') + 1) if m2 else None
+            match_line = _src_lines[line_no - 1].strip() if (line_no and _src_lines) else ''
+            msg = f"Unauthorized module import: '{root}' (allowed: {sorted(_ALLOWED_IMPORTS)})"
+            _rag.add_security_block(algorithm_file, reason=f"Unauthorized module import: {root}",
+                                    pattern=f"import {root}", tool=tool,
+                                    match_lineno=line_no, match_line=match_line)
             return msg
     return None
 
@@ -417,7 +427,7 @@ async def uqi_analyze(
                 _rag.add_pipeline_issue(
                     stage="uqi_analyze",
                     sdk=framework,
-                    issue="회로 추출 실패 — circuits 비어있음 (커널 컴파일 오류 또는 실행 실패)",
+                    issue="Circuit extraction failed — circuits empty (kernel compile error or execution failure)",
                     solution="",
                     qpu_name=qpu_name,
                     severity="error",
@@ -527,7 +537,7 @@ async def uqi_optimize(
                 _rag.add_pipeline_issue(
                     stage="uqi_optimize",
                     sdk=framework,
-                    issue="최적화 실패 — results 비어있음 (회로 추출 또는 변환 실패)",
+                    issue="Optimization failed — results empty (circuit extraction or conversion failure)",
                     solution="",
                     qpu_name=qpu_name,
                     severity="error",
@@ -627,7 +637,8 @@ async def uqi_noise_simulate(
                         circuit_name=name, qpu_name=qpu_name,
                         backend=f"noise_sim_{sdk}", shots=shots,
                         counts=r["noise_counts"], ok=True,
-                        extra={"comparison": r["comparison"]}
+                        extra={"comparison": r["comparison"],
+                               "algorithm_file": Path(algorithm_file).name}
                     )
                     results[name] = {
                         "ideal_counts":    r["ideal_counts"],
@@ -645,7 +656,7 @@ async def uqi_noise_simulate(
                 _rag.add_pipeline_issue(
                     stage="uqi_noise_simulate",
                     sdk=framework,
-                    issue="노이즈 시뮬 실패 — results 비어있음 (회로 추출 또는 변환 실패)",
+                    issue="Noise simulation failed — results empty (circuit extraction or conversion failure)",
                     solution="",
                     qpu_name=qpu_name,
                     severity="error",
@@ -734,7 +745,7 @@ async def uqi_qec_analyze(
                 _rag.add_pipeline_issue(
                     stage="uqi_qec_analyze",
                     sdk=framework,
-                    issue="QEC 분석 실패 — results 비어있음 (회로 추출 또는 변환 실패)",
+                    issue="QEC analysis failed — results empty (circuit extraction or conversion failure)",
                     solution="",
                     qpu_name=qpu_name,
                     severity="error",
@@ -824,7 +835,7 @@ async def uqi_qec_apply(
                 _rag.add_pipeline_issue(
                     stage="uqi_qec_apply",
                     sdk=framework,
-                    issue="QEC 적용 실패 — results 비어있음 (회로 추출 또는 변환 실패)",
+                    issue="QEC apply failed — results empty (circuit extraction or conversion failure)",
                     solution="",
                     qpu_name=qpu_name,
                     severity="error",
@@ -970,6 +981,33 @@ async def uqi_rag_search(
             elif query_type == "gpu_benchmark":
                 records = _rag.search(record_type="gpu_benchmark", limit=limit)
                 return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records])
+            elif query_type == "noise_simulation":
+                records = _rag.search(record_type="execution", limit=limit * 10)
+                result = []
+                for r in records:
+                    d = r["data"]
+                    backend = d.get("backend", "")
+                    if not backend.startswith("noise_sim"):
+                        continue
+                    if qpu_name and d.get("qpu_name") != qpu_name:
+                        continue
+                    comp = d.get("comparison") or {}
+                    alg = d.get("algorithm_file") or ""
+                    result.append({
+                        "circuit_name":    d.get("circuit_name"),
+                        "algorithm_file":  alg,
+                        "qpu_name":        d.get("qpu_name"),
+                        "sdk":             backend.replace("noise_sim_", ""),
+                        "shots":           d.get("shots"),
+                        "fidelity":        comp.get("fidelity"),
+                        "tvd":             comp.get("tvd"),
+                        "dominant_ideal":  comp.get("dominant_a"),
+                        "dominant_noise":  comp.get("dominant_b"),
+                        "_ts":             r["timestamp"],
+                    })
+                    if len(result) >= limit:
+                        break
+                return _safe_json(result)
             elif query_type == "semantic":
                 if not query:
                     return json.dumps({"error": MCP_SEMANTIC_NO_QUERY})

@@ -93,7 +93,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "Python 파일" in result
+            assert "Python (.py)" in result
         finally:
             _clean(f)
 
@@ -113,7 +113,7 @@ class TestSafeFileCheck:
                 mock_stat.return_value.st_size = 2 * 1024 * 1024
                 result = _safe_file_check(f)
                 assert result is not None
-                assert "크기 초과" in result
+                assert "File size exceeded" in result
         finally:
             _clean(f)
 
@@ -122,7 +122,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -131,7 +131,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -140,7 +140,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -149,7 +149,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -158,7 +158,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -167,7 +167,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -176,7 +176,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -185,7 +185,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -194,7 +194,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -203,7 +203,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 
@@ -212,7 +212,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "허용되지 않은 모듈" in result
+            assert "Unauthorized module import" in result
         finally:
             _clean(f)
 
@@ -241,7 +241,7 @@ class TestSafeFileCheck:
         try:
             result = _safe_file_check(f)
             assert result is not None
-            assert "보안 정책 위반" in result
+            assert "Security policy violation" in result
         finally:
             _clean(f)
 

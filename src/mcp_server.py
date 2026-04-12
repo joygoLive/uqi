@@ -1258,6 +1258,8 @@ async def uqi_upload_algorithm(
                 return json.dumps({"error": MCP_FILE_EXT_NOT_ALLOWED})
             safe_name = Path(filename).name
             dest = ALG_FILES_DIR / safe_name
+            if dest.exists():
+                return json.dumps({"error": f"FILE_EXISTS:{safe_name}", "conflict": True})
             dest.write_text(content, encoding="utf-8")
             return _safe_json({
                 "ok": True, "path": str(dest),

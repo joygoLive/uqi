@@ -1059,10 +1059,9 @@ except ImportError as e:
     sys.exit(0)
 
 try:
-    from qiskit import QuantumCircuit
-    from qiskit.qasm2 import dumps as qasm2_dumps
+    import numpy as np
 except ImportError as e:
-    print('__UQI_JSON__:' + json.dumps({{'__error__': f'Qiskit 필요: {{e}}'}}))
+    print('__UQI_JSON__:' + json.dumps({{'__error__': f'numpy 필요: {{e}}'}}))
     sys.exit(0)
 
 captured = {{}}
@@ -1155,38 +1154,37 @@ finally:
     PcvlSampler.sample_count = original_sample_count
     PcvlSampler.samples      = original_samples
 
-# 캡처된 Perceval 회로를 Qiskit 게이트로 매핑 후 QASM 변환
-def perceval_circuit_to_qasm(circuit, circuit_name):
-    if circuit is None:
-        return None, 'circuit is None'
-    try:
-        m = circuit.m
-        qc = QuantumCircuit(m, m)
-        for _, component in circuit:
-            comp_type = type(component).__name__
-            if 'BS' in comp_type:
-                if m >= 2:
-                    qc.h(0)
-                    qc.cx(0, 1)
-            elif 'PS' in comp_type:
-                qc.rz(0.5, 0)
-            elif 'PERM' in comp_type:
-                if m >= 2:
-                    qc.swap(0, 1)
-        qc.measure(list(range(m)), list(range(m)))
-        qasm = qasm2_dumps(qc)
-        return qasm, None
-    except Exception as e:
-        return None, str(e)
-
+# 캡처된 Perceval 회로에서 유니터리 행렬 + input_state 직렬화
 results = {{}}
 for name, (circuit, input_state) in captured.items():
-    qasm, err = perceval_circuit_to_qasm(circuit, name)
-    if qasm:
-        m = circuit.m if circuit else 0
-        results[name] = {{'qasm': qasm, 'ok': True, 'num_modes': m}}
-    else:
-        results[name] = {{'qasm': None, 'ok': False, 'error': err}}
+    if circuit is None:
+        results[name] = {{'ok': False, 'error': 'circuit is None'}}
+        continue
+    try:
+        m = circuit.m
+        unitary = circuit.compute_unitary()
+        # complex numpy array → [[re, im], ...] 2D list
+        flat = []
+        arr = np.array(unitary)
+        for row in arr:
+            flat_row = []
+            for val in row:
+                flat_row.append([float(val.real), float(val.imag)])
+            flat_row_list = flat_row
+            flat.append(flat_row_list)
+        # input_state → int 리스트
+        if input_state is not None:
+            is_list = list(input_state)
+        else:
+            is_list = [1] + [0] * (m - 1)
+        results[name] = {{
+            'ok': True,
+            'num_modes': m,
+            'unitary': flat,
+            'input_state': is_list,
+        }}
+    except Exception as e:
+        results[name] = {{'ok': False, 'error': str(e)}}
 
 print('__UQI_JSON__:' + json.dumps(results))
 """
@@ -1202,10 +1200,16 @@ print('__UQI_JSON__:' + json.dumps(results))
 
         new_circuits = {}
         for name, info in data.items():
-            if info.get('ok') and info.get('qasm'):
+            if info.get('ok') and info.get('unitary'):
                 key = f"{prefix}{name}"
-                new_circuits[key] = info['qasm']
-                self.circuits[key] = info['qasm']
+                new_circuits[key] = info
+                # perceval_circuits에 (unitary_data, input_state) 저장
+                # 실제 pcvl 객체 복원은 submit 시점에 수행
+                self.perceval_circuits[key] = (
+                    info['unitary'],      # [[re,im], ...] 2D list
+                    info['input_state'],   # [int, ...]
+                    info['num_modes'],
+                )
             elif not info.get('ok') and info.get('error'):
                 print(f"  [Extractor] Perceval 변환 실패 ({name}): {info['error']}")
 
@@ -1213,7 +1217,7 @@ print('__UQI_JSON__:' + json.dumps(results))
             print(f"  [Extractor] 추출된 회로 없음")
             return
 
-        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 회로")
+        print(f"  [Extractor] 추출 완료: {len(new_circuits)}개 회로 (유니터리+input_state)")
         print(f"    회로 목록: {', '.join(new_circuits.keys())}")
 
     # ─────────────────────────────────────────

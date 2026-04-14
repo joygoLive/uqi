@@ -19,6 +19,51 @@ class UQIExecutorPerceval:
         self.shots = shots
         self.results = {}
 
+    @staticmethod
+    def _restore_perceval_objects(entry):
+        """직렬화된 (unitary_data, input_state_list, num_modes) →
+        (pcvl.Unitary circuit, pcvl.BasicState) 복원"""
+        import perceval as pcvl
+        import numpy as np
+
+        unitary_data, is_list, num_modes = entry
+        # [[re,im], ...] 2D list → complex numpy array → pcvl.Unitary
+        arr = np.array(
+            [[complex(c[0], c[1]) for c in row] for row in unitary_data]
+        )
+        circuit = pcvl.Unitary(pcvl.Matrix(arr))
+        input_state = pcvl.BasicState(is_list)
+        return circuit, input_state
+
+    @staticmethod
+    def get_platform_specs(platform: str, token: str) -> dict:
+        """Quandela 플랫폼 스펙 조회 (max_modes, max_photons 등)"""
+        try:
+            import perceval as pcvl
+            session = pcvl.QuandelaSession(platform_name=platform, token=token)
+            session.start()
+            p = session.build_remote_processor()
+            specs = p.specs
+            constraints = specs.get('constraints', {})
+            result = {
+                "ok": True,
+                "platform": platform,
+                "max_modes": constraints.get('max_mode_count', 12),
+                "max_photons": constraints.get('max_photon_count', 6),
+                "type": "Simulator" if platform.startswith("sim:") else "QPU",
+            }
+            session.stop()
+            return result
+        except Exception as e:
+            return {
+                "ok": False,
+                "platform": platform,
+                "error": str(e),
+                "max_modes": 12,
+                "max_photons": 6,
+                "type": "Simulator" if platform.startswith("sim:") else "QPU",
+            }
+
     def run_all(
         self,
         use_simulator: bool = True,
@@ -34,8 +79,9 @@ class UQIExecutorPerceval:
             print("  [Perceval] 실행할 회로 없음")
             return {}
 
-        for name, (circuit, input_state) in self.extractor.perceval_circuits.items():
+        for name, entry in self.extractor.perceval_circuits.items():
             print(f"  [Perceval] 실행: {name}")
+            circuit, input_state = self._restore_perceval_objects(entry)
             self.results[name] = self._run_single(
                 name, circuit, input_state, use_simulator
             )

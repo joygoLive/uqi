@@ -562,16 +562,20 @@ class TestInitialState:
         """초기 frameworks 목록은 빈 리스트"""
         assert UQIExtractor("dummy.py").frameworks == []
 
-    def test_TC078_perceval_stores_in_circuits_after_subprocess(self):
-        """Perceval subprocess 이관 후 결과가 circuits에 저장됨 (perceval_circuits 아님)"""
+    def test_TC078_perceval_stores_in_perceval_circuits_after_subprocess(self):
+        """Perceval subprocess 이관 후 유니터리+input_state가 perceval_circuits에 저장됨"""
         ext = UQIExtractor("dummy.py")
         ext.frameworks = ["Perceval"]
-        # _run_subprocess가 QASM 반환하는 것처럼 mocking
-        fake_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\nqreg q[2];\ncreg c[2];\nh q[0];\nmeasure q[0] -> c[0];\n"
-        fake_data = {"perceval_circuit_0": {"qasm": fake_qasm, "ok": True, "num_modes": 2}}
+        # _run_subprocess가 유니터리+input_state 반환하는 것처럼 mocking
+        fake_unitary = [[[1.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [1.0, 0.0]]]
+        fake_data = {"perceval_circuit_0": {
+            "ok": True, "num_modes": 2,
+            "unitary": fake_unitary, "input_state": [1, 0],
+        }}
         with patch.object(ext, "_run_subprocess", return_value=fake_data):
             ext._extract_perceval_circuits()
-        assert "perceval_circuit_0" in ext.circuits
-        assert ext.circuits["perceval_circuit_0"] == fake_qasm
-        # perceval_circuits는 더 이상 사용 안 함 (비어 있어야 함)
-        assert ext.perceval_circuits == {}
+        assert "perceval_circuit_0" in ext.perceval_circuits
+        entry = ext.perceval_circuits["perceval_circuit_0"]
+        assert entry[0] == fake_unitary      # unitary data
+        assert entry[1] == [1, 0]            # input_state
+        assert entry[2] == 2                 # num_modes

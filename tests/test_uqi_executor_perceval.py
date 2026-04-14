@@ -24,6 +24,14 @@ def _make_executor(perceval_circuits=None, shots=1024):
     return UQIExecutorPerceval(extractor, shots=shots)
 
 
+# 직렬화된 형식의 더미 perceval_circuits 엔트리 생성
+def _dummy_entry():
+    """(unitary_data, input_state_list, num_modes) 형식 더미 데이터"""
+    # 2x2 identity 유니터리
+    unitary = [[[1.0, 0.0], [0.0, 0.0]], [[0.0, 0.0], [1.0, 0.0]]]
+    return (unitary, [1, 0], 2)
+
+
 def _mock_pcvl(counts_raw=None, max_modes=12, max_photons=6):
     """perceval mock 모듈 생성"""
     pcvl = MagicMock()
@@ -90,55 +98,61 @@ class TestRunAll:
 
     def test_TC022_single_circuit_executed(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0])
+            "circ_a": _dummy_entry()
         })
-        with patch.object(executor, "_run_single", return_value={"ok": True}) as m:
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", return_value={"ok": True}) as m:
             executor.run_all()
             m.assert_called_once()
             assert m.call_args[0][0] == "circ_a"
 
     def test_TC023_multiple_circuits_all_executed(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0]),
-            "circ_b": (MagicMock(), [0, 1]),
+            "circ_a": _dummy_entry(),
+            "circ_b": _dummy_entry(),
         })
-        with patch.object(executor, "_run_single", return_value={"ok": True}):
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", return_value={"ok": True}):
             result = executor.run_all()
             assert set(result.keys()) == {"circ_a", "circ_b"}
 
     def test_TC024_token_stored(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0])
+            "circ_a": _dummy_entry()
         })
-        with patch.object(executor, "_run_single", return_value={"ok": True}):
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", return_value={"ok": True}):
             executor.run_all(token="quandela-tok")
             assert executor._token == "quandela-tok"
 
     def test_TC025_platform_sim_stored(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0])
+            "circ_a": _dummy_entry()
         })
-        with patch.object(executor, "_run_single", return_value={"ok": True}):
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", return_value={"ok": True}):
             executor.run_all(platform_sim="sim:ascella")
             assert executor._platform_sim == "sim:ascella"
 
     def test_TC026_platform_qpu_stored(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0])
+            "circ_a": _dummy_entry()
         })
-        with patch.object(executor, "_run_single", return_value={"ok": True}):
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", return_value={"ok": True}):
             executor.run_all(platform_qpu="qpu:belenos")
             assert executor._platform_qpu == "qpu:belenos"
 
     def test_TC027_use_simulator_passed_to_run_single(self):
         executor = _make_executor(perceval_circuits={
-            "circ_a": (MagicMock(), [1, 0])
+            "circ_a": _dummy_entry()
         })
         captured = {}
         def fake_run(name, circuit, input_state, use_simulator):
             captured["use_simulator"] = use_simulator
             return {"ok": True}
-        with patch.object(executor, "_run_single", side_effect=fake_run):
+        with patch.object(UQIExecutorPerceval, "_restore_perceval_objects", return_value=(MagicMock(), [1, 0])), \
+             patch.object(executor, "_run_single", side_effect=fake_run):
             executor.run_all(use_simulator=False)
             assert captured["use_simulator"] is False
 

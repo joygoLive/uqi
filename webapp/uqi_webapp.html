@@ -4114,10 +4114,14 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   const searchCircuit = document.getElementById('jh-search-circuit')?.value || '';
 
   try {
-    const res  = await callTool('uqi_job_list', {
-      limit: limitVal, status: statusFilter, days: daysFilter, offset,
-      search_vendor: searchVendor, search_qpu: searchQpu, search_circuit: searchCircuit,
-    });
+    const _jhTimeout = ms => new Promise((_,rej) => setTimeout(() => rej(new Error('Job list timeout')), ms));
+    const res  = await Promise.race([
+      callTool('uqi_job_list', {
+        limit: limitVal, status: statusFilter, days: daysFilter, offset,
+        search_vendor: searchVendor, search_qpu: searchQpu, search_circuit: searchCircuit,
+      }),
+      _jhTimeout(15000),
+    ]);
     const data = JSON.parse(getResultText(res));
     if (!data.ok) { el.innerHTML = `<div class="error-state">⚠ ${escHtml(data.error||'Failed to load')}</div>`; return; }
 
@@ -4168,8 +4172,8 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
       }
     }
   } catch(e) {
-    // Not connected일 때는 초기 상태 유지 (조용히 무시)
-    if (e.message === 'Not connected') {
+    // Not connected / timeout 시 초기 상태 유지 (조용히 무시)
+    if (e.message === 'Not connected' || e.message === 'Job list timeout') {
       if (!_jobHistoryLastHtml) el.innerHTML = `<div class="empty-state">${t('pipeline.job_manager.empty')}</div>`;
     } else if (_jobHistoryLastHtml) {
       el.innerHTML = _jobHistoryLastHtml;

@@ -335,6 +335,10 @@ def _extract_and_convert(algorithm_file: str):
             extractor = UQIExtractor(algorithm_file)
             extractor.framework = framework
             extractor.circuits  = {}
+            # perceval_circuits 복원 (유니터리+input_state 직렬화 데이터)
+            pcvl_cached = cached_data.get("perceval_circuits", {})
+            for k, v in pcvl_cached.items():
+                extractor.perceval_circuits[k] = tuple(v)
             converter = UQIQIRConverter(extractor)
             converter.qasm_results = qasm_results
             converter.qir_results  = qir_results
@@ -351,11 +355,14 @@ def _extract_and_convert(algorithm_file: str):
     converter.convert_all()
 
     try:
+        # perceval_circuits: {name: (unitary, input_state, num_modes)} — JSON 직렬화 가능
+        pcvl_serializable = {k: list(v) for k, v in extractor.perceval_circuits.items()}
         cache_data = json.dumps({
-            "framework":    framework,
-            "qasm_results": converter.qasm_results,
-            "qir_results":  {k: v.hex() if isinstance(v, bytes) else str(v)
-                             for k, v in (converter.qir_results or {}).items()},
+            "framework":          framework,
+            "qasm_results":       converter.qasm_results,
+            "qir_results":        {k: v.hex() if isinstance(v, bytes) else str(v)
+                                   for k, v in (converter.qir_results or {}).items()},
+            "perceval_circuits":  pcvl_serializable,
         }, ensure_ascii=False)
         _rag.set_cache(cache_key, cache_data)
     except Exception as e:
@@ -1587,6 +1594,205 @@ async def uqi_qpu_submit(
             else:
                 goto_submit = False
 
+            # ── Perceval QPU: 전체 QPU 조회 없이 바로 처리 ──
+            PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos"]
+            if qpu_name in PERCEVAL_QPUS:
+                extractor, converter, framework = _extract_and_convert(algorithm_file)
+
+                if not confirmed:
+                    from uqi_executor_perceval import UQIExecutorPerceval
+
+                    # perceval_circuits에서 회로 분석 정보 추출
+                    if not extractor.perceval_circuits:
+                        extractor._extract_perceval_circuits()
+
+                    # 회로 요구사항 계산
+                    _max_circuit_modes = 0
+                    _max_circuit_photons = 0
+                    _pcvl_circuit_info = {}
+                    for cname, entry in extractor.perceval_circuits.items():
+                        unitary_data, is_list, num_modes = entry
+                        n_photons = sum(is_list)
+                        _max_circuit_modes = max(_max_circuit_modes, num_modes)
+                        _max_circuit_photons = max(_max_circuit_photons, n_photons)
+                        _pcvl_circuit_info[cname] = {
+                            "num_qubits":   num_modes,
+                            "total_gates":  1,
+                            "depth":        1,
+                            "fidelity":     None,
+                            "combination":  f"Photonic · {num_modes} modes · {n_photons} photon{'s' if n_photons != 1 else ''}",
+                        }
+
+                    # ── 광자 QPU 비교 분석 ──
+                    _ALL_PCVL_PLATFORMS = ["sim:ascella", "qpu:ascella", "qpu:belenos"]
+                    _ptoken = os.getenv("QUANDELA_TOKEN")
+                    _pcvl_comparison = {}
+                    _best_qpu = qpu_name  # 기본값
+                    _best_score = -1
+
+                    for pqpu in _ALL_PCVL_PLATFORMS:
+                        _cache_key_spec = f"pcvl_specs:{pqpu}"
+                        _cached_spec = _rag.get_cache(_cache_key_spec)
+                        if _cached_spec:
+                            try:
+                                spec = json.loads(_cached_spec)
+                            except Exception:
+                                spec = None
+                        else:
+                            spec = None
+
+                        if not spec:
+                            print(f"  [Perceval] 플랫폼 스펙 조회: {pqpu}", file=sys.stderr)
+                            spec = UQIExecutorPerceval.get_platform_specs(pqpu, _ptoken)
+                            try:
+                                _rag.set_cache(_cache_key_spec, json.dumps(spec, ensure_ascii=False))
+                            except Exception:
+                                pass
+
+                        is_sim = pqpu.startswith("sim:")
+                        max_m = spec.get("max_modes", 12)
+                        max_p = spec.get("max_photons", 6)
+                        fits = _max_circuit_modes <= max_m and _max_circuit_photons <= max_p
+                        available = spec.get("ok", False)
+
+                        # 스코어: 실행 가능 + 실제 QPU 우선 + 가용성
+                        score = 0.0
+                        if fits:
+                            score += 0.5
+                        if available:
+                            score += 0.3
+                        if not is_sim:
+                            score += 0.2
+                        if score > _best_score:
+                            _best_score = score
+                            _best_qpu = pqpu
+
+                        _pcvl_comparison[pqpu] = {
+                            "recommended":     False,  # 아래에서 설정
+                            "selected":        pqpu == qpu_name,
+                            "online":          available,
+                            "avg_fidelity":    1.0 if fits else None,
+                            "composite_score": round(score, 3) if fits else 0.0,
+                            "avg_2q_error":    None,
+                            "avg_t2_ms":       None,
+                            "total_exec_s":    None,
+                            "pending_jobs":    None,
+                            "queue_note":      f"{'Simulator' if is_sim else 'QPU'} · {max_m} modes · {max_p} photons"
+                                               + ("" if fits else f" · ⚠ {_max_circuit_modes}m/{_max_circuit_photons}p 초과"),
+                        }
+
+                    if _best_qpu in _pcvl_comparison:
+                        _pcvl_comparison[_best_qpu]["recommended"] = True
+
+                    # analyze 결과를 submit 캐시에 저장 → 2번째 호출부터 즉시 반환
+                    _pcvl_cache = {
+                        "status":           STATUS_AWAITING_CONFIRMATION,
+                        "selected_qpu":     qpu_name,
+                        "recommended_qpu":  _best_qpu,
+                        "shots":            shots,
+                        "circuit_info":     _pcvl_circuit_info,
+                        "qpu_comparison":   _pcvl_comparison,
+                        "selection_note":   f"Photonic QPU ({qpu_name})",
+                        "disadvantages":    [] if qpu_name == _best_qpu else [
+                            f"추천 QPU는 {_best_qpu}입니다 (선택: {qpu_name})",
+                        ],
+                    }
+                    _pcvl_cache["message"] = _build_qpu_submit_message(_pcvl_cache)
+                    _rag.set_cache(_submit_cache_key, json.dumps(_pcvl_cache, ensure_ascii=False))
+                    return _safe_json(_pcvl_cache)
+
+                # confirmed=True → 실제 제출
+                # perceval_circuits: 유니터리+input_state 직렬화 데이터
+                if not extractor.perceval_circuits:
+                    print(f"  [Submit] Perceval 회로 재추출 (캐시 히트로 인한 빈 상태)",
+                          file=sys.stderr)
+                    extractor._extract_perceval_circuits()
+
+                if not extractor.perceval_circuits:
+                    return json.dumps({"error": "Perceval circuit extraction failed — no circuits found. "
+                                                "Check that the algorithm file uses pcvl.Processor / pcvl.RemoteProcessor."})
+
+                # ── 백그라운드 제출: IBM/IQM과 동일한 submission_id 방식 ──
+                import uuid as _uuid, threading as _threading
+                from uqi_executor_perceval import UQIExecutorPerceval
+
+                _pcircuit_names = list(extractor.perceval_circuits.keys())
+                sid = _uuid.uuid4().hex[:10]
+                _submission_progress[sid] = {
+                    "status":          "submitting",
+                    "total":           len(_pcircuit_names),
+                    "done":            0,
+                    "selected_qpu":    qpu_name,
+                    "recommended_qpu": qpu_name,
+                    "shots":           shots,
+                    "results":         {},
+                }
+
+                _perceval_entries = dict(extractor.perceval_circuits)
+                _ptoken = os.getenv("QUANDELA_TOKEN")
+                _use_sim = qpu_name.startswith("sim:")
+
+                def _bg_perceval_submit(sid=sid):
+                    prog = _submission_progress[sid]
+                    _pexec = UQIExecutorPerceval(extractor=extractor, shots=shots)
+                    _pexec._token = _ptoken
+                    _pexec._platform_sim = qpu_name if _use_sim else "sim:ascella"
+                    _pexec._platform_qpu = qpu_name if not _use_sim else "qpu:belenos"
+
+                    for name in _pcircuit_names:
+                        try:
+                            _entry = _perceval_entries[name]
+                            _pcircuit, _pinput = UQIExecutorPerceval._restore_perceval_objects(_entry)
+                            t_start = time.time()
+                            result_dict = _pexec._run_single(
+                                name=name, circuit=_pcircuit,
+                                input_state=_pinput, use_simulator=_use_sim,
+                            )
+                            if not result_dict["ok"]:
+                                raise Exception(result_dict["error"])
+                            exec_time = time.time() - t_start
+                            import uuid as _juuid
+                            _jid = _juuid.uuid4().hex
+                            _job_store.save_job(
+                                job_id=_jid, vendor="quandela",
+                                qpu_name=qpu_name, circuit_name=name, shots=shots,
+                                extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
+                            )
+                            _job_store.update_job(
+                                _jid, status="done",
+                                counts=result_dict["counts"],
+                            )
+                            _rag.add_execution(
+                                circuit_name=name, qpu_name=qpu_name, backend=qpu_name,
+                                shots=shots, counts=result_dict["counts"], ok=True,
+                                exec_time_sec=exec_time,
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "counts": result_dict["counts"],
+                                "backend": qpu_name, "exec_time": round(exec_time, 2),
+                                "job_id": _jid,
+                            }
+                        except Exception as e:
+                            prog["results"][name] = {"ok": False, "error": str(e)}
+                            _rag.add_execution(
+                                circuit_name=name, qpu_name=qpu_name, backend=qpu_name,
+                                shots=shots, counts={}, ok=False,
+                                extra={"error": str(e)},
+                            )
+                        prog["done"] += 1
+                    prog["status"] = "completed"
+
+                _threading.Thread(target=_bg_perceval_submit, daemon=True).start()
+                return _safe_json({
+                    "status":          "submitting",
+                    "submission_id":   sid,
+                    "total":           len(_pcircuit_names),
+                    "selected_qpu":    qpu_name,
+                    "recommended_qpu": qpu_name,
+                    "shots":           shots,
+                })
+
+            # ── 비-Perceval QPU (IBM/IQM 등) ──
             if not goto_submit:
                 extractor, converter, framework = _extract_and_convert(algorithm_file)
 
@@ -1610,53 +1816,6 @@ async def uqi_qpu_submit(
                             "error": mcp_qpu_offline_cached(qpu_name),
                             "queue_note": s.get("note", ""),
                         })
-
-            PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos"]
-            if qpu_name in PERCEVAL_QPUS:
-                if not confirmed:
-                    return _safe_json({
-                        "status": STATUS_AWAITING_CONFIRMATION,
-                        "message": (
-                            f"⚠️  Perceval QPU 제출 확인 필요\n\n"
-                            f"선택 QPU: {qpu_name}\nshots: {shots}\n\n"
-                            f"제출하려면 confirmed=True로 다시 호출하세요."
-                        ),
-                        "selected_qpu": qpu_name,
-                    })
-                token = os.getenv("QUANDELA_TOKEN")
-                from uqi_executor_perceval import UQIExecutorPerceval
-                use_sim  = qpu_name.startswith("sim:")
-                executor = UQIExecutorPerceval(extractor=extractor, shots=shots)
-                executor._token = token
-                executor._platform_sim = qpu_name if use_sim else "sim:ascella"
-                executor._platform_qpu = qpu_name if not use_sim else "qpu:belenos"
-
-                # perceval_circuits는 JSON 직렬화 불가 → 캐시 복원 불가
-                # QASM 캐시 히트 경우 extractor.perceval_circuits가 빈 dict임
-                # → 항상 Perceval 회로 재추출 필요
-                if not extractor.perceval_circuits:
-                    print(f"  [Submit] Perceval 회로 재추출 (캐시 히트로 인한 빈 상태)",
-                          file=sys.stderr)
-                    extractor._extract_perceval_circuits()
-
-                if not extractor.perceval_circuits:
-                    return json.dumps({"error": "Perceval circuit extraction failed — no circuits found. "
-                                                "Check that the algorithm file uses pcvl.Processor / pcvl.RemoteProcessor."})
-
-                execution_results = {}
-                try:
-                    for name, (circuit, input_state) in extractor.perceval_circuits.items():
-                        result_dict = executor._run_single(
-                            name=name, circuit=circuit,
-                            input_state=input_state, use_simulator=use_sim,
-                        )
-                        execution_results[name] = result_dict
-                except Exception as e:
-                    return json.dumps({"error": perceval_run_fail(str(e))})
-                return _safe_json({
-                    "status": "completed", "selected_qpu": qpu_name,
-                    "shots": shots, "results": execution_results,
-                })
 
             if not goto_submit:
                 # analyze 단계 캐시 키 (confirmed=True일 때 저장용)
@@ -2076,10 +2235,14 @@ async def uqi_qpu_submit(
                             _pexec   = UQIExecutorPerceval(extractor=extractor, shots=shots)
                             _pexec._token = _ptoken
                             t_start = time.time()
+                            _entry = extractor.perceval_circuits.get(name)
+                            if _entry is None:
+                                raise Exception(f"Perceval 회로 '{name}' 없음 — 추출 실패")
+                            _pcircuit, _pinput = UQIExecutorPerceval._restore_perceval_objects(_entry)
                             result_dict = _pexec._run_single(
                                 name=name,
-                                circuit=extractor.perceval_circuits.get(name, (None, None))[0],
-                                input_state=extractor.perceval_circuits.get(name, (None, None))[1],
+                                circuit=_pcircuit,
+                                input_state=_pinput,
                                 use_simulator=use_sim,
                             )
                             if not result_dict["ok"]:

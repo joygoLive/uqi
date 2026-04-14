@@ -10,6 +10,7 @@
   "header.lock": "잠금",
   "header.theme_toggle_to_light": "☀",
   "header.theme_toggle_to_dark": "☾",
+  "header.theme_toggle_to_midnight": "✦",
   "status.disconnected": "미연결",
   "status.connected": "연결됨",
   "status.connecting": "연결 중...",

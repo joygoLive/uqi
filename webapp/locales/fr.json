@@ -10,6 +10,7 @@
   "header.lock": "VERROU",
   "header.theme_toggle_to_light": "☀",
   "header.theme_toggle_to_dark": "☾",
+  "header.theme_toggle_to_midnight": "✦",
   "status.disconnected": "déconnecté",
   "status.connected": "connecté",
   "status.connecting": "Connexion...",

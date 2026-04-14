@@ -10,6 +10,7 @@
   "header.lock": "LOCK",
   "header.theme_toggle_to_light": "☀",
   "header.theme_toggle_to_dark": "☾",
+  "header.theme_toggle_to_midnight": "✦",
   "status.disconnected": "disconnected",
   "status.connected": "connected",
   "status.connecting": "Connecting...",

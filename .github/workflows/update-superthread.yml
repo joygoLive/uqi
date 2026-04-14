@@ -10,43 +10,55 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Parse and Update Superthread
         env:
           ST_API_KEY: ${{ secrets.SUPERTHREAD_API_KEY }}
           ST_TEAM_ID: "teg6H8Tx"
         run: |
-          # 1. 커밋 메시지에서 숫자 추출 (C-65 -> 65)
+          # 1. 정보 추출
           COMMIT_MSG=$(git log -1 --pretty=%B)
           AUTHOR=$(git log -1 --pretty=%an)
           CARD_NUM=$(echo "$COMMIT_MSG" | grep -oEi 'C-[0-9]+' | head -1 | grep -oE '[0-9]+')
 
           if [ -z "$CARD_NUM" ]; then
-            echo "❌ 카드 번호를 찾지 못했습니다."
+            echo "❌ 카드 번호를 찾지 못했습니다. 작업을 스킵합니다."
             exit 0
           fi
-          echo "✅ 작업 대상 카드 번호: $CARD_NUM"
+          echo "✅ 대상 카드: C-$CARD_NUM"
 
-          # 2. 메시지 가공 (HTML <p> 태그 추가)
-          # 줄바꿈을 처리하기 위해 간단한 가공을 거칩니다.
-          FORMATTED_MSG="<p><b>🚀 Git Push 알림 (${{ github.ref_name }})</b><br>작업자: $AUTHOR<br>내용: $COMMIT_MSG</p>"
+          # 2. HTML 메시지 생성 (줄바꿈 처리)
+          # 커밋 메시지의 줄바꿈을 <br>로 변환하여 HTML 형식으로 만듭니다.
+          COMMIT_HTML=$(echo "$COMMIT_MSG" | sed 's/$/<br>/' | tr -d '\n')
+          FULL_HTML="<p><b>🚀 Git Push 알림 (${{ github.ref_name }})</b><br><b>작업자:</b> $AUTHOR<br><b>내용:</b><br>$COMMIT_HTML</p>"
 
-          # 3. 댓글 작성 (알아낸 정답 형식 적용)
-          echo "💬 Superthread에 댓글 등록 중..."
-          POST_RES=$(curl -s -w "\n%{http_code}" -X POST "https://api.superthread.com/v1/$ST_TEAM_ID/comments" \
+          # 3. jq를 사용하여 안전하게 JSON 데이터 생성 (중요!)
+          # 이 방식은 커밋 메시지에 따옴표(")가 있어도 자동으로 이스케이프 해줍니다.
+          JSON_PAYLOAD=$(jq -n \
+            --arg cid "$CARD_NUM" \
+            --arg content "$FULL_HTML" \
+            '{card_id: $cid, schema: 1, content: $content}')
+
+          echo "🚀 전송 데이터 확인: $JSON_PAYLOAD"
+
+          # 4. API 호출
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.superthread.com/v1/$ST_TEAM_ID/comments" \
                -H "Authorization: Bearer $ST_API_KEY" \
                -H "Content-Type: application/json" \
-               --data-raw "{
-                 \"card_id\": \"$CARD_NUM\",
-                 \"schema\": 1,
-                 \"content\": \"$FORMATTED_MSG\"
-               }")
+               -d "$JSON_PAYLOAD")
 
-          # 결과 확인
-          HTTP_STATUS=$(echo "$POST_RES" | tail -n1)
+          # 5. 결과 분석
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP 응답 코드: $HTTP_STATUS"
+          echo "응답 내용: $RESPONSE_BODY"
+
           if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
             echo "🎉 성공: Superthread 카드에 기록되었습니다."
           else
-            echo "❌ 실패 응답: $POST_RES"
+            echo "❌ 실패: API 응답을 확인하세요."
             exit 1
           fi

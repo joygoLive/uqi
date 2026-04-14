@@ -164,7 +164,7 @@ def build_noise_model_from_calibration(calibration: dict,
     )
 
     noise_model  = NoiseModel()
-    basis_gates  = calibration.get("basis_gates", [])
+    basis_gates  = calibration.get("basis_gates") or []
     q1_error     = calibration.get("avg_1q_error")
     q2_error     = calibration.get("avg_2q_error")
     ro_error     = calibration.get("avg_ro_error")

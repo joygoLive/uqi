@@ -259,6 +259,7 @@ body.mode-expert .step-desc { display:none; }
 .step-badge.done { background:rgba(63,185,80,0.15); color:var(--success); border:1px solid rgba(63,185,80,0.3); }
 .step-badge.error { background:rgba(248,81,73,0.15); color:var(--error); border:1px solid rgba(248,81,73,0.3); }
 .step-badge.running { background:rgba(240,136,62,0.15); color:var(--warn); border:1px solid rgba(240,136,62,0.3); }
+.step-badge.skip { background:rgba(0,212,255,0.1); color:var(--accent); border:1px solid rgba(0,212,255,0.25); }
 .step-chevron { font-size:10px; color:var(--text3); transition:transform 0.2s; }
 .noise-bar-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; font-size:10px; font-family:var(--font-mono); }
 .noise-bar-label { color:var(--text2); min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -331,6 +332,7 @@ body.mode-expert .step-desc { display:none; }
 .empty-state { padding:24px; text-align:center; color:var(--text3); font-size:12px; }
 .error-state { padding:12px 14px; background:rgba(248,81,73,0.08); border:1px solid rgba(248,81,73,0.2); border-radius:7px; color:var(--error); font-size:11px; line-height:1.6; }
 .success-state { padding:12px 14px; background:rgba(63,185,80,0.08); border:1px solid rgba(63,185,80,0.2); border-radius:7px; color:var(--success); font-size:11px; line-height:1.6; }
+.info-state { padding:12px 14px; background:rgba(0,212,255,0.06); border:1px solid rgba(0,212,255,0.2); border-radius:7px; color:var(--accent); font-size:11px; line-height:1.6; }
 .warn-banner { padding:12px 14px; background:rgba(240,136,62,0.08); border:1px solid rgba(240,136,62,0.25); border-radius:7px; color:var(--warn); font-size:11px; line-height:1.6; margin-bottom:12px; }
 .spinner { display:inline-block; width:12px; height:12px; border:2px solid rgba(0,212,255,0.2); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:middle; margin-right:6px; }
 @keyframes spin { to { transform:rotate(360deg); } }
@@ -3318,7 +3320,7 @@ function setBadge(step, status) {
   if (!status) { b.style.display='none'; return; }
   b.style.display='inline';
   b.className='step-badge '+status;
-  b.textContent = status==='done' ? t('step.badge.done') : t('step.badge.error');
+  b.textContent = status==='done' ? t('step.badge.done') : status==='skip' ? 'N/A' : t('step.badge.error');
 }
 function setStepResult(step, html) {
   document.getElementById('result-'+step).innerHTML = html;
@@ -3385,9 +3387,38 @@ function renderAnalyze(data, el) {
   for (const [name, c] of Object.entries(circuits)) {
     if (c.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(c.error)}</div>`; continue; }
     const p = c.profile||{};
+    const ph = c.photonic;
     const qasmId = `qasm-${name.replace(/\W/g,'_')}`;
-    html += `
-      <div class="section-divider">${name}</div>
+    html += `<div class="section-divider">${name}</div>`;
+
+    if (ph) {
+      // ── 광자 회로 전용 분석 뷰 ──
+      const modeOkCls = ph.mode_ok === false ? 'bad' : ph.mode_ok === true ? 'good' : 'neutral';
+      const homPct = ph.avg_hom != null ? (ph.avg_hom * 100).toFixed(1) : null;
+      const homCls = ph.avg_hom != null ? (ph.avg_hom >= 0.85 ? 'good' : 'warn') : 'neutral';
+      const txPct  = ph.avg_transmittance != null ? (ph.avg_transmittance * 100).toFixed(1) : null;
+      const txCls  = ph.avg_transmittance != null ? (ph.avg_transmittance >= 0.05 ? 'good' : 'warn') : 'neutral';
+      const g2Cls  = ph.avg_g2 != null ? (ph.avg_g2 <= 0.05 ? 'good' : 'warn') : 'neutral';
+      html += `
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Modes</div><div class="metric-value ${modeOkCls}">${ph.num_modes??'—'}${ph.max_modes?` / ${ph.max_modes}`:''}</div></div>
+        <div class="metric-item"><div class="metric-label">Max Photons</div><div class="metric-value neutral">${ph.max_photons??'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">HOM Visibility</div><div class="metric-value ${homCls}">${homPct!=null?homPct+'%':'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Transmittance</div><div class="metric-value ${txCls}">${txPct!=null?txPct+'%':'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">g²(0)</div><div class="metric-value ${g2Cls}">${ph.avg_g2!=null?ph.avg_g2.toFixed(4):'—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Clock</div><div class="metric-value neutral">${ph.clock_mhz!=null?ph.clock_mhz+' MHz':'—'}</div></div>
+      </div>`;
+      if (ph.notes && ph.notes.length) {
+        html += `<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">`;
+        for (const note of ph.notes) {
+          const cls = note.startsWith('⚠') ? 'warn' : note.startsWith('✓') ? 'good' : 'neutral';
+          html += `<div style="font-size:11px;padding:4px 8px;border-radius:4px;background:var(--surface2);color:var(--text2)">${escHtml(note)}</div>`;
+        }
+        html += `</div>`;
+      }
+    } else {
+      // ── 일반 큐비트 회로 분석 뷰 ──
+      html += `
       <div class="metric-grid">
         <div class="metric-item"><div class="metric-label">Qubits</div><div class="metric-value neutral">${p.num_qubits??'—'}</div></div>
         <div class="metric-item"><div class="metric-label">Gates</div><div class="metric-value neutral">${p.total_gates??'—'}</div></div>
@@ -3396,12 +3427,14 @@ function renderAnalyze(data, el) {
         <div class="metric-item"><div class="metric-label">T2 Ratio</div><div class="metric-value ${c.t2_ratio>0.5?'bad':c.t2_ratio>0.2?'warn':'good'}">${c.t2_ratio??'—'}</div></div>
         <div class="metric-item"><div class="metric-label">Param?</div><div class="metric-value neutral">${p.is_parameterized?'Yes':'No'}</div></div>
       </div>
-      ${p.ops?`<div class="gates-list">${Object.entries(p.ops).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`:''}
-      ${c.qasm ? (()=>{
-        const _k = name;
-        _qasmStore[_k] = c.qasm;
-        const {preview, truncated, total} = _qasmPreview(c.qasm);
-        return `
+      ${p.ops?`<div class="gates-list">${Object.entries(p.ops).map(([k,v])=>`<span class="gate-tag">${k}:${v}</span>`).join('')}</div>`:''}`;
+    }
+
+    html += `${c.qasm ? (()=>{
+      const _k = name;
+      _qasmStore[_k] = c.qasm;
+      const {preview, truncated, total} = _qasmPreview(c.qasm);
+      return `
       <div style="margin-top:10px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
           <button onclick="document.getElementById('${qasmId}').style.display=document.getElementById('${qasmId}').style.display==='none'?'block':'none';this.textContent=this.textContent.includes('▼')?'QASM ▲':'QASM ▼'"
@@ -3411,7 +3444,7 @@ function renderAnalyze(data, el) {
         </div>
         <pre id="${qasmId}" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:10px;line-height:1.5;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre;color:var(--text2)">${escHtml(preview)}${truncated?`\n\n... (${total - 50} lines truncated — Download to view full QASM)`:''}</pre>
       </div>`;
-      })() : ''}`;
+    })() : ''}`;
   }
   return html;
 }
@@ -3520,7 +3553,14 @@ async function runNoise() {
       shots: parseInt(document.getElementById('noise-shots').value)||1024,
     });
     const data = JSON.parse(getResultText(res));
-    if (data.error) { setStepResult('noise',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('noise','error'); return; }
+    if (data.error) {
+      if (data.photonic) {
+        setStepResult('noise',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('noise','skip');
+      } else {
+        setStepResult('noise',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('noise','error');
+      }
+      return;
+    }
     setStepResult('noise', renderNoise(data, elapsed(t0)));
     _addCacheBadge('noise', f, getQPU(), data._cached);
     setBadge('noise','done');
@@ -3576,7 +3616,14 @@ async function runQECAnalyze() {
       shots: parseInt(document.getElementById('qeca-shots').value)||1024,
     });
     const data = JSON.parse(getResultText(res));
-    if (data.error) { setStepResult('qec-analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','error'); return; }
+    if (data.error) {
+      if (data.photonic) {
+        setStepResult('qec-analyze',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','skip');
+      } else {
+        setStepResult('qec-analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','error');
+      }
+      return;
+    }
     setStepResult('qec-analyze', renderQECAnalyze(data, elapsed(t0)));
     _addCacheBadge('qec-analyze', f, getQPU(), data._cached);
     setBadge('qec-analyze','done');
@@ -3619,7 +3666,14 @@ async function runQECApply() {
       shots: parseInt(document.getElementById('qecap-shots').value)||256,
     });
     const data = JSON.parse(getResultText(res));
-    if (data.error) { setStepResult('qec-apply',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-apply','error'); return; }
+    if (data.error) {
+      if (data.photonic) {
+        setStepResult('qec-apply',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('qec-apply','skip');
+      } else {
+        setStepResult('qec-apply',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-apply','error');
+      }
+      return;
+    }
     setStepResult('qec-apply', renderQECApply(data, elapsed(t0)));
     _addCacheBadge('qec-apply', f, getQPU(), data._cached);
     setBadge('qec-apply','done');

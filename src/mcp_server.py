@@ -155,6 +155,8 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
 
 _pending_submissions = {}
 
+_PHOTONIC_QPUS = {"qpu:ascella", "qpu:belenos", "sim:ascella"}
+
 # 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)
 _submission_progress: dict = {}   # {sid: {status, total, done, results, selected_qpu, shots}}
 
@@ -395,6 +397,7 @@ async def uqi_analyze(
             calibration = _get_calibration(qpu_name)
             results = {}
             _should_cache = False
+            is_photonic_qpu = qpu_name in _PHOTONIC_QPUS
             for name, qasm in converter.qasm_results.items():
                 try:
                     qc      = QuantumCircuit.from_qasm_str(qasm)
@@ -406,13 +409,85 @@ async def uqi_analyze(
                         t2_ns    = t2_ms * 1e6
                         est_ns   = q2_ns * qc.depth()
                         t2_ratio = round(est_ns / t2_ns, 2)
-                    results[name] = {
+                    entry = {
                         "profile":   profile,
                         "t2_ratio":  t2_ratio,
                         "qpu_name":  qpu_name,
                         "framework": framework,
                         "qasm":      qasm,
                     }
+                    # ── 광자 QPU 전용 분석 정보 ──
+                    if is_photonic_qpu:
+                        num_modes   = qc.num_qubits   # Perceval 모드 → Qiskit 큐비트 매핑
+                        max_modes   = calibration.get("max_mode_count") or 0
+                        max_photons = calibration.get("max_photon_count") or 0
+                        transmit    = calibration.get("avg_transmittance")
+                        hom         = calibration.get("avg_hom")
+                        g2          = calibration.get("avg_g2")
+                        clock_mhz   = calibration.get("clock_mhz")
+                        mode_ok     = (num_modes <= max_modes) if max_modes else None
+                        notes = []
+                        if mode_ok is False:
+                            notes.append(
+                                f"⚠ Circuit uses {num_modes} modes but {qpu_name} supports "
+                                f"max {max_modes} modes — submission will fail."
+                            )
+                        elif mode_ok:
+                            notes.append(
+                                f"✓ Mode count ({num_modes}/{max_modes}) within QPU limit."
+                            )
+                        if transmit is not None:
+                            eta_pct = round(transmit * 100, 1)
+                            if eta_pct < 5:
+                                notes.append(
+                                    f"⚠ Low transmittance ({eta_pct}%) — expect high photon loss. "
+                                    "Use min_detected_photons_filter to reduce noise."
+                                )
+                            else:
+                                notes.append(
+                                    f"✓ Transmittance: {eta_pct}% per optical component."
+                                )
+                        if hom is not None:
+                            hom_pct = round(hom * 100, 1)
+                            if hom_pct < 85:
+                                notes.append(
+                                    f"⚠ HOM visibility {hom_pct}% (< 85%) — photon "
+                                    "indistinguishability is reduced, affecting interference quality."
+                                )
+                            else:
+                                notes.append(
+                                    f"✓ HOM visibility: {hom_pct}% — good photon indistinguishability."
+                                )
+                        if g2 is not None:
+                            if g2 > 0.05:
+                                notes.append(
+                                    f"⚠ g²(0)={g2:.4f} > 0.05 — photon source has multi-photon contamination."
+                                )
+                            else:
+                                notes.append(
+                                    f"✓ g²(0)={g2:.4f} — near-ideal single-photon source purity."
+                                )
+                        if max_photons:
+                            notes.append(
+                                f"ℹ Max photon input: {max_photons}. "
+                                f"Verify input state n ≤ {max_photons}."
+                            )
+                        if clock_mhz:
+                            notes.append(
+                                f"ℹ Clock: {clock_mhz} MHz — each sample takes ~{round(1000/clock_mhz,1)} µs."
+                            )
+                        entry["photonic"] = {
+                            "num_modes":        num_modes,
+                            "max_modes":        max_modes,
+                            "max_photons":      max_photons,
+                            "avg_transmittance":transmit,
+                            "avg_hom":          hom,
+                            "avg_g2":           g2,
+                            "clock_mhz":        clock_mhz,
+                            "mode_ok":          mode_ok,
+                            "notes":            notes,
+                        }
+                    results[name] = entry
                     _should_cache = True
                 except Exception as e:
                     results[name] = {"error": str(e)}
@@ -588,6 +663,16 @@ async def uqi_noise_simulate(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_noise_simulate")
     if _check_err:
         return json.dumps({"error": _check_err})
+    if qpu_name in _PHOTONIC_QPUS:
+        return json.dumps({
+            "error": (
+                f"Noise simulation is not supported for photonic QPUs ({qpu_name}). "
+                "Qubit-based noise models (depolarizing, thermal relaxation) do not apply to "
+                "photonic circuits. Use the QPU Submit step with Perceval executor to run "
+                "directly on the photonic hardware or simulator."
+            ),
+            "photonic": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit
@@ -703,6 +788,16 @@ async def uqi_qec_analyze(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qec_analyze")
     if _check_err:
         return json.dumps({"error": _check_err})
+    if qpu_name in _PHOTONIC_QPUS:
+        return json.dumps({
+            "error": (
+                f"QEC analysis is not supported for photonic QPUs ({qpu_name}). "
+                "Qubit-based QEC codes (bit-flip, phase-flip, Steane) do not apply to "
+                "photonic circuits. Photonic error mitigation relies on different techniques "
+                "such as photon-number-resolving detection and boson sampling fidelity checks."
+            ),
+            "photonic": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit
@@ -789,6 +884,16 @@ async def uqi_qec_apply(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qec_apply")
     if _check_err:
         return json.dumps({"error": _check_err})
+    if qpu_name in _PHOTONIC_QPUS:
+        return json.dumps({
+            "error": (
+                f"QEC apply is not supported for photonic QPUs ({qpu_name}). "
+                "Qubit-based QEC encodings (bit-flip, phase-flip) cannot be applied to "
+                "photonic circuits. Photonic error mitigation relies on different techniques "
+                "such as photon-number-resolving detection and boson sampling fidelity checks."
+            ),
+            "photonic": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit

@@ -1630,6 +1630,19 @@ async def uqi_qpu_submit(
                 executor._token = token
                 executor._platform_sim = qpu_name if use_sim else "sim:ascella"
                 executor._platform_qpu = qpu_name if not use_sim else "qpu:belenos"
+
+                # perceval_circuits는 JSON 직렬화 불가 → 캐시 복원 불가
+                # QASM 캐시 히트 경우 extractor.perceval_circuits가 빈 dict임
+                # → 항상 Perceval 회로 재추출 필요
+                if not extractor.perceval_circuits:
+                    print(f"  [Submit] Perceval 회로 재추출 (캐시 히트로 인한 빈 상태)",
+                          file=sys.stderr)
+                    extractor._extract_perceval_circuits()
+
+                if not extractor.perceval_circuits:
+                    return json.dumps({"error": "Perceval circuit extraction failed — no circuits found. "
+                                                "Check that the algorithm file uses pcvl.Processor / pcvl.RemoteProcessor."})
+
                 execution_results = {}
                 try:
                     for name, (circuit, input_state) in extractor.perceval_circuits.items():

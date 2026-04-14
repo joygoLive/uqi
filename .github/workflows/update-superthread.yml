@@ -3,8 +3,8 @@ name: Update Superthread Card
 on:
   push:
     branches:
-      - dev
       - main
+      - dev
 
 jobs:
   update-superthread:
@@ -12,31 +12,70 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # 전체 커밋 로그를 가져오기 위해 설정
 
-      - name: Parse and Debug API
+      - name: Parse and Update Superthread
         env:
           ST_API_KEY: ${{ secrets.SUPERTHREAD_API_KEY }}
         run: |
-          # 1. 메시지 추출 및 로그 출력
+          # 1. 커밋 메시지에서 정보 추출 (제목 + 본문 전체)
           COMMIT_MSG=$(git log -1 --pretty=%B)
-          echo "Full Commit Message: $COMMIT_MSG"
-
-          # 2. ID 추출 (c-65 -> C-65)
-          CARD_ID=$(echo "$COMMIT_MSG" | grep -oEi 'C-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+          AUTHOR=$(git log -1 --pretty=%an)
+          BRANCH_NAME=${{ github.ref_name }}
           
-          if [ -z "$CARD_ID" ]; then
-            echo "❌ 카드 ID를 찾지 못했습니다."
+          echo "=== 분석 시작 ==="
+          echo "브랜치: $BRANCH_NAME"
+          echo "작성자: $AUTHOR"
+          echo "메시지: $COMMIT_MSG"
+
+          # 2. 카드 Short ID 추출 (C-65 등)
+          # 대소문자 구분 없이 C-숫자 패턴을 찾습니다.
+          RAW_ID=$(echo "$COMMIT_MSG" | grep -oEi 'C-[0-9]+' | head -1)
+
+          if [ -z "$RAW_ID" ]; then
+            echo "❌ 메시지에서 C-65와 같은 카드 ID를 찾지 못했습니다. 작업을 종료합니다."
             exit 0
           fi
-          echo "✅ 추출된 카드 ID: $CARD_ID"
+          
+          # 숫자 부분만 추출 (예: C-65 -> 65)
+          SHORT_ID=$(echo "$RAW_ID" | grep -oE '[0-9]+')
+          echo "✅ 추출된 Short ID: $SHORT_ID"
 
-          # 3. API 호출 및 응답 상세 출력
-          echo "🚀 API 호출 시도 중..."
-          RESPONSE=$(curl -s -i -X POST "https://api.superthread.com/v1/cards/$CARD_ID/comments" \
+          # 3. Superthread API로 실제 카드 UUID 찾기
+          # 검색 API를 사용하여 Short ID를 기반으로 고유 ID(UUID)를 가져옵니다.
+          echo "🔍 카드 정보 조회 중..."
+          SEARCH_RES=$(curl -s -H "Authorization: Bearer $ST_API_KEY" \
+            "https://api.superthread.com/v1/cards?short_id=$SHORT_ID")
+          
+          # jq를 사용하여 JSON 응답에서 id 값을 추출
+          CARD_UUID=$(echo "$SEARCH_RES" | jq -r '.items[0].id // empty')
+
+          if [ -z "$CARD_UUID" ] || [ "$CARD_UUID" == "null" ]; then
+            echo "❌ Superthread에서 해당 카드를 찾을 수 없습니다. (응답: $SEARCH_RES)"
+            exit 1
+          fi
+          echo "✅ 카드 UUID 확인됨: $CARD_UUID"
+
+          # 4. 실제 UUID를 사용하여 댓글 작성
+          echo "💬 댓글 작성 중..."
+          POST_RES=$(curl -s -w "\n%{http_code}" -X POST "https://api.superthread.com/v1/cards/$CARD_UUID/comments" \
                -H "Authorization: Bearer $ST_API_KEY" \
                -H "Content-Type: application/json" \
-               -d "{\"body\": \"Git Commit Log: $COMMIT_MSG\"}")
+               -d "{
+                 \"body\": \"🚀 **Git 자동 업데이트 ($BRANCH_NAME)**\n\n**작업자:** $AUTHOR\n**내용:** $COMMIT_MSG\"
+               }")
 
-          echo "--- API RESPONSE START ---"
-          echo "$RESPONSE"
-          echo "--- API RESPONSE END ---"
+          HTTP_STATUS=$(echo "$POST_RES" | tail -n1)
+          RESPONSE_BODY=$(echo "$POST_RES" | sed '$d')
+
+          echo "--- API 응답 상세 ---"
+          echo "HTTP 상태 코드: $HTTP_STATUS"
+          echo "응답 본문: $RESPONSE_BODY"
+
+          if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
+            echo "🎉 성공: Superthread 카드에 댓글이 등록되었습니다."
+          else
+            echo "❌ 실패: 댓글 등록 중 오류가 발생했습니다."
+            exit 1
+          fi

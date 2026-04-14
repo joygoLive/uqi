@@ -469,7 +469,15 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div class="status-dot" id="statusDot"></div>
           <span id="statusText">disconnected</span>
         </div>
-        <button class="btn-theme-toggle" id="btn-theme-toggle" onclick="toggleTheme()" title="Toggle theme">☾</button>
+        <div class="lang-picker-wrap" id="theme-picker-wrap">
+          <button class="btn-theme-toggle" id="btn-theme-toggle" onclick="toggleThemePicker(event)" title="Switch theme">☾</button>
+          <div class="lang-picker-popup" id="theme-picker-popup">
+            <div class="lang-picker-item" onclick="selectTheme('dark')"><span class="lang-check">✓</span> ☾ Dark</div>
+            <div class="lang-picker-item" onclick="selectTheme('midnight')"><span class="lang-check">✓</span> ✦ Midnight</div>
+            <div class="lang-picker-item" onclick="selectTheme('nord')"><span class="lang-check">✓</span> ❄ Nord</div>
+            <div class="lang-picker-item" onclick="selectTheme('light')"><span class="lang-check">✓</span> ☀ Light</div>
+          </div>
+        </div>
         <div class="lang-picker-wrap" id="lang-picker-wrap">
           <button class="btn-lang-toggle" id="btn-lang-toggle" onclick="toggleLangPicker(event)" title="Switch language">EN</button>
           <div class="lang-picker-popup" id="lang-picker-popup">
@@ -1121,6 +1129,8 @@ function selectLang(lang) {
 document.addEventListener('click', () => {
   const popup = document.getElementById('lang-picker-popup');
   if (popup) popup.classList.remove('open');
+  const tpopup = document.getElementById('theme-picker-popup');
+  if (tpopup) tpopup.classList.remove('open');
 });
 
 // ─────────────────────────────────────────────────────────
@@ -1131,12 +1141,15 @@ function initTheme() {
   document.documentElement.setAttribute('data-theme', saved);
   _updateThemeIcon(saved);
 }
-function toggleTheme() {
-  const cur  = document.documentElement.getAttribute('data-theme') || 'dark';
-  const next = cur === 'dark' ? 'midnight' : cur === 'midnight' ? 'nord' : cur === 'nord' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('uqi_theme', next);
-  _updateThemeIcon(next);
+function toggleThemePicker(e) {
+  e.stopPropagation();
+  document.getElementById('theme-picker-popup').classList.toggle('open');
+}
+function selectTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('uqi_theme', theme);
+  document.getElementById('theme-picker-popup').classList.remove('open');
+  _updateThemeIcon(theme);
 }
 function _updateThemeIcon(theme) {
   const btn = document.getElementById('btn-theme-toggle');
@@ -1145,6 +1158,11 @@ function _updateThemeIcon(theme) {
   else if (theme === 'midnight') btn.textContent = t('header.theme_toggle_to_midnight');
   else if (theme === 'nord')     btn.textContent = t('header.theme_toggle_to_nord');
   else                           btn.textContent = t('header.theme_toggle_to_dark');
+  // active 체크마크 갱신
+  const themes = ['dark','midnight','nord','light'];
+  document.querySelectorAll('#theme-picker-popup .lang-picker-item').forEach((el, i) => {
+    el.classList.toggle('active', themes[i] === theme);
+  });
 }
 
 // 현재 언어 설정에 맞는 로케일 문자열 반환

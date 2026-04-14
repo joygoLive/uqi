@@ -1,4 +1,4 @@
-name: Update Superthread Card (Always C-65)
+name: Update Superthread Card (All Commits in Push)
 
 on:
   push:
@@ -12,49 +12,52 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # 모든 커밋 히스토리를 가져와야 범위를 계산할 수 있습니다.
 
-      - name: Send Commit Log to Superthread
+      - name: Send All Commit Logs to Superthread
         env:
           ST_API_KEY: ${{ secrets.SUPERTHREAD_API_KEY }}
           ST_TEAM_ID: "teg6H8Tx"
-          TARGET_CARD_NUM: "65" # 업데이트할 카드 번호를 65로 고정
+          TARGET_CARD_NUM: "65"
         run: |
-          # 1. 정보 추출
-          COMMIT_MSG=$(git log -1 --pretty=%B)
-          AUTHOR=$(git log -1 --pretty=%an)
-          
-          echo "=== 커밋 메시지 전송 시작 ==="
-          echo "대상 카드: C-$TARGET_CARD_NUM"
-          echo "작성자: $AUTHOR"
+          echo "=== 커밋 로그 취합 시작 ==="
 
-          # 2. HTML 메시지 가공 (특수문자 및 줄바꿈 처리)
-          # 커밋 메시지의 줄바꿈을 <br>로 변환하여 HTML 형식으로 만듭니다.
-          COMMIT_HTML=$(echo "$COMMIT_MSG" | sed 's/$/<br>/' | tr -d '\n' | tr -d '\r')
-          FULL_HTML="<p><b>🚀 Git Push 알림 (${{ github.ref_name }})</b><br><b>작업자:</b> $AUTHOR<br><b>내용:</b><br>$COMMIT_HTML</p>"
+          # 1. 이번 푸시에 포함된 커밋 범위 파악
+          # github.event.before는 푸시 전 마지막 커밋, after는 푸시 후 최신 커밋입니다.
+          BEFORE_SHA=${{ github.event.before }}
+          AFTER_SHA=${{ github.event.after }}
 
-          # 3. jq를 사용하여 안전하게 JSON 데이터 생성
+          # 만약 새 브랜치 푸시라면 범위 계산이 안 되므로 최신 1개만 가져옵니다.
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            COMMIT_LIST=$(git log -1 --pretty=format:"<li>%s (by %an)</li>")
+            COUNT=1
+          else
+            # 푸시된 모든 커밋을 리스트 형태로 추출
+            COMMIT_LIST=$(git log $BEFORE_SHA..$AFTER_SHA --pretty=format:"<li>%s (by %an)</li>")
+            COUNT=$(git rev-list --count $BEFORE_SHA..$AFTER_SHA)
+          fi
+
+          echo "총 $COUNT 개의 커밋을 발견했습니다."
+
+          # 2. HTML 메시지 구성
+          FULL_HTML="<p><b>🚀 Dev 브랜치 업데이트 ($COUNT 개의 커밋)</b></p><ul>$COMMIT_LIST</ul>"
+
+          # 3. jq를 사용하여 안전하게 JSON 생성
           JSON_PAYLOAD=$(jq -n \
             --arg cid "$TARGET_CARD_NUM" \
             --arg content "$FULL_HTML" \
             '{card_id: $cid, schema: 1, content: $content}')
 
-          # 4. Superthread API 호출
-          echo "💬 Superthread C-$TARGET_CARD_NUM 카드에 댓글 등록 중..."
+          # 4. API 호출
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "https://api.superthread.com/v1/$ST_TEAM_ID/comments" \
                -H "Authorization: Bearer $ST_API_KEY" \
                -H "Content-Type: application/json" \
                -d "$JSON_PAYLOAD")
 
-          # 5. 결과 분석
           HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
-          RESPONSE_BODY=$(echo "$RESPONSE" | sed '$d')
-
-          echo "HTTP 응답 코드: $HTTP_STATUS"
-          
           if [ "$HTTP_STATUS" -eq 201 ] || [ "$HTTP_STATUS" -eq 200 ]; then
-            echo "🎉 성공: 모든 커밋 로그가 C-$TARGET_CARD_NUM 카드에 기록되었습니다."
+            echo "🎉 성공: $COUNT 개의 커밋 로그가 C-$TARGET_CARD_NUM 카드에 기록되었습니다."
           else
-            echo "❌ 실패 응답 본문: $RESPONSE_BODY"
+            echo "❌ 실패 응답 본문: $RESPONSE"
             exit 1
           fi

@@ -1614,15 +1614,15 @@ function renderQPUGrid(qpus) {
 
     let metricsHtml = '';
     if (isPhotonic) {
-      const trans = d.avg_transmittance != null ? (d.avg_transmittance * 100).toFixed(1) + '%' : '—';
-      const hom   = d.avg_hom           != null ? (d.avg_hom           * 100).toFixed(1) + '%' : '—';
-      const g2    = d.avg_g2            != null ? (d.avg_g2            * 100).toFixed(2) + '%' : '—';
-      const modes = d.max_mode_count    != null ? d.max_mode_count                              : '—';
+      const trans   = d.avg_transmittance != null ? (d.avg_transmittance * 100).toFixed(1) + '%' : '—';
+      const hom     = d.avg_hom           != null ? (d.avg_hom           * 100).toFixed(1) + '%' : '—';
+      const g2      = d.avg_g2            != null ? (d.avg_g2            * 100).toFixed(2) + '%' : '—';
+      const photons = d.max_photon_count  != null ? d.max_photon_count                            : '—';
       const transCls = d.avg_transmittance != null ? (d.avg_transmittance > 0.05 ? 'warn' : 'bad') : 'dim';
       const homCls   = d.avg_hom           != null ? (d.avg_hom > 0.90 ? 'good' : 'warn')          : 'dim';
       metricsHtml = `
         <div class="qpu-metrics">
-          <div class="qpu-metric"><div class="qpu-metric-label">Modes</div><div class="qpu-metric-value neutral">${modes}</div></div>
+          <div class="qpu-metric"><div class="qpu-metric-label">Photons</div><div class="qpu-metric-value neutral">${photons}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">HOM</div><div class="qpu-metric-value ${homCls}" style="font-size:12px">${hom}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">Transmittance</div><div class="qpu-metric-value ${transCls}" style="font-size:12px">${trans}</div></div>
           <div class="qpu-metric"><div class="qpu-metric-label">g²(0)</div><div class="qpu-metric-value ${d.avg_g2 != null ? (d.avg_g2 < 0.05 ? 'good' : 'warn') : 'dim'}" style="font-size:12px">${g2}</div></div>
@@ -1745,8 +1745,8 @@ async function showQPUDetail(qpu, el) {
             <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
           </div>
           <div class="cal-grid">
-            <div class="cal-item"><div class="cal-label">Max Modes</div><div class="cal-value neutral">${modes}</div></div>
             <div class="cal-item"><div class="cal-label">Max Photons</div><div class="cal-value neutral">${photons}</div></div>
+            <div class="cal-item"><div class="cal-label">Max Modes</div><div class="cal-value neutral">${modes}</div></div>
             <div class="cal-item"><div class="cal-label">Transmittance</div><div class="cal-value ${d.avg_transmittance != null ? 'warn' : 'dim'}" style="font-size:14px">${trans}</div></div>
             <div class="cal-item"><div class="cal-label">HOM</div><div class="cal-value ${d.avg_hom != null ? (d.avg_hom > 0.90 ? 'good' : 'warn') : 'dim'}" style="font-size:14px">${hom}</div></div>
             <div class="cal-item"><div class="cal-label">g²(0)</div><div class="cal-value ${d.avg_g2 != null ? (d.avg_g2 < 0.05 ? 'good' : 'warn') : 'dim'}" style="font-size:14px">${g2}</div></div>

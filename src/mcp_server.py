@@ -2335,6 +2335,39 @@ if __name__ == "__main__":
                     })
                 await self.app(scope, receive, send)
 
+        import asyncio as _asyncio
+
+        class SSEKeepaliveMiddleware:
+            """SSE /sse 연결에 20초마다 comment 전송 — 브라우저/프록시 idle 타임아웃 방지"""
+            def __init__(self, app):
+                self.app = app
+            async def __call__(self, scope, receive, send):
+                if scope["type"] != "http" or not scope.get("path", "").endswith("/sse"):
+                    await self.app(scope, receive, send)
+                    return
+                response_started = False
+                async def send_with_keepalive(message):
+                    nonlocal response_started
+                    if message["type"] == "http.response.start":
+                        response_started = True
+                    await send(message)
+                # 원본 앱을 태스크로 실행하면서 keepalive 코루틴 병렬 실행
+                async def keepalive():
+                    while True:
+                        await _asyncio.sleep(20)
+                        if not response_started:
+                            continue
+                        try:
+                            await send({"type": "http.response.body",
+                                        "body": b": ping\n\n", "more_body": True})
+                        except Exception:
+                            return
+                ka_task = _asyncio.ensure_future(keepalive())
+                try:
+                    await self.app(scope, receive, send_with_keepalive)
+                finally:
+                    ka_task.cancel()
+
         mcp_app = mcp.http_app(transport="sse")
 
         async def homepage(request: Request):
@@ -2355,11 +2388,19 @@ if __name__ == "__main__":
                 Middleware(CORSMiddleware, allow_origins=["*"],
                            allow_methods=["*"], allow_headers=["*"]),
                 Middleware(NgrokBypassMiddleware),
-                Middleware(RequestContextMiddleware),  # 추가
+                Middleware(SSEKeepaliveMiddleware),
+                Middleware(RequestContextMiddleware),
                 Middleware(SessionExpiredMiddleware),
             ],
         )
 
-        uvicorn.run(app, host=args.host, port=args.port, loop="asyncio")
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            loop="asyncio",
+            timeout_keep_alive=300,   # SSE 연결 idle 유지 (기본 5초 → 5분)
+            timeout_graceful_shutdown=10,
+        )
     else:
         mcp.run()

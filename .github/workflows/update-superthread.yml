@@ -1,0 +1,44 @@
+name: Update Superthread Card
+
+on:
+  push:
+    branches:
+      - dev  # 배포 브랜치 이름 (main 또는 master 등)
+
+jobs:
+  update-superthread:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Parse Commit and Update Superthread
+        env:
+          ST_API_KEY: ${{ secrets.SUPERTHREAD_API_KEY }}
+        run: |
+          # 1. 최신 커밋 메시지 가져오기
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          AUTHOR=$(git log -1 --pretty=%an)
+          echo "Commit Message: $COMMIT_MSG"
+
+          # 2. 커밋 메시지에서 C-숫자 패턴 추출 (예: C-65)
+          # 'C-65' 혹은 'c-65' 대소문자 구분 없이 추출
+          CARD_ID=$(echo "$COMMIT_MSG" | grep -oEi 'C-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$CARD_ID" ]; then
+            echo "Superthread 카드 ID(예: C-65)를 찾을 수 없습니다. 스킵합니다."
+            exit 0
+          fi
+
+          echo "찾은 카드 ID: $CARD_ID"
+
+          # 3. Superthread API를 사용하여 댓글 추가
+          # API 엔드포인트는 Superthread 공식 문서를 기준으로 작성되었습니다.
+          # 카드 ID($CARD_ID)가 URL 경로에 포함됩니다.
+          
+          curl -X POST "https://api.superthread.com/v1/cards/$CARD_ID/comments" \
+               -H "Authorization: Bearer $ST_API_KEY" \
+               -H "Content-Type: application/json" \
+               -d "{
+                 \"body\": \"📢 **Git 자동 업데이트**\n\n**작업자:** $AUTHOR\n**내용:** $COMMIT_MSG\"
+               }"

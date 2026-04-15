@@ -214,8 +214,11 @@ sys.path.insert(0, '{os.path.dirname(os.path.abspath(alg_file))}')
 
 import pennylane as qml
 from pennylane.workflow import construct_batch
-import matplotlib
-matplotlib.use('Agg')
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+except ImportError:
+    pass
 
 all_created_qnodes = {{}}
 qnode_name_mapping = {{}}
@@ -452,8 +455,11 @@ print('__UQI_JSON__:' + json.dumps(results))
 import sys, json, os
 sys.path.insert(0, '{os.path.dirname(os.path.abspath(alg_file))}')
 
-import matplotlib
-matplotlib.use('Agg')
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+except ImportError:
+    pass
 
 from qrisp import QuantumSession, QuantumVariable
 
@@ -868,8 +874,11 @@ except Exception as e:
 import sys, json, os, importlib, inspect
 sys.path.insert(0, '{alg_dir}')
 
-import matplotlib
-matplotlib.use('Agg')
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+except ImportError:
+    pass
 
 try:
     from qiskit import QuantumCircuit
@@ -1048,8 +1057,11 @@ print('__UQI_JSON__:' + json.dumps(captured))
 import sys, json, re
 sys.path.insert(0, '{alg_dir}')
 
-import matplotlib
-matplotlib.use('Agg')
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+except ImportError:
+    pass
 
 try:
     import perceval as pcvl

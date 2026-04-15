@@ -45,7 +45,10 @@ patch("uqi_rag.UQIRAG", return_value=_mock_rag):
         _file_hash,
         _get_calibration,
         _build_calibration_response,
+        _resolve_qpu,
         SUPPORTED_QPUS,
+        _PHOTONIC_QPUS,
+        _FRAMEWORK_QPU_MAP,
         _BLOCKED_PATTERNS,
         _ALLOWED_IMPORTS,
         _QISKIT_STD_GATES,
@@ -511,6 +514,124 @@ class TestConstants:
     def test_TC05G_16_blocked_patterns(self):
         # 소스 주석 기준 16개 패턴 검증
         assert len(_BLOCKED_PATTERNS) >= 16
+
+    def test_TC05H_sim_ascella_in_supported(self):
+        assert "sim:ascella" in SUPPORTED_QPUS
+
+    def test_TC05I_sim_belenos_in_supported(self):
+        assert "sim:belenos" in SUPPORTED_QPUS
+
+    def test_TC05J_qpu_ascella_in_supported(self):
+        assert "qpu:ascella" in SUPPORTED_QPUS
+
+    def test_TC05K_qpu_belenos_in_supported(self):
+        assert "qpu:belenos" in SUPPORTED_QPUS
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-06x: Photonic QPU 매핑 검증
+# ─────────────────────────────────────────────────────────────
+
+class TestPhotonicQPUMapping:
+
+    def test_TC061_photonic_qpus_contains_sim_ascella(self):
+        assert "sim:ascella" in _PHOTONIC_QPUS
+
+    def test_TC062_photonic_qpus_contains_sim_belenos(self):
+        assert "sim:belenos" in _PHOTONIC_QPUS
+
+    def test_TC063_photonic_qpus_contains_qpu_ascella(self):
+        assert "qpu:ascella" in _PHOTONIC_QPUS
+
+    def test_TC064_photonic_qpus_contains_qpu_belenos(self):
+        assert "qpu:belenos" in _PHOTONIC_QPUS
+
+    def test_TC065_ibm_fez_not_in_photonic(self):
+        assert "ibm_fez" not in _PHOTONIC_QPUS
+
+    def test_TC066_framework_map_has_perceval(self):
+        assert "Perceval" in _FRAMEWORK_QPU_MAP
+
+    def test_TC067_framework_map_has_qiskit(self):
+        assert "Qiskit" in _FRAMEWORK_QPU_MAP
+
+    def test_TC068_perceval_default_is_sim_ascella(self):
+        assert _FRAMEWORK_QPU_MAP["Perceval"]["default"] == "sim:ascella"
+
+    def test_TC069_qiskit_default_is_ibm_fez(self):
+        assert _FRAMEWORK_QPU_MAP["Qiskit"]["default"] == "ibm_fez"
+
+    def test_TC06A_perceval_qpus_all_photonic(self):
+        for q in _FRAMEWORK_QPU_MAP["Perceval"]["qpus"]:
+            assert q in _PHOTONIC_QPUS
+
+    def test_TC06B_qiskit_qpus_no_photonic(self):
+        for q in _FRAMEWORK_QPU_MAP["Qiskit"]["qpus"]:
+            assert q not in _PHOTONIC_QPUS
+
+
+# ─────────────────────────────────────────────────────────────
+# TC-07x: _resolve_qpu 검증
+# ─────────────────────────────────────────────────────────────
+
+class TestResolveQPU:
+
+    def test_TC071_perceval_file_auto_resolves_to_sim_ascella(self):
+        path = _write_algo("import perceval as pcvl\ncircuit = pcvl.Circuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "auto")
+            assert result == "sim:ascella"
+        finally:
+            _clean(path)
+
+    def test_TC072_perceval_file_ibm_fez_resolves_to_sim_ascella(self):
+        """Perceval 파일에 gate-based QPU 선택 시 자동 보정"""
+        path = _write_algo("import perceval as pcvl\ncircuit = pcvl.Circuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "ibm_fez")
+            assert result == "sim:ascella"
+        finally:
+            _clean(path)
+
+    def test_TC073_qiskit_file_auto_resolves_to_ibm_fez(self):
+        path = _write_algo("from qiskit import QuantumCircuit\nqc = QuantumCircuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "auto")
+            assert result == "ibm_fez"
+        finally:
+            _clean(path)
+
+    def test_TC074_qiskit_file_sim_ascella_resolves_to_ibm_fez(self):
+        """Qiskit 파일에 photonic QPU 선택 시 자동 보정"""
+        path = _write_algo("from qiskit import QuantumCircuit\nqc = QuantumCircuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "sim:ascella")
+            assert result == "ibm_fez"
+        finally:
+            _clean(path)
+
+    def test_TC075_qiskit_file_ibm_fez_unchanged(self):
+        """이미 올바른 QPU면 변경 없음"""
+        path = _write_algo("from qiskit import QuantumCircuit\nqc = QuantumCircuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "ibm_fez")
+            assert result == "ibm_fez"
+        finally:
+            _clean(path)
+
+    def test_TC076_perceval_file_sim_ascella_unchanged(self):
+        """이미 올바른 QPU면 변경 없음"""
+        path = _write_algo("import perceval as pcvl\ncircuit = pcvl.Circuit(2)\n")
+        try:
+            result = _resolve_qpu(path, "sim:ascella")
+            assert result == "sim:ascella"
+        finally:
+            _clean(path)
+
+    def test_TC077_nonexistent_file_returns_original(self):
+        """파일이 없으면 원래 값 반환 (에러 안 남)"""
+        result = _resolve_qpu("/tmp/nonexistent_abc123.py", "ibm_fez")
+        assert result == "ibm_fez"
 
 
 if __name__ == "__main__":

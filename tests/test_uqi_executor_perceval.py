@@ -54,7 +54,11 @@ def _mock_pcvl(counts_raw=None, max_modes=12, max_photons=6):
         }
     }
     sampler = MagicMock()
-    sampler.sample_count.return_value = {"results": counts_raw or {"(1, 0)": 600, "(0, 1)": 400}}
+    # sample_count는 property로 Job 객체를 반환, Job()를 호출하면 결과 dict 반환
+    job_mock = MagicMock()
+    job_mock.return_value = {"results": counts_raw if counts_raw is not None else {"(1, 0)": 600, "(0, 1)": 400}}
+    job_mock.id = "cloud-job-id-mock"
+    type(sampler).sample_count = property(lambda self: job_mock)
     pcvl.algorithm.Sampler.return_value = sampler
     session.build_remote_processor.return_value = processor
     pcvl.QuandelaSession.return_value = session
@@ -233,8 +237,6 @@ class TestRunSingle:
         executor._platform_qpu = "qpu:belenos"
 
         pcvl, _, _, sampler = _mock_pcvl(counts_raw={})
-        # 명시적으로 빈 results 반환 재설정
-        sampler.sample_count.return_value = {"results": {}}
         with patch.dict("sys.modules", {"perceval": pcvl, "numpy": MagicMock()}):
             result = executor._run_single("circ_a", MagicMock(), [1, 0], True)
             assert result["ok"] is False
@@ -297,6 +299,20 @@ class TestRunSingle:
         with patch.dict("sys.modules", {"perceval": None}):
             result = executor._run_single("circ_a", MagicMock(), [1, 0], True)
             assert result["ok"] is False
+
+    def test_TC03C_cloud_job_id_captured(self):
+        """성공 시 cloud_job_id가 결과에 포함됨"""
+        executor = _make_executor()
+        executor._token = "tok"
+        executor._platform_sim = "sim:ascella"
+        executor._platform_qpu = "qpu:belenos"
+
+        pcvl, _, _, _ = _mock_pcvl(counts_raw={"(1, 0)": 600, "(0, 1)": 400})
+        with patch.dict("sys.modules", {"perceval": pcvl, "numpy": MagicMock()}):
+            result = executor._run_single("circ_a", MagicMock(), [1, 0], True)
+            assert result["ok"] is True
+            assert "cloud_job_id" in result
+            assert result["cloud_job_id"] == "cloud-job-id-mock"
 
 
 # ─────────────────────────────────────────────────────────────

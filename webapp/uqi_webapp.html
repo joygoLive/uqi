@@ -621,7 +621,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
           <div id="dgx-area" style="display:none">
             <div class="dgx-file-select">
               <div class="form-group">
-                <select class="form-select" id="dgx-select"></select>
+                <select class="form-select" id="dgx-select" onchange="_onFileSelected()"></select>
               </div>
               <div class="dgx-row">
                 <button class="btn-view-file" onclick="viewDGXFile()">👁 View</button>
@@ -852,6 +852,8 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                   <option value="iqm_garnet">IQM Garnet</option>
                   <option value="qpu:ascella">qpu:ascella</option>
                   <option value="qpu:belenos">qpu:belenos</option>
+                  <option value="sim:ascella">sim:ascella</option>
+                  <option value="sim:belenos">sim:belenos</option>
                 </select>
               </div>
               <div class="form-group">
@@ -3222,6 +3224,7 @@ function handleFile(file) {
         _fnameState = null;
         fname.textContent = `✓ ${file.name}`;
         fname.className = 'file-name-display ok';
+        _onFileSelected();
       } else if (d.conflict) {
         _uploadedPath = null;
         _fnameState = { key: 'alert.file_exists', params: { name: file.name } };
@@ -3248,6 +3251,7 @@ async function loadDGXFiles() {
       _dgxFiles = d.files;
       const sel = document.getElementById('dgx-select');
       sel.innerHTML = _dgxFiles.map(f=>`<option value="${f.path}">${f.name} (${f.size_kb}KB)</option>`).join('');
+      _onFileSelected();
     }
   } catch(e) {}
 }
@@ -3308,7 +3312,13 @@ function toggleStep(name) {
     body.classList.add('open');
     chev.classList.add('open');
     // Auto-load job history when opening that panel
-    if (name === 'job-history') { _jobHistoryBusy = false; _jhLoadDistinct(); loadJobHistory(); }
+    if (name === 'job-history') { _jobHistoryBusy = false; _jhLoadDistinct().then(() => loadJobHistory()); }
+    // Photonic QPU 비호환 단계 즉시 N/A 표시
+    const _photonicSteps = {'optimize':'optimize','noise':'noise','qec-analyze':'qec','qec-apply':'qec'};
+    if (_isPhotonic() && name in _photonicSteps) {
+      setStepResult(name, `<div class="info-state">${_photonicSkipMsg(_photonicSteps[name])}</div>`);
+      setBadge(name, 'skip');
+    }
   }
 }
 // Open analyze by default
@@ -3368,6 +3378,113 @@ async function _invalidateCache(step, file, qpu) {
 }
 function getQPU() { return document.getElementById('global-qpu').value; }
 function elapsed(t0) { return ((Date.now()-t0)/1000).toFixed(2)+'s'; }
+
+// ── Framework 감지 → QPU 필터링 ──
+let _detectedFramework = null;
+let _compatibleQPUs = null;
+let _allQPUs = null;  // 전체 QPU 목록 보존
+
+async function _onFileSelected() {
+  const f = getSelectedFile();
+  if (!f) return;
+  // 이전 분석 결과 초기화
+  _resetAllStepResults();
+  try {
+    const res = await callTool('uqi_detect_framework', { algorithm_file: f });
+    const d = JSON.parse(getResultText(res));
+    if (!d.ok) return;
+    _detectedFramework = d.framework;
+    _compatibleQPUs = d.compatible_qpus;
+    _filterQPUSelectors(d.compatible_qpus, d.default_qpu);
+    _updatePhotonicStepStates();
+  } catch(e) {}
+}
+
+function _resetAllStepResults() {
+  _lastAnalyzeData = null;
+  _lastOptimizeData = null;
+  const steps = ['analyze','optimize','noise','qec-analyze','qec-apply','qpu'];
+  const emptyMsgs = {
+    'analyze':     'pipeline.analyze.empty',
+    'optimize':    'pipeline.optimize.empty',
+    'noise':       'pipeline.noise.empty',
+    'qec-analyze': 'pipeline.qec_analyze.empty',
+    'qec-apply':   'pipeline.qec_apply.empty',
+    'qpu':         'pipeline.qpu.empty',
+  };
+  for (const step of steps) {
+    const key = emptyMsgs[step] || '';
+    setStepResult(step, `<div class="empty-state">${t(key)}</div>`);
+    const badge = document.getElementById('badge-' + step);
+    if (badge) { badge.style.display = 'none'; badge.className = 'step-badge'; }
+  }
+  // QPU submit confirm 버튼 숨기기
+  const confirmBtn = document.getElementById('btn-qpu-confirm');
+  if (confirmBtn) confirmBtn.style.display = 'none';
+}
+
+function _filterQPUSelectors(compatQPUs, defaultQPU) {
+  // global-qpu 필터링
+  const globalSel = document.getElementById('global-qpu');
+  if (globalSel) {
+    if (!_allQPUs) _allQPUs = [...globalSel.options].map(o => o.value);
+    const filtered = _allQPUs.filter(q => compatQPUs.includes(q));
+    globalSel.innerHTML = filtered.map(q => `<option value="${q}">${q}</option>`).join('');
+    if (filtered.includes(defaultQPU)) globalSel.value = defaultQPU;
+  }
+  // qpu-qpu (submit용) 필터링
+  const qpuSel = document.getElementById('qpu-qpu');
+  if (qpuSel) {
+    const cur = qpuSel.value;
+    qpuSel.innerHTML = `<option value="auto">${t('qpu.auto_recommended')}</option>`
+      + compatQPUs.map(q => `<option value="${q}">${q}</option>`).join('');
+    if ([...qpuSel.options].some(o => o.value === cur)) qpuSel.value = cur;
+    else if (compatQPUs.includes(defaultQPU)) qpuSel.value = defaultQPU;
+  }
+}
+
+function _isPhotonic() {
+  const qpu = getQPU();
+  return qpu.startsWith('qpu:') || qpu.startsWith('sim:');
+}
+
+function _updatePhotonicStepStates() {
+  if (!_isPhotonic()) return;
+  const steps = {
+    'optimize': 'optimize',
+    'noise': 'noise',
+    'qec-analyze': 'qec',
+    'qec-apply': 'qec',
+  };
+  for (const [stepId, msgKey] of Object.entries(steps)) {
+    setStepResult(stepId, `<div class="info-state">${_photonicSkipMsg(msgKey)}</div>`);
+    setBadge(stepId, 'skip');
+  }
+}
+
+function _photonicSkipMsg(step) {
+  const qpu = getQPU();
+  const msgs = {
+    optimize: {
+      title: 'Optimization — Not applicable',
+      desc:  'Qubit gate decomposition and routing optimization do not apply to photonic circuits.',
+    },
+    noise: {
+      title: 'Noise Simulation — Not applicable',
+      desc:  'Qubit-based noise models (depolarizing, T1/T2) do not apply to photonic circuits.',
+    },
+    qec: {
+      title: 'QEC — Not applicable',
+      desc:  'Qubit-based error correction codes do not apply to photonic circuits.',
+    },
+  };
+  const m = msgs[step] || { title: 'Not applicable', desc: '' };
+  return `<div style="display:flex;flex-direction:column;gap:8px">`
+    + `<div style="font-size:13px;font-weight:600">🔬 ${m.title}</div>`
+    + `<div style="color:var(--text2)">${m.desc}</div>`
+    + `<div style="color:var(--text3);font-size:10px;margin-top:4px">Selected: ${escHtml(qpu)} · Photonic QPU pipeline: <strong>Circuit Analysis → QPU Submit</strong></div>`
+    + `</div>`;
+}
 
 // ── Analyze ──
 let _lastAnalyzeData  = null;
@@ -3496,7 +3613,14 @@ async function runOptimize() {
       verify: document.getElementById('opt-verify').checked,
     });
     const data = JSON.parse(getResultText(res));
-    if (data.error) { setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('optimize','error'); return; }
+    if (data.error) {
+      if (data.photonic) {
+        setStepResult('optimize',`<div class="info-state">${_photonicSkipMsg('optimize')}</div>`); setBadge('optimize','skip');
+      } else {
+        setStepResult('optimize',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('optimize','error');
+      }
+      return;
+    }
     _lastOptimizeData = data;
     setStepResult('optimize', renderOptimize(data, elapsed(t0)));
     _addCacheBadge('optimize', f, getQPU(), data._cached);
@@ -3565,7 +3689,7 @@ async function runNoise() {
     const data = JSON.parse(getResultText(res));
     if (data.error) {
       if (data.photonic) {
-        setStepResult('noise',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('noise','skip');
+        setStepResult('noise',`<div class="info-state">${_photonicSkipMsg('noise')}</div>`); setBadge('noise','skip');
       } else {
         setStepResult('noise',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('noise','error');
       }
@@ -3628,7 +3752,7 @@ async function runQECAnalyze() {
     const data = JSON.parse(getResultText(res));
     if (data.error) {
       if (data.photonic) {
-        setStepResult('qec-analyze',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','skip');
+        setStepResult('qec-analyze',`<div class="info-state">${_photonicSkipMsg('qec')}</div>`); setBadge('qec-analyze','skip');
       } else {
         setStepResult('qec-analyze',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-analyze','error');
       }
@@ -3678,7 +3802,7 @@ async function runQECApply() {
     const data = JSON.parse(getResultText(res));
     if (data.error) {
       if (data.photonic) {
-        setStepResult('qec-apply',`<div class="info-state">ℹ ${escHtml(data.error)}</div>`); setBadge('qec-apply','skip');
+        setStepResult('qec-apply',`<div class="info-state">${_photonicSkipMsg('qec')}</div>`); setBadge('qec-apply','skip');
       } else {
         setStepResult('qec-apply',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); setBadge('qec-apply','error');
       }

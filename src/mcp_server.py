@@ -151,11 +151,38 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "ionq_forte1", "ionq_aria1",
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    "quera_aquila", "pasqal_fresnel",
-                   "qpu:ascella", "qpu:belenos"]
+                   "qpu:ascella", "qpu:belenos",
+                   "sim:ascella", "sim:belenos"]
 
 _pending_submissions = {}
 
-_PHOTONIC_QPUS = {"qpu:ascella", "qpu:belenos", "sim:ascella"}
+_PHOTONIC_QPUS = {"qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos"}
+
+# Framework → 호환 QPU 매핑
+_GATE_BASED_QPUS = [q for q in SUPPORTED_QPUS if q not in _PHOTONIC_QPUS]
+_FRAMEWORK_QPU_MAP = {
+    "Qiskit":    {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "PennyLane": {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "Qrisp":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "CUDAQ":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "Perceval":  {"qpus": list(_PHOTONIC_QPUS), "default": "sim:ascella"},
+}
+
+def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
+    """QPU 이름이 'auto'이거나 framework와 불일치할 때 자동 보정.
+    예: Perceval 파일 + ibm_fez → sim:ascella, Qiskit 파일 + sim:ascella → ibm_fez"""
+    try:
+        from uqi_extractor import UQIExtractor
+        ext = UQIExtractor(algorithm_file)
+        fw = ext.detect_framework()
+        mapping = _FRAMEWORK_QPU_MAP.get(fw)
+        if not mapping:
+            return qpu_name
+        if qpu_name == "auto" or qpu_name not in mapping["qpus"]:
+            return mapping["default"]
+    except Exception:
+        pass
+    return qpu_name
 
 # 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)
 _submission_progress: dict = {}   # {sid: {status, total, done, results, selected_qpu, shots}}
@@ -384,6 +411,7 @@ async def uqi_analyze(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_analyze")
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
 
     def _run():
         from uqi_optimizer import analyze_circuit
@@ -405,6 +433,72 @@ async def uqi_analyze(
             results = {}
             _should_cache = False
             is_photonic_qpu = qpu_name in _PHOTONIC_QPUS
+
+            # ── Perceval 회로 전용 경로: QASM 없이 perceval_circuits에서 직접 분석 ──
+            if is_photonic_qpu and not converter.qasm_results and extractor.perceval_circuits:
+                if not extractor.perceval_circuits:
+                    extractor._extract_perceval_circuits()
+                for cname, entry_data in extractor.perceval_circuits.items():
+                    unitary_data, is_list, num_modes = entry_data
+                    n_photons = sum(is_list)
+                    max_modes   = calibration.get("max_mode_count") or 0
+                    max_photons = calibration.get("max_photon_count") or 0
+                    transmit    = calibration.get("avg_transmittance")
+                    hom         = calibration.get("avg_hom")
+                    g2          = calibration.get("avg_g2")
+                    clock_mhz   = calibration.get("clock_mhz")
+                    mode_ok     = (num_modes <= max_modes) if max_modes else None
+                    notes = []
+                    if mode_ok is False:
+                        notes.append(f"⚠ Circuit uses {num_modes} modes but {qpu_name} supports max {max_modes} modes — submission will fail.")
+                    elif mode_ok:
+                        notes.append(f"✓ Mode count ({num_modes}/{max_modes}) within QPU limit.")
+                    if transmit is not None:
+                        eta_pct = round(transmit * 100, 1)
+                        notes.append(f"{'⚠ Low t' if eta_pct < 5 else '✓ T'}ransmittance: {eta_pct}% per optical component." + (" Use min_detected_photons_filter to reduce noise." if eta_pct < 5 else ""))
+                    if hom is not None:
+                        hom_pct = round(hom * 100, 1)
+                        notes.append(f"{'⚠' if hom_pct < 85 else '✓'} HOM visibility: {hom_pct}%" + (" — photon indistinguishability is reduced." if hom_pct < 85 else " — good photon indistinguishability."))
+                    if g2 is not None:
+                        notes.append(f"{'⚠' if g2 > 0.05 else '✓'} g²(0)={g2:.4f}" + (" — multi-photon contamination." if g2 > 0.05 else " — near-ideal single-photon source."))
+                    if max_photons:
+                        notes.append(f"ℹ Max photon input: {max_photons}. Verify input state n ≤ {max_photons}.")
+                    if clock_mhz:
+                        notes.append(f"ℹ Clock: {clock_mhz} MHz — each sample takes ~{round(1000/clock_mhz,1)} µs.")
+                    results[cname] = {
+                        "profile": {
+                            "num_qubits":  num_modes,
+                            "total_gates": 1,
+                            "depth":       1,
+                            "ops":         {"PhotonicCircuit": 1},
+                        },
+                        "t2_ratio":  None,
+                        "qpu_name":  qpu_name,
+                        "framework": framework,
+                        "photonic": {
+                            "num_modes":        num_modes,
+                            "max_modes":        max_modes,
+                            "max_photons":      max_photons,
+                            "n_input_photons":  n_photons,
+                            "avg_transmittance":transmit,
+                            "avg_hom":          hom,
+                            "avg_g2":           g2,
+                            "clock_mhz":        clock_mhz,
+                            "mode_ok":          mode_ok,
+                            "notes":            notes,
+                        },
+                    }
+                    _should_cache = True
+
+                _result = _safe_json({
+                    "algorithm_file": algorithm_file,
+                    "framework":      framework,
+                    "circuits":       results,
+                })
+                if _should_cache:
+                    _rag.set_cache(_cache_key, _result)
+                return _result
+
             for name, qasm in converter.qasm_results.items():
                 try:
                     qc      = QuantumCircuit.from_qasm_str(qasm)
@@ -558,6 +652,16 @@ async def uqi_optimize(
     _check_err = _safe_file_check(algorithm_file)
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
+    if qpu_name in _PHOTONIC_QPUS:
+        return json.dumps({
+            "error": (
+                f"Circuit optimization is not supported for photonic QPUs ({qpu_name}). "
+                "Qubit-based transpilation (gate decomposition, routing) does not apply to "
+                "photonic circuits. Use Circuit Analysis and QPU Submit steps directly."
+            ),
+            "photonic": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit
@@ -670,6 +774,7 @@ async def uqi_noise_simulate(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_noise_simulate")
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
     if qpu_name in _PHOTONIC_QPUS:
         return json.dumps({
             "error": (
@@ -795,6 +900,7 @@ async def uqi_qec_analyze(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qec_analyze")
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
     if qpu_name in _PHOTONIC_QPUS:
         return json.dumps({
             "error": (
@@ -891,6 +997,7 @@ async def uqi_qec_apply(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qec_apply")
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
     if qpu_name in _PHOTONIC_QPUS:
         return json.dumps({
             "error": (
@@ -1351,6 +1458,33 @@ async def uqi_list_qpus() -> str:
     return json.dumps({"qpus": SUPPORTED_QPUS})
 
 
+@mcp.tool()
+async def uqi_detect_framework(algorithm_file: str) -> str:
+    """알고리즘 파일의 framework를 감지하고 호환 QPU 목록 반환"""
+    _check_err = _safe_file_check(algorithm_file, tool="uqi_detect_framework")
+    if _check_err:
+        return json.dumps({"error": _check_err})
+
+    def _run():
+        from uqi_extractor import UQIExtractor
+        try:
+            extractor = UQIExtractor(algorithm_file)
+            framework = extractor.detect_framework()
+            mapping = _FRAMEWORK_QPU_MAP.get(framework, {
+                "qpus": SUPPORTED_QPUS, "default": "ibm_fez"
+            })
+            return json.dumps({
+                "ok": True,
+                "framework": framework,
+                "compatible_qpus": mapping["qpus"],
+                "default_qpu": mapping["default"],
+            }, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    return await asyncio.to_thread(_run)
+
+
 # ─────────────────────────────────────────────────────────
 # 툴 6.5: 알고리즘 파일 업로드
 # ─────────────────────────────────────────────────────────
@@ -1557,6 +1691,7 @@ async def uqi_qpu_submit(
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qpu_submit")
     if _check_err:
         return json.dumps({"error": _check_err})
+    qpu_name = _resolve_qpu(algorithm_file, qpu_name)
 
     def _run():
         import contextlib
@@ -1595,7 +1730,7 @@ async def uqi_qpu_submit(
                 goto_submit = False
 
             # ── Perceval QPU: 전체 QPU 조회 없이 바로 처리 ──
-            PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos"]
+            PERCEVAL_QPUS = ["qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos"]
             if qpu_name in PERCEVAL_QPUS:
                 extractor, converter, framework = _extract_and_convert(algorithm_file)
 
@@ -1624,7 +1759,7 @@ async def uqi_qpu_submit(
                         }
 
                     # ── 광자 QPU 비교 분석 ──
-                    _ALL_PCVL_PLATFORMS = ["sim:ascella", "qpu:ascella", "qpu:belenos"]
+                    _ALL_PCVL_PLATFORMS = ["sim:ascella", "sim:belenos", "qpu:ascella", "qpu:belenos"]
                     _ptoken = os.getenv("QUANDELA_TOKEN")
                     _pcvl_comparison = {}
                     _best_qpu = qpu_name  # 기본값
@@ -1752,7 +1887,7 @@ async def uqi_qpu_submit(
                                 raise Exception(result_dict["error"])
                             exec_time = time.time() - t_start
                             import uuid as _juuid
-                            _jid = _juuid.uuid4().hex
+                            _jid = result_dict.get("cloud_job_id") or _juuid.uuid4().hex
                             _job_store.save_job(
                                 job_id=_jid, vendor="quandela",
                                 qpu_name=qpu_name, circuit_name=name, shots=shots,

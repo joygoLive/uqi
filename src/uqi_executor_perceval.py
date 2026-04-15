@@ -165,7 +165,10 @@ class UQIExecutorPerceval:
             p.min_detected_photons_filter(1)
 
             sampler = pcvl.algorithm.Sampler(p, max_shots_per_call=self.shots)
-            job_result = sampler.sample_count(self.shots)
+            job = sampler.sample_count
+            job_result = job(self.shots)
+            # 클라우드 job ID 캡처 (RemoteJob의 경우)
+            cloud_job_id = getattr(job, 'id', None) or getattr(job, '_id', None)
             session.stop()
 
             # ── 결과 파싱 ──
@@ -182,8 +185,9 @@ class UQIExecutorPerceval:
             result["counts"] = counts
             result["probs"] = probs
             result["backend"] = platform
+            result["cloud_job_id"] = cloud_job_id
             result["ok"] = True
-            print(f"    ✓ 실행 성공 (backend={platform}, {len(counts)} 상태)")
+            print(f"    ✓ 실행 성공 (backend={platform}, job_id={cloud_job_id}, {len(counts)} 상태)")
 
         except Exception as e:
             result["error"] = str(e)

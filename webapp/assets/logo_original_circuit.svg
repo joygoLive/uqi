@@ -1,0 +1,17 @@
+<svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 와이어 2개 -->
+  <line x1="1" y1="5.5" x2="19" y2="5.5" stroke="currentColor" stroke-width="1.0" opacity="0.5"/>
+  <line x1="1" y1="14.5" x2="19" y2="14.5" stroke="currentColor" stroke-width="1.0" opacity="0.5"/>
+  <!-- H 게이트 (위 와이어) -->
+  <rect x="2.25" y="2.25" width="7.5" height="6.5" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>
+  <line x1="4.3" y1="3.85" x2="4.3" y2="7.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="7.2" y1="3.85" x2="7.2" y2="7.25" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="4.3" y1="5.55" x2="7.2" y2="5.55" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+  <!-- CNOT 컨트롤 점 -->
+  <circle cx="14.5" cy="5.5" r="1.5" fill="currentColor"/>
+  <line x1="14.5" y1="7" x2="14.5" y2="11.2" stroke="currentColor" stroke-width="1.1"/>
+  <!-- 타겟 원 + 십자 -->
+  <circle cx="14.5" cy="14.5" r="3.0" stroke="currentColor" stroke-width="1.3"/>
+  <line x1="14.5" y1="11.5" x2="14.5" y2="17.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+  <line x1="11.5" y1="14.5" x2="17.5" y2="14.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+</svg>

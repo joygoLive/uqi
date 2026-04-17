@@ -161,6 +161,15 @@ body.mode-expert .btn-mode-toggle { border-color:var(--accent); color:var(--acce
 .main-panel { display:none; }
 .main-panel.active { display:block; }
 
+/* ── Restricted mode (easter-egg gated) ── */
+.logo { user-select:none; -webkit-user-select:none; }
+body.restricted-mode .main-nav { display:none; }
+body.restricted-mode #theme-picker-wrap,
+body.restricted-mode #lang-picker-wrap,
+body.restricted-mode #btn-mode-toggle { display:none !important; }
+body.restricted-mode #panel-pipeline,
+body.restricted-mode #panel-knowledge { display:none !important; }
+
 /* ── QPUs Dashboard ── */
 .qpus-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
 .qpus-title { font-family:var(--font-display); font-size:16px; font-weight:700; color:var(--text); }
@@ -1251,6 +1260,46 @@ async function unlock() {
   }
 }
 function logout() { sessionStorage.removeItem('uqi_auth'); location.reload(); }
+
+// ─────────────────────────────────────────────────────────
+// Easter-egg: 로고 3초 이내 7회 클릭 → 전체/제한 모드 토글
+// ─────────────────────────────────────────────────────────
+const UQI_EE_WINDOW_MS = 3000;
+const UQI_EE_CLICKS = 7;
+let _uqiLogoClicks = [];
+function _applyRestrictedMode(restricted) {
+  document.body.classList.toggle('restricted-mode', restricted);
+  if (restricted) {
+    // 제한 모드 복귀 시 QPU 패널로 강제 전환
+    const qpuBtn = document.querySelector('.main-nav .nav-btn');
+    if (qpuBtn && typeof switchMain === 'function') switchMain('qpus', qpuBtn);
+  }
+}
+function _toggleUqiUnlock() {
+  const unlocked = localStorage.getItem('uqi_unlocked') === '1';
+  if (unlocked) {
+    localStorage.removeItem('uqi_unlocked');
+    _applyRestrictedMode(true);
+  } else {
+    localStorage.setItem('uqi_unlocked', '1');
+    _applyRestrictedMode(false);
+  }
+}
+function _onLogoClick() {
+  const now = Date.now();
+  _uqiLogoClicks.push(now);
+  _uqiLogoClicks = _uqiLogoClicks.filter(ts => now - ts <= UQI_EE_WINDOW_MS);
+  if (_uqiLogoClicks.length >= UQI_EE_CLICKS) {
+    _uqiLogoClicks = [];
+    _toggleUqiUnlock();
+  }
+}
+function _bindLogoEasterEgg() {
+  const logo = document.querySelector('#mainApp .logo');
+  if (!logo || logo._uqiEeBound) return;
+  logo.addEventListener('click', _onLogoClick);
+  logo._uqiEeBound = true;
+}
 window.addEventListener('load',()=>{
   initTheme();  // 로그인 전에도 테마 적용
   if (sessionStorage.getItem('uqi_auth')==='1') {
@@ -1362,6 +1411,10 @@ async function testConnection() {
 function initApp() {
   initTheme();
   applyI18n();
+  // Easter-egg: 저장된 해제 상태에 따라 제한 모드 적용
+  const unlocked = localStorage.getItem('uqi_unlocked') === '1';
+  _applyRestrictedMode(!unlocked);
+  _bindLogoEasterEgg();
   setTimeout(()=>testConnection(),300);
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>e.preventDefault());

@@ -2797,9 +2797,20 @@ if __name__ == "__main__":
         from starlette.applications import Starlette
         from starlette.routing import Mount, Route
         from starlette.middleware import Middleware
+        from starlette.staticfiles import StaticFiles
+
+        notion_backup_dir = Path(__file__).parent.parent / "webapp" / "notion-backup"
+        notion_backup_routes = []
+        if notion_backup_dir.exists():
+            notion_backup_routes.append(
+                Mount(
+                    "/notion-backup",
+                    app=StaticFiles(directory=str(notion_backup_dir), html=True),
+                )
+            )
 
         app = Starlette(
-            routes=[Route("/", homepage), Mount("/", app=mcp_app)],
+            routes=[Route("/", homepage), *notion_backup_routes, Mount("/", app=mcp_app)],
             middleware=[
                 Middleware(CORSMiddleware, allow_origins=["*"],
                            allow_methods=["*"], allow_headers=["*"]),

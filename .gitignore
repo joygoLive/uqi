@@ -30,3 +30,8 @@ node_modules/
 
 # claude desktop / mcp workspaces
 .claude/
+
+# Notion backup static site (Quartz build output, rsync'd from separate project)
+# — content is generated; should not be tracked in UQI repo
+webapp/notion-backup/
+webapp/notion-backup

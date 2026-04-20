@@ -77,7 +77,6 @@
   --glow: rgba(9,105,218,0.04);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-html, body { touch-action: manipulation; }
 body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; overflow-x:hidden; }
 body::before {
   content:''; position:fixed; inset:0;
@@ -163,7 +162,11 @@ body.mode-expert .btn-mode-toggle { border-color:var(--accent); color:var(--acce
 .main-panel.active { display:block; }
 
 /* ── Easter-egg gated modes: qpu → qpu+pipeline → full ── */
-.logo { user-select:none; -webkit-user-select:none; }
+.logo { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+.main-nav .nav-btn[onclick*="knowledge"] { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+/* Notion Archive 카드: 이스터에그로 토글 */
+.notion-archive-card { display:none; }
+body.ee-notion-revealed .notion-archive-card { display:block; }
 /* qpu 모드: 가장 제한적 */
 body.ee-mode-qpu .main-nav { display:none; }
 body.ee-mode-qpu #theme-picker-wrap,
@@ -946,7 +949,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
   <div class="main-panel" id="panel-knowledge">
     <div class="knowledge-layout">
       <div class="knowledge-sidebar">
-        <div class="knowledge-form" style="margin-bottom:12px">
+        <div class="knowledge-form notion-archive-card" style="margin-bottom:12px">
           <div class="knowledge-form-title">NOTION ARCHIVE</div>
           <a href="/notion-backup/" target="_blank" rel="noopener"
              style="display:flex;align-items:center;gap:10px;padding:12px;
@@ -1333,6 +1336,37 @@ function _bindLogoEasterEgg() {
   logo.addEventListener('click', _onLogoClick);
   logo._uqiEeBound = true;
 }
+
+// ─────────────────────────────────────────────────────────
+// Easter-egg: 지식베이스 탭 3초 이내 7회 클릭 → Notion Archive 카드 토글
+// ─────────────────────────────────────────────────────────
+let _uqiKnowledgeClicks = [];
+function _getNotionRevealed() {
+  return localStorage.getItem('uqi_notion_revealed') === '1';
+}
+function _applyNotionReveal(revealed) {
+  document.body.classList.toggle('ee-notion-revealed', !!revealed);
+}
+function _toggleNotionReveal() {
+  const next = !_getNotionRevealed();
+  localStorage.setItem('uqi_notion_revealed', next ? '1' : '0');
+  _applyNotionReveal(next);
+}
+function _onKnowledgeClick() {
+  const now = Date.now();
+  _uqiKnowledgeClicks.push(now);
+  _uqiKnowledgeClicks = _uqiKnowledgeClicks.filter(ts => now - ts <= UQI_EE_WINDOW_MS);
+  if (_uqiKnowledgeClicks.length >= UQI_EE_CLICKS) {
+    _uqiKnowledgeClicks = [];
+    _toggleNotionReveal();
+  }
+}
+function _bindKnowledgeEasterEgg() {
+  const btn = document.querySelector('#mainApp .main-nav .nav-btn[onclick*="knowledge"]');
+  if (!btn || btn._uqiEeBound) return;
+  btn.addEventListener('click', _onKnowledgeClick);
+  btn._uqiEeBound = true;
+}
 window.addEventListener('load',()=>{
   initTheme();  // 로그인 전에도 테마 적용
   if (sessionStorage.getItem('uqi_auth')==='1') {
@@ -1447,6 +1481,9 @@ function initApp() {
   // Easter-egg: 저장된 모드 적용 (qpu → qpu+pipeline → full)
   _applyEeMode(_getEeMode());
   _bindLogoEasterEgg();
+  // Easter-egg: Notion Archive 카드 노출 상태 복원 + Knowledge 탭 리스너
+  _applyNotionReveal(_getNotionRevealed());
+  _bindKnowledgeEasterEgg();
   setTimeout(()=>testConnection(),300);
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>e.preventDefault());

@@ -2798,6 +2798,23 @@ if __name__ == "__main__":
         from starlette.routing import Mount, Route
         from starlette.middleware import Middleware
         from starlette.staticfiles import StaticFiles
+        from starlette.types import Scope
+
+        class QuartzStaticFiles(StaticFiles):
+            """Static files with .html extension fallback for Quartz pages.
+
+            Quartz emits pretty paths like 'Foo/Bar.html' but internal links
+            reference 'Foo/Bar' (no extension). Starlette's built-in html=True
+            only maps directory→index.html, so we add .html fallback on 404.
+            """
+
+            async def get_response(self, path: str, scope: Scope):
+                response = await super().get_response(path, scope)
+                if response.status_code == 404:
+                    basename = path.rsplit("/", 1)[-1] if "/" in path else path
+                    if basename and "." not in basename:
+                        return await super().get_response(path + ".html", scope)
+                return response
 
         notion_backup_dir = Path(__file__).parent.parent / "webapp" / "notion-backup"
         notion_backup_routes = []
@@ -2805,7 +2822,7 @@ if __name__ == "__main__":
             notion_backup_routes.append(
                 Mount(
                     "/notion-backup",
-                    app=StaticFiles(directory=str(notion_backup_dir), html=True),
+                    app=QuartzStaticFiles(directory=str(notion_backup_dir), html=True),
                 )
             )
 

@@ -77,6 +77,7 @@
   --glow: rgba(9,105,218,0.04);
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+html, body { touch-action: manipulation; }
 body { background:var(--bg); color:var(--text); font-family:var(--font-mono); min-height:100vh; overflow-x:hidden; }
 body::before {
   content:''; position:fixed; inset:0;
@@ -161,14 +162,21 @@ body.mode-expert .btn-mode-toggle { border-color:var(--accent); color:var(--acce
 .main-panel { display:none; }
 .main-panel.active { display:block; }
 
-/* ── Restricted mode (easter-egg gated) ── */
+/* ── Easter-egg gated modes: qpu → qpu+pipeline → full ── */
 .logo { user-select:none; -webkit-user-select:none; }
-body.restricted-mode .main-nav { display:none; }
-body.restricted-mode #theme-picker-wrap,
-body.restricted-mode #lang-picker-wrap,
-body.restricted-mode #btn-mode-toggle { display:none !important; }
-body.restricted-mode #panel-pipeline,
-body.restricted-mode #panel-knowledge { display:none !important; }
+/* qpu 모드: 가장 제한적 */
+body.ee-mode-qpu .main-nav { display:none; }
+body.ee-mode-qpu #theme-picker-wrap,
+body.ee-mode-qpu #lang-picker-wrap,
+body.ee-mode-qpu #btn-mode-toggle { display:none !important; }
+body.ee-mode-qpu #panel-pipeline,
+body.ee-mode-qpu #panel-knowledge { display:none !important; }
+/* qpu+pipeline 모드: 파이프라인 접근 허용, 우상단 컨트롤은 qpu 모드와 동일하게 숨김 */
+body.ee-mode-qpu-pipeline #theme-picker-wrap,
+body.ee-mode-qpu-pipeline #lang-picker-wrap,
+body.ee-mode-qpu-pipeline #btn-mode-toggle { display:none !important; }
+body.ee-mode-qpu-pipeline #panel-knowledge { display:none !important; }
+body.ee-mode-qpu-pipeline .main-nav .nav-btn[onclick*="knowledge"] { display:none !important; }
 
 /* ── QPUs Dashboard ── */
 .qpus-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
@@ -1262,28 +1270,37 @@ async function unlock() {
 function logout() { sessionStorage.removeItem('uqi_auth'); location.reload(); }
 
 // ─────────────────────────────────────────────────────────
-// Easter-egg: 로고 3초 이내 7회 클릭 → 전체/제한 모드 토글
+// Easter-egg: 로고 3초 이내 7회 클릭 → qpu → qpu+pipeline → full 순환
 // ─────────────────────────────────────────────────────────
 const UQI_EE_WINDOW_MS = 3000;
 const UQI_EE_CLICKS = 7;
+const UQI_EE_MODES = ['qpu', 'qpu-pipeline', 'full'];
 let _uqiLogoClicks = [];
-function _applyRestrictedMode(restricted) {
-  document.body.classList.toggle('restricted-mode', restricted);
-  if (restricted) {
-    // 제한 모드 복귀 시 QPU 패널로 강제 전환
+function _getEeMode() {
+  const m = localStorage.getItem('uqi_ee_mode');
+  return UQI_EE_MODES.includes(m) ? m : 'qpu';
+}
+function _activePanelName() {
+  const el = document.querySelector('.main-panel.active');
+  return el ? el.id.replace(/^panel-/, '') : null;
+}
+function _applyEeMode(mode) {
+  document.body.classList.remove('ee-mode-qpu','ee-mode-qpu-pipeline','ee-mode-full');
+  document.body.classList.add('ee-mode-' + mode);
+  // 현재 패널이 새 모드에서 숨겨진다면 QPU로 강제 전환
+  const active = _activePanelName();
+  const blocked = (mode === 'qpu' && active && active !== 'qpus')
+               || (mode === 'qpu-pipeline' && active === 'knowledge');
+  if (blocked) {
     const qpuBtn = document.querySelector('.main-nav .nav-btn');
     if (qpuBtn && typeof switchMain === 'function') switchMain('qpus', qpuBtn);
   }
 }
-function _toggleUqiUnlock() {
-  const unlocked = localStorage.getItem('uqi_unlocked') === '1';
-  if (unlocked) {
-    localStorage.removeItem('uqi_unlocked');
-    _applyRestrictedMode(true);
-  } else {
-    localStorage.setItem('uqi_unlocked', '1');
-    _applyRestrictedMode(false);
-  }
+function _cycleEeMode() {
+  const cur = _getEeMode();
+  const next = UQI_EE_MODES[(UQI_EE_MODES.indexOf(cur) + 1) % UQI_EE_MODES.length];
+  localStorage.setItem('uqi_ee_mode', next);
+  _applyEeMode(next);
 }
 function _onLogoClick() {
   const now = Date.now();
@@ -1291,7 +1308,7 @@ function _onLogoClick() {
   _uqiLogoClicks = _uqiLogoClicks.filter(ts => now - ts <= UQI_EE_WINDOW_MS);
   if (_uqiLogoClicks.length >= UQI_EE_CLICKS) {
     _uqiLogoClicks = [];
-    _toggleUqiUnlock();
+    _cycleEeMode();
   }
 }
 function _bindLogoEasterEgg() {
@@ -1411,9 +1428,8 @@ async function testConnection() {
 function initApp() {
   initTheme();
   applyI18n();
-  // Easter-egg: 저장된 해제 상태에 따라 제한 모드 적용
-  const unlocked = localStorage.getItem('uqi_unlocked') === '1';
-  _applyRestrictedMode(!unlocked);
+  // Easter-egg: 저장된 모드 적용 (qpu → qpu+pipeline → full)
+  _applyEeMode(_getEeMode());
   _bindLogoEasterEgg();
   setTimeout(()=>testConnection(),300);
   document.addEventListener('dragover',e=>e.preventDefault());

@@ -49,14 +49,15 @@ cd ~/work/orientom/orientom-notion-pipeline
 | 2 | obsidian-vault 기존 내용 정리 | `clean_obsidian_vault` |
 | 3 | ≥5 MB 첨부 분할 (obsidian-vault vs gdrive-upload) | `split_vault.py` |
 | 4 | 타이틀 없는 UUID 폴더 자식 hoist | `hoist_uuid_dirs.py` |
-| 5 | backup-meta.json 기록 (zip mtime 기준) | `write_backup_meta` |
-| 6 | GDrive 첨부 동기화 (delete+create) | `rclone sync` |
-| 7 | GDrive 파일 ID 조회 → `file_mapping.json` | `get_gdrive_urls.py` |
-| 8 | bare 파일명 링크화 + GDrive URL 치환 | `rewrite_md_links.py` |
-| 9 | obsidian-vault git commit + push | `git_commit_push` |
-| 10 | Quartz overlay 적용 (brand + plugin) | `apply_quartz_overlay` |
-| 11 | 정적 사이트 빌드 (UUID 제거, base64 스트립) | `npx quartz build` |
-| 12 | 임시 vault 삭제 | `cleanup_temp` |
+| 5 | MD 파일명 UUID 접미사 제거 + 내부 링크 재작성 | `strip_filename_uuids.py` |
+| 6 | backup-meta.json 기록 (zip mtime 기준) | `write_backup_meta` |
+| 7 | GDrive 첨부 동기화 (delete+create) | `rclone sync` |
+| 8 | GDrive 파일 ID 조회 → `file_mapping.json` | `get_gdrive_urls.py` |
+| 9 | bare 파일명 링크화 + GDrive URL 치환 | `rewrite_md_links.py` |
+| 10 | obsidian-vault git commit + push | `git_commit_push` |
+| 11 | Quartz overlay 적용 (brand + plugin) | `apply_quartz_overlay` |
+| 12 | 정적 사이트 빌드 (base64 스트립, HardLineBreaks) | `npx quartz build` |
+| 13 | 임시 vault 삭제 | `cleanup_temp` |
 
 ### 5. 검증 (브라우저)
 
@@ -89,6 +90,9 @@ OBSIDIAN_VAULT_DIR=~/work/orientom/obsidian-vault python3 rewrite_md_links.py --
 
 # UUID-only 폴더 hoist 만
 python3 hoist_uuid_dirs.py ~/work/orientom/obsidian-vault
+
+# MD 파일명 UUID 제거 + 내부 링크 재작성만 (--dry-run 으로 미리 보기 가능)
+python3 strip_filename_uuids.py ~/work/orientom/obsidian-vault
 ```
 
 ### 8. 관련 repo 위치 (동기화 대상)

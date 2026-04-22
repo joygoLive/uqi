@@ -19,6 +19,7 @@ from uqi_optimizer   import UQIOptimizer
 from uqi_noise       import UQINoise
 from uqi_qec         import UQIQEC
 from uqi_rag         import UQIRAG
+from uqi_qpu_live_check import live_check_qpu, recommend_alternatives
 import uqi_job_store as _job_store
 from uqi_messages import (
     MCP_CACHE_EXPIRED,
@@ -29,6 +30,9 @@ from uqi_messages import (
     MCP_SUBMISSION_NOT_FOUND,
     mcp_qpu_offline,
     mcp_qpu_offline_cached,
+    mcp_qpu_offline_live,
+    mcp_live_check_unreachable,
+    mcp_action_retry_or_cancel,
     mcp_unavailable_qpu,
     mcp_qubit_exceeded_submit,
     mcp_qubit_exceeded_transpile,
@@ -1837,6 +1841,28 @@ async def uqi_qpu_submit(
                     return _safe_json(_pcvl_cache)
 
                 # confirmed=True → 실제 제출
+                # 제출 직전 실시간 상태 확인 (캐시 우회, 3회 재시도)
+                _live = live_check_qpu(qpu_name)
+                if not _live["ok"]:
+                    return json.dumps({
+                        "error":    mcp_live_check_unreachable(qpu_name, _live["attempts"]),
+                        "status":   "live_check_unreachable",
+                        "qpu":      qpu_name,
+                        "attempts": _live["attempts"],
+                    }, ensure_ascii=False)
+                if not _live["available"]:
+                    _co = locals().get("_cached_obj")
+                    _qpu_cmp = _co.get("qpu_comparison", {}) if isinstance(_co, dict) else {}
+                    _alts = recommend_alternatives(qpu_name, _qpu_cmp)
+                    return json.dumps({
+                        "error":           mcp_qpu_offline_live(qpu_name, _live["status"]),
+                        "status":          "qpu_offline",
+                        "qpu":             qpu_name,
+                        "current_status":  _live["status"],
+                        "alternatives":    _alts,
+                        "action_required": mcp_action_retry_or_cancel(),
+                    }, ensure_ascii=False)
+
                 # perceval_circuits: 유니터리+input_state 직렬화 데이터
                 if not extractor.perceval_circuits:
                     print(f"  [Submit] Perceval 회로 재추출 (캐시 히트로 인한 빈 상태)",
@@ -1875,6 +1901,21 @@ async def uqi_qpu_submit(
                     _pexec._platform_qpu = qpu_name if not _use_sim else "qpu:belenos"
 
                     for name in _pcircuit_names:
+                        _saved_jid = {"id": None}  # on_submit 콜백과 공유
+
+                        def _on_submit(jid, platform, _name=name):
+                            # Quandela 에 job 생성된 직후 호출 — 즉시 로컬 DB에 기록
+                            _saved_jid["id"] = jid
+                            try:
+                                _job_store.save_job(
+                                    job_id=jid, vendor="quandela",
+                                    qpu_name=qpu_name, circuit_name=_name, shots=shots,
+                                    extra={"backend": qpu_name, "platform": platform},
+                                )
+                            except Exception as _se:
+                                print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
+                                      file=sys.stderr)
+
                         try:
                             _entry = _perceval_entries[name]
                             _pcircuit, _pinput = UQIExecutorPerceval._restore_perceval_objects(_entry)
@@ -1882,17 +1923,30 @@ async def uqi_qpu_submit(
                             result_dict = _pexec._run_single(
                                 name=name, circuit=_pcircuit,
                                 input_state=_pinput, use_simulator=_use_sim,
+                                on_submit=_on_submit,
                             )
-                            if not result_dict["ok"]:
-                                raise Exception(result_dict["error"])
                             exec_time = time.time() - t_start
+                            # 콜백에서 저장됐으면 그 id 사용, 아니면 fallback(UUID)
                             import uuid as _juuid
-                            _jid = result_dict.get("cloud_job_id") or _juuid.uuid4().hex
-                            _job_store.save_job(
-                                job_id=_jid, vendor="quandela",
-                                qpu_name=qpu_name, circuit_name=name, shots=shots,
-                                extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
-                            )
+                            _jid = (_saved_jid["id"]
+                                    or result_dict.get("cloud_job_id")
+                                    or _juuid.uuid4().hex)
+                            if not _saved_jid["id"]:
+                                # 콜백 미실행 (제출 자체 실패 등) — 지금이라도 등록
+                                _job_store.save_job(
+                                    job_id=_jid, vendor="quandela",
+                                    qpu_name=qpu_name, circuit_name=name, shots=shots,
+                                    extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
+                                )
+
+                            if not result_dict["ok"]:
+                                # 결과 실패 — error 상태로 마킹 후 예외 전파
+                                _job_store.update_job(
+                                    _jid, status="error",
+                                    error=result_dict.get("error", "unknown"),
+                                )
+                                raise Exception(result_dict["error"])
+
                             _job_store.update_job(
                                 _jid, status="done",
                                 counts=result_dict["counts"],
@@ -1908,7 +1962,18 @@ async def uqi_qpu_submit(
                                 "job_id": _jid,
                             }
                         except Exception as e:
-                            prog["results"][name] = {"ok": False, "error": str(e)}
+                            # 콜백으로 이미 저장된 경우 error 상태 마킹 시도
+                            if _saved_jid["id"]:
+                                try:
+                                    _job_store.update_job(
+                                        _saved_jid["id"], status="error", error=str(e),
+                                    )
+                                except Exception:
+                                    pass
+                            prog["results"][name] = {
+                                "ok": False, "error": str(e),
+                                "job_id": _saved_jid["id"],
+                            }
                             _rag.add_execution(
                                 circuit_name=name, qpu_name=qpu_name, backend=qpu_name,
                                 shots=shots, counts={}, ok=False,
@@ -1934,6 +1999,7 @@ async def uqi_qpu_submit(
                 available_qpus = _get_available_qpus_cached()
 
                 if qpu_name != "auto":
+                    # analyze 단계: 캐시 기반 사전 필터 (실제 submit 직전에 live check 재수행)
                     qpu_status = _get_qpu_status_cached()
                     s = qpu_status.get(qpu_name, {})
                     if not s.get("available", True):
@@ -1941,16 +2007,7 @@ async def uqi_qpu_submit(
                             "error": mcp_qpu_offline(qpu_name),
                             "queue_note": s.get("note", ""),
                         })
-            else:
-                # goto_submit=True: 캐시 기반 offline 체크만 (API 호출 없음)
-                if qpu_name != "auto":
-                    qpu_status = _get_qpu_status_cached()
-                    s = qpu_status.get(qpu_name, {})
-                    if s and not s.get("available", True):
-                        return json.dumps({
-                            "error": mcp_qpu_offline_cached(qpu_name),
-                            "queue_note": s.get("note", ""),
-                        })
+            # goto_submit=True 경로는 캐시 우회 — 실제 제출 직전 live_check_qpu() 가 최종 판정
 
             if not goto_submit:
                 # analyze 단계 캐시 키 (confirmed=True일 때 저장용)
@@ -2283,6 +2340,27 @@ async def uqi_qpu_submit(
                         "status": STATUS_CACHE_EXPIRED,
                     }, ensure_ascii=False)
             # confirmed=True → 실제 제출
+            # 제출 직전 실시간 상태 확인 (캐시 우회, 3회 재시도)
+            _live = live_check_qpu(selected_qpu)
+            if not _live["ok"]:
+                return json.dumps({
+                    "error":   mcp_live_check_unreachable(selected_qpu, _live["attempts"]),
+                    "status":  "live_check_unreachable",
+                    "qpu":     selected_qpu,
+                    "attempts": _live["attempts"],
+                }, ensure_ascii=False)
+            if not _live["available"]:
+                _qpu_cmp = _cached_obj.get("qpu_comparison", {}) if isinstance(_cached_obj, dict) else {}
+                _alts = recommend_alternatives(selected_qpu, _qpu_cmp)
+                return json.dumps({
+                    "error":           mcp_qpu_offline_live(selected_qpu, _live["status"]),
+                    "status":          "qpu_offline",
+                    "qpu":             selected_qpu,
+                    "current_status":  _live["status"],
+                    "alternatives":    _alts,
+                    "action_required": mcp_action_retry_or_cancel(),
+                }, ensure_ascii=False)
+
             cal = _get_calibration(selected_qpu)
             device_qubits = cal.get("num_qubits", 0)
             for name, v in qpu_analysis.get(selected_qpu, {}).get("circuits", {}).items():
@@ -2324,6 +2402,7 @@ async def uqi_qpu_submit(
                     _iqm_exec._token = IQM_TOKEN
 
                 for name in circuit_names_to_submit:
+                    _saved_jid = {"id": None}  # Perceval 분기 콜백과 outer except 공유
                     try:
                         if "ibm" in selected_qpu:
                             sub = _ibm_exec._submit_single(
@@ -2374,15 +2453,48 @@ async def uqi_qpu_submit(
                             if _entry is None:
                                 raise Exception(f"Perceval 회로 '{name}' 없음 — 추출 실패")
                             _pcircuit, _pinput = UQIExecutorPerceval._restore_perceval_objects(_entry)
+
+                            def _on_submit(jid, platform, _name=name):
+                                _saved_jid["id"] = jid
+                                try:
+                                    _job_store.save_job(
+                                        job_id=jid, vendor="quandela",
+                                        qpu_name=selected_qpu, circuit_name=_name, shots=shots,
+                                        extra={"backend": selected_qpu, "platform": platform},
+                                    )
+                                except Exception as _se:
+                                    print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
+                                          file=sys.stderr)
+
                             result_dict = _pexec._run_single(
                                 name=name,
                                 circuit=_pcircuit,
                                 input_state=_pinput,
                                 use_simulator=use_sim,
+                                on_submit=_on_submit,
                             )
-                            if not result_dict["ok"]:
-                                raise Exception(result_dict["error"])
                             exec_time = time.time() - t_start
+                            import uuid as _juuid
+                            _jid = (_saved_jid["id"]
+                                    or result_dict.get("cloud_job_id")
+                                    or _juuid.uuid4().hex)
+                            if not _saved_jid["id"]:
+                                _job_store.save_job(
+                                    job_id=_jid, vendor="quandela",
+                                    qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                    extra={"backend": selected_qpu, "exec_time": round(exec_time, 2)},
+                                )
+
+                            if not result_dict["ok"]:
+                                _job_store.update_job(
+                                    _jid, status="error",
+                                    error=result_dict.get("error", "unknown"),
+                                )
+                                raise Exception(result_dict["error"])
+
+                            _job_store.update_job(
+                                _jid, status="done", counts=result_dict["counts"],
+                            )
                             _rag.add_execution(
                                 circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
                                 shots=shots, counts=result_dict["counts"], ok=True, exec_time_sec=exec_time,
@@ -2390,6 +2502,7 @@ async def uqi_qpu_submit(
                             prog["results"][name] = {
                                 "ok": True, "counts": result_dict["counts"],
                                 "backend": selected_qpu, "exec_time": round(exec_time, 2),
+                                "job_id": _jid,
                             }
                         else:
                             raise ValueError(
@@ -2397,7 +2510,18 @@ async def uqi_qpu_submit(
                             )
 
                     except Exception as e:
-                        prog["results"][name] = {"ok": False, "error": str(e)}
+                        # Perceval on_submit 으로 이미 저장된 경우 error 상태 마킹
+                        if _saved_jid["id"]:
+                            try:
+                                _job_store.update_job(
+                                    _saved_jid["id"], status="error", error=str(e),
+                                )
+                            except Exception:
+                                pass
+                        prog["results"][name] = {
+                            "ok": False, "error": str(e),
+                            "job_id": _saved_jid["id"],
+                        }
                         _rag.add_execution(
                             circuit_name=name, qpu_name=selected_qpu, backend=selected_qpu,
                             shots=shots, counts={}, ok=False, extra={"error": str(e)},
@@ -2806,6 +2930,9 @@ if __name__ == "__main__":
             Quartz emits pretty paths like 'Foo/Bar.html' but internal links
             reference 'Foo/Bar' (no extension). Starlette's built-in html=True
             only maps directory→index.html, so we add .html fallback on 404.
+
+            Also forces `Cache-Control: no-store` so weekly rebuilds are
+            reflected immediately without clients holding stale HTML/assets.
             """
 
             async def get_response(self, path: str, scope: Scope):
@@ -2813,7 +2940,13 @@ if __name__ == "__main__":
                 if response.status_code == 404:
                     basename = path.rsplit("/", 1)[-1] if "/" in path else path
                     if basename and "." not in basename:
-                        return await super().get_response(path + ".html", scope)
+                        response = await super().get_response(path + ".html", scope)
+                # Starlette StaticFiles sets its own Cache-Control via max-age;
+                # override so notion-backup content never sits in browser cache.
+                try:
+                    response.headers["Cache-Control"] = "no-store"
+                except Exception:
+                    pass
                 return response
 
         notion_backup_dir = Path(__file__).parent.parent / "webapp" / "notion-backup"

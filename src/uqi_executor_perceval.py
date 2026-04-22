@@ -43,14 +43,19 @@ class UQIExecutorPerceval:
             session = pcvl.QuandelaSession(platform_name=platform, token=token)
             session.start()
             p = session.build_remote_processor()
-            specs = p.specs
-            constraints = specs.get('constraints', {})
+            specs = p.specs or {}
+            constraints = specs.get('constraints', {}) or {}
+            # operational 상태는 p.status 기반 — max_mode_count는 maintenance 중에도
+            # nominal 값이 반환되어 오탐 유발 (bcd5868 이후 로직 통일)
+            status_str = str(getattr(p, "status", "")).lower()
+            is_available = (status_str == "available")
             result = {
-                "ok": True,
+                "ok": is_available,
                 "platform": platform,
                 "max_modes": constraints.get('max_mode_count', 12),
                 "max_photons": constraints.get('max_photon_count', 6),
                 "type": "Simulator" if platform.startswith("sim:") else "QPU",
+                "status": status_str or "unknown",
             }
             session.stop()
             return result
@@ -96,7 +101,18 @@ class UQIExecutorPerceval:
         circuit,
         input_state,
         use_simulator: bool,
+        on_submit=None,           # callable(cloud_job_id, platform) — 제출 직후 1회 호출
+        max_wait_s: float = 600.0,
+        poll_interval_s: float = 2.0,
     ) -> dict:
+        """
+        Perceval 회로 1개 실행.
+
+        on_submit 콜백은 Quandela 클라우드에 job이 생성된 직후(아직 실행 전) 호출되어
+        cloud_job_id를 외부(예: job store)에 즉시 등록할 수 있게 한다.
+        이후 결과 대기 중 timeout/에러가 발생해도 cloud_job_id 는 result["cloud_job_id"]
+        에 보존되어 호출자가 취소/정리를 수행할 수 있다.
+        """
 
         result = {
             "ok": False,
@@ -104,6 +120,7 @@ class UQIExecutorPerceval:
             "probs": None,
             "backend": None,
             "error": None,
+            "cloud_job_id": None,
         }
 
         try:
@@ -159,20 +176,64 @@ class UQIExecutorPerceval:
                 session.stop()
                 return result
 
-            # ── Step 5: 실행 ──
+            # ── Step 5: 실행 (비동기 제출 → 폴링) ──
             p.set_circuit(u)
             p.with_input(input_state)
             p.min_detected_photons_filter(1)
 
             sampler = pcvl.algorithm.Sampler(p, max_shots_per_call=self.shots)
             job = sampler.sample_count
-            job_result = job(self.shots)
-            # 클라우드 job ID 캡처 (RemoteJob의 경우)
+
+            # 비동기 제출 — 즉시 cloud_job_id 확보 (timeout 시 취소/정리용)
+            job.execute_async(self.shots)
             cloud_job_id = getattr(job, 'id', None) or getattr(job, '_id', None)
+            result["cloud_job_id"] = cloud_job_id
+            result["backend"] = platform
+            print(f"    ✓ 제출 완료: job_id={cloud_job_id}")
+
+            # 제출 직후 콜백 (외부 job store 등록 등)
+            if on_submit and cloud_job_id:
+                try:
+                    on_submit(cloud_job_id, platform)
+                except Exception as _cb_err:
+                    print(f"    ⚠ on_submit callback error: {_cb_err}")
+
+            # 결과 대기 (poll)
+            import time as _time
+            _t_wait_start = _time.time()
+            while not job.is_complete:
+                if job.is_failed:
+                    result["error"] = f"job failed on cloud: status={job.status}"
+                    session.stop()
+                    return result
+                if _time.time() - _t_wait_start > max_wait_s:
+                    result["error"] = (f"wait timeout {max_wait_s}s "
+                                       f"(cloud_job_id={cloud_job_id} 는 서버에 남아있음)")
+                    session.stop()
+                    return result
+                _time.sleep(poll_interval_s)
+
+            # is_complete=True 이지만 실제로는 ERROR 상태로 끝난 경우가 있음
+            # (Perceval이 is_failed를 세팅하지 않는 케이스 방어)
+            _final_status = str(getattr(job, 'status', '')).upper()
+            if _final_status in ('ERROR', 'CANCELED', 'CANCELLED', 'FAILED'):
+                result["error"] = (f"job ended with status={_final_status} "
+                                   f"(cloud_job_id={cloud_job_id})")
+                session.stop()
+                return result
+
+            job_result = job.get_results()
             session.stop()
 
+            # get_results()가 None을 리턴하는 경우 방어 — Quandela ERROR 시 발생
+            if job_result is None:
+                result["error"] = (f"cloud returned no results (status={_final_status}, "
+                                   f"cloud_job_id={cloud_job_id})")
+                print(f"    ✗ {result['error']}")
+                return result
+
             # ── 결과 파싱 ──
-            counts_raw = job_result.get('results', {})
+            counts_raw = job_result.get('results', {}) if isinstance(job_result, dict) else {}
             counts = {str(k): int(v) for k, v in counts_raw.items()}
             total = sum(counts.values()) if counts else 0
             probs = {k: v / total for k, v in counts.items()} if total > 0 else {}
@@ -184,8 +245,7 @@ class UQIExecutorPerceval:
 
             result["counts"] = counts
             result["probs"] = probs
-            result["backend"] = platform
-            result["cloud_job_id"] = cloud_job_id
+            # backend, cloud_job_id 는 제출 시점에 이미 기록됨
             result["ok"] = True
             print(f"    ✓ 실행 성공 (backend={platform}, job_id={cloud_job_id}, {len(counts)} 상태)")
 

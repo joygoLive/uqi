@@ -69,6 +69,19 @@ def mcp_qpu_offline_cached(qpu_name: str) -> str:
     return f"{qpu_name} 현재 offline 상태입니다 (캐시)."
 
 
+def mcp_qpu_offline_live(qpu_name: str, status_str: str) -> str:
+    return f"{qpu_name} 사용 불가 — 현재 상태: {status_str}. 제출이 취소되었습니다."
+
+
+def mcp_live_check_unreachable(qpu_name: str, attempts: int) -> str:
+    return (f"{qpu_name} 상태 확인 실패 ({attempts}회 재시도 후 연결 불가). "
+            f"현재 온라인 연결이 어려운 상태입니다. 잠시 후 다시 시도해주세요.")
+
+
+def mcp_action_retry_or_cancel() -> str:
+    return "추천된 다른 QPU로 재시도하거나 제출을 취소하세요."
+
+
 def mcp_unavailable_qpu(qpu_name: str) -> str:
     return f"미지원 또는 가용하지 않은 QPU: {qpu_name}"
 

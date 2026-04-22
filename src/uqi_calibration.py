@@ -65,6 +65,8 @@ CALIBRATION_TTL = {
     "quantinuum":  timedelta(hours=168),  # 정적 번들 데이터 — 주 1회
 }
 
+QUANDELA_PLATFORMS = ["sim:ascella", "sim:belenos", "qpu:ascella", "qpu:belenos"]
+
 
 class UQICalibration:
     """
@@ -1196,23 +1198,26 @@ class UQICalibration:
                         platform_name=platform, token=quandela_token)
                     session.start()
                     p = session.build_remote_processor()
-                    specs = p.specs
-                    constraints = specs.get('constraints', {})
-                    max_modes   = constraints.get('max_mode_count', 0)
-                    max_photons = constraints.get('max_photon_count', 0)
+                    # operational 상태는 p.status 사용 (max_mode_count는 명목 스펙이라
+                    # maintenance 중에도 nominal 값이 반환되어 오탐 발생)
+                    status_str = str(getattr(p, "status", "")).lower()
+                    is_available = (status_str == "available")
+                    specs = p.specs or {}
+                    constraints = specs.get('constraints', {}) or {}
+                    max_modes   = constraints.get('max_mode_count', 0) or 0
+                    max_photons = constraints.get('max_photon_count', 0) or 0
                     session.stop()
-                    is_available = max_modes > 0
                     self._qpu_status_cache[platform] = {
                         "available":    is_available,
                         "pending_jobs": None,
-                        "note":         f"max_modes={max_modes} max_photons={max_photons}" if is_available else "maintenance (max_modes=0)",
+                        "note":         status_str or "unknown",
                         "vendor":       "quandela",
                         "max_modes":    max_modes,
                         "max_photons":  max_photons,
                     }
                     if is_available:
                         available.append(platform)
-                    print(f"  [QPU] Quandela {platform}: online={is_available} max_modes={max_modes} max_photons={max_photons}")
+                    print(f"  [QPU] Quandela {platform}: status={status_str} online={is_available} max_modes={max_modes} max_photons={max_photons}")
                 except Exception as e:
                     self._qpu_status_cache[platform] = {
                         "available":    False,

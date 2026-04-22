@@ -961,7 +961,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
             <span style="font-size:18px">📚</span>
             <div style="flex:1">
               <div style="font-size:12px;font-weight:600">Orientom Notion Backup</div>
-              <div style="font-size:10px;color:var(--text2);margin-top:2px">주간 백업 아카이브 →</div>
+              <div id="notion-backup-last-sync" style="font-size:10px;color:var(--text2);margin-top:2px">노션 백업 아카이브 →</div>
             </div>
           </a>
         </div>
@@ -1346,6 +1346,28 @@ function _getNotionRevealed() {
 }
 function _applyNotionReveal(revealed) {
   document.body.classList.toggle('ee-notion-revealed', !!revealed);
+  if (revealed) _refreshNotionBackupDate();
+}
+async function _refreshNotionBackupDate() {
+  const el = document.getElementById('notion-backup-last-sync');
+  if (!el) return;
+  try {
+    const r = await fetch('/notion-backup/backup-meta.json', {
+      headers: {'ngrok-skip-browser-warning':'true'},
+      cache: 'no-store'
+    });
+    if (!r.ok) return;
+    const meta = await r.json();
+    const iso = meta && meta.last_backup_at;
+    if (!iso) return;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return;
+    const ymd = d.toLocaleDateString('ko-KR', {year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\.\s?/g,'-').replace(/-$/,'');
+    const hm  = d.toLocaleTimeString('ko-KR', {hour:'2-digit',minute:'2-digit',hour12:false});
+    el.textContent = `마지막 백업: ${ymd} ${hm} →`;
+  } catch (_e) {
+    // leave default label on failure
+  }
 }
 function _toggleNotionReveal() {
   const next = !_getNotionRevealed();

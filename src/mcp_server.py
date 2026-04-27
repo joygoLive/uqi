@@ -1654,6 +1654,82 @@ async def uqi_read_file(algorithm_file: str) -> str:
 # 캐시에는 구조화 데이터만 저장, 메시지는 이 함수로 생성
 # ─────────────────────────────────────────────────────────
 
+# ─────────────────────────────────────────────────────────────
+# 비용 안전장치 (cost_safeguard)
+# ─────────────────────────────────────────────────────────────
+# 정책:
+#   - admin_override=True (webapp admin 이스터에그) → 무조건 통과
+#   - estimated_usd ≥ COST_THRESHOLD_USD (default $50) → 차단
+#   - confidence == "verify_required" / "unknown" → 차단 (비용 추정 불가)
+#   - 그 외 (free, credits, hqc 무료 한도 내) → 통과
+# 차단 메시지: "관리자 컨택" 안내 (이메일 표기 안 함)
+
+COST_SAFEGUARD_THRESHOLD_USD = 50.0
+
+
+def _check_cost_safeguard(qpu_name: str, shots: int,
+                          admin_override: bool = False) -> dict | None:
+    """비용 안전장치 검사.
+
+    Returns:
+        None : 통과 (제출 허용)
+        dict : 차단 정보 (error, blocked_by, reason, message 등)
+    """
+    if admin_override:
+        return None
+
+    try:
+        from uqi_pricing import estimate_cost
+        cost = estimate_cost(qpu_name, shots)
+    except Exception as e:
+        # estimate_cost 자체 실패 → 보수적으로 차단
+        return {
+            "error":      "🛡️ 제출 차단됨 — 비용 안전장치 검사 오류",
+            "blocked_by": "cost_safeguard_error",
+            "detail":     str(e),
+            "qpu":        qpu_name,
+            "shots":      shots,
+            "message": (
+                "🛡️ 비용 안전장치 검사 중 오류 발생.\n"
+                "안전을 위해 제출이 차단되었습니다.\n"
+                "관리자에게 문의해주세요."
+            ),
+        }
+
+    threshold = COST_SAFEGUARD_THRESHOLD_USD
+    blocked_reason = None
+    est_usd = cost.get("estimated_usd")
+    confidence = cost.get("confidence")
+
+    if est_usd is not None and est_usd >= threshold:
+        blocked_reason = f"예상 비용 ${est_usd:.2f} ≥ 임계값 ${threshold:.0f}"
+    elif confidence in ("verify_required", "unknown"):
+        blocked_reason = f"비용 추정 불가 (confidence={confidence})"
+
+    if not blocked_reason:
+        return None
+
+    return {
+        "error":         "🛡️ 제출 차단됨 — 비용 안전장치",
+        "blocked_by":    "cost_safeguard",
+        "reason":        blocked_reason,
+        "qpu":           qpu_name,
+        "shots":         shots,
+        "estimated_usd": est_usd,
+        "cost_details":  cost.get("details"),
+        "message": (
+            "🛡️ 제출 차단됨 — 비용 안전장치\n\n"
+            f"  QPU:         {qpu_name}\n"
+            f"  Shots:       {shots}\n"
+            f"  예상 비용:    {cost.get('details','-')}\n"
+            f"  차단 사유:    {blocked_reason}\n\n"
+            "이 QPU 제출은 관리자 권한이 필요합니다.\n"
+            "실행이 필요하면 회로 / shot 수 / 예상 비용 정보와 함께\n"
+            "관리자에게 문의해주세요."
+        ),
+    }
+
+
 def _build_qpu_submit_message(d: dict) -> str:
     """캐시 데이터 또는 분析 결과 dict에서 QPU 제출 확인 메시지 생성"""
     selected_qpu    = d.get("selected_qpu", "")
@@ -1810,8 +1886,9 @@ async def uqi_qpu_submit(
     qpu_name:       str  = "auto",
     shots:          int  = 1024,
     confirmed:      bool = False,
+    admin_override: bool = False,
 ) -> str:
-    """QPU 제출 (Human-in-the-loop). confirmed=False: 예상 분석만, confirmed=True: 실제 제출. 비용 발생 주의."""
+    """QPU 제출 (Human-in-the-loop). confirmed=False: 예상 분석만, confirmed=True: 실제 제출. 비용 발생 주의. admin_override: webapp admin 모드에서만 활성, 비용 안전장치 우회용."""
     _check_err = _safe_file_check(algorithm_file, tool="uqi_qpu_submit")
     if _check_err:
         return json.dumps({"error": _check_err})
@@ -1822,6 +1899,14 @@ async def uqi_qpu_submit(
     # 넘긴 경우는 사용자 의도 존중. (IonQ Forte-1 최소 100, 최대 5000)
     if qpu_name.startswith("ionq_") and shots == 1024:
         shots = 100
+
+    # ── 비용 안전장치: confirmed=True 시점에서 검사 ──
+    # admin_override=True (webapp admin 이스터에그) 시 우회.
+    # 분석 단계(confirmed=False)는 모두 통과 — 누구나 비용 추정/회로 분석 가능.
+    if confirmed:
+        _block = _check_cost_safeguard(qpu_name, shots, admin_override)
+        if _block:
+            return json.dumps(_block, ensure_ascii=False)
 
     def _run():
         import contextlib
@@ -2913,6 +2998,147 @@ async def uqi_job_cancel(job_id: str) -> str:
 
         except Exception as e:
             return json.dumps({"ok": False, "error": str(e)})
+
+    return await asyncio.to_thread(_run)
+
+
+# ─────────────────────────────────────────────────────────────
+# 비용 요약 — AWS Braket + Azure Quantum 청구 비용 실시간 조회
+# ─────────────────────────────────────────────────────────────
+
+def _aws_billing_summary() -> dict:
+    """AWS Cost Explorer로 month-to-date 비용 요약."""
+    out = {"ok": False, "error": None,
+           "total_usd": None, "currency": "USD",
+           "by_service": {},
+           "period_start": None, "period_end": None}
+    try:
+        import boto3
+        from datetime import date as _d
+        ce = boto3.client(
+            'ce',
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            region_name='us-east-1',
+        )
+        today = _d.today()
+        start = today.replace(day=1).isoformat()
+        end   = today.isoformat()
+        out["period_start"] = start
+        out["period_end"]   = end
+        # 동일 날짜면 +1일 (Cost Explorer는 end exclusive)
+        if start == end:
+            from datetime import timedelta as _td
+            end = (today + _td(days=1)).isoformat()
+        resp = ce.get_cost_and_usage(
+            TimePeriod={'Start': start, 'End': end},
+            Granularity='MONTHLY',
+            Metrics=['UnblendedCost'],
+            GroupBy=[{'Type': 'DIMENSION', 'Key': 'SERVICE'}],
+        )
+        total = 0.0
+        services = {}
+        for day in resp.get('ResultsByTime', []):
+            for grp in day.get('Groups', []):
+                svc = grp['Keys'][0]
+                amt = float(grp['Metrics']['UnblendedCost']['Amount'])
+                services[svc] = services.get(svc, 0) + amt
+                total += amt
+        out["ok"] = True
+        out["total_usd"]   = round(total, 4)
+        out["by_service"]  = {k: round(v, 4) for k, v in services.items() if v > 0.0001}
+    except Exception as e:
+        msg = str(e)
+        if "AccessDenied" in msg or "not authorized" in msg:
+            out["error"] = "ce:GetCostAndUsage 권한 필요 (관리자 문의)"
+        else:
+            out["error"] = msg[:300]
+    return out
+
+
+def _azure_billing_summary() -> dict:
+    """Azure Cost Management로 month-to-date 비용 요약."""
+    out = {"ok": False, "error": None,
+           "total": None, "currency": None,
+           "period": "MonthToDate"}
+
+    # 사전 검사 — token 발급 전 빠른 실패
+    sub_id = os.getenv("AZURE_QUANTUM_SUBSCRIPTION_ID")
+    if not sub_id:
+        out["error"] = "AZURE_QUANTUM_SUBSCRIPTION_ID 환경변수 없음"
+        return out
+
+    try:
+        from azure.identity import ClientSecretCredential
+        import requests as _req
+
+        cred = ClientSecretCredential(
+            tenant_id=os.getenv("AZURE_TENANT_ID"),
+            client_id=os.getenv("AZURE_CLIENT_ID"),
+            client_secret=os.getenv("AZURE_CLIENT_SECRET"),
+        )
+        token = cred.get_token("https://management.azure.com/.default").token
+
+        # 2023-11-01: 안정 버전, Cost Management Reader 권한으로 동작
+        url = (
+            f"https://management.azure.com/subscriptions/{sub_id}"
+            f"/providers/Microsoft.CostManagement/query?api-version=2023-11-01"
+        )
+        body = {
+            "type":      "ActualCost",
+            "timeframe": "MonthToDate",
+            "dataset": {
+                "granularity": "None",
+                "aggregation": {"totalCost": {"name": "Cost", "function": "Sum"}}
+            }
+        }
+        r = _req.post(url, json=body, headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type":  "application/json",
+        }, timeout=30)
+
+        if r.status_code == 200:
+            data = r.json()
+            rows = data.get('properties', {}).get('rows', [])
+            if rows and len(rows[0]) >= 2:
+                cost, currency = rows[0][0], rows[0][1]
+                out["ok"] = True
+                out["total"]    = round(float(cost), 4)
+                out["currency"] = str(currency)
+            else:
+                out["ok"]      = True
+                out["total"]   = 0.0
+                out["currency"] = "USD"
+        elif r.status_code == 401 or r.status_code == 403:
+            out["error"] = (
+                "Cost Management Reader 권한 필요 (Subscription scope) — 관리자 문의"
+            )
+        else:
+            out["error"] = f"HTTP {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        out["error"] = str(e)[:300]
+    return out
+
+
+@mcp.tool(timeout=30)
+async def uqi_billing_summary() -> str:
+    """AWS Braket + Azure Quantum 청구 비용 요약 (month-to-date, 실시간 API 호출).
+
+    Returns: JSON
+        {
+          "fetched_at": ISO 8601,
+          "aws":   {ok, total_usd, currency, by_service, period_start, period_end, error?},
+          "azure": {ok, total, currency, period, error?},
+        }
+    """
+    def _run():
+        from datetime import datetime as _dt, timezone as _tz
+        result = {
+            "fetched_at": _dt.now(_tz.utc).isoformat(),
+            "aws":   _aws_billing_summary(),
+            "azure": _azure_billing_summary(),
+        }
+        return json.dumps(result, ensure_ascii=False, default=str)
 
     return await asyncio.to_thread(_run)
 

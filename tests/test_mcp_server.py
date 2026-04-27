@@ -793,6 +793,315 @@ class TestSupportedQpusCatalog:
         assert "quantinuum_h1_1" in SUPPORTED_QPUS
 
 
+# ─────────────────────────────────────────────────────────────
+# 비용 안전장치 (cost_safeguard) — 실제 비용 발생 없이 꼼꼼하게 검증
+# ─────────────────────────────────────────────────────────────
+
+class TestCostSafeguard:
+    """_check_cost_safeguard 함수 — 13가지 시나리오"""
+
+    # ─── admin_override=True: 모든 케이스 통과 ───
+
+    def test_TC200_admin_override_always_passes_expensive(self):
+        """admin → IonQ 1000 shots ($80.30) 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("ionq_forte1", 1000, admin_override=True) is None
+
+    def test_TC201_admin_override_passes_pasqal(self):
+        """admin → Pasqal Fresnel ($54+) 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("pasqal_fresnel", 100, admin_override=True) is None
+
+    def test_TC202_admin_override_passes_unknown_qpu(self):
+        """admin → 미등록 QPU도 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("brand_new_qpu", 100, admin_override=True) is None
+
+    def test_TC203_admin_override_passes_quantinuum(self):
+        """admin → Quantinuum (verify_required) 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("quantinuum_h2_1", 100, admin_override=True) is None
+
+    # ─── 일반 사용자: 차단 시나리오 (모두 admin 권한 필요) ───
+
+    def test_TC210_block_ionq_700shots_above_threshold(self):
+        """IonQ 700 shots = $0.30 + $56 = $56.30 → 차단 ($50 ≥)"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 700)
+        assert block is not None
+        assert block["blocked_by"] == "cost_safeguard"
+        assert "$56.30" in block["reason"] or "≥ 임계값" in block["reason"]
+
+    def test_TC211_block_ionq_1000shots(self):
+        """IonQ 1000 shots = $80.30 → 차단"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 1000)
+        assert block is not None
+        assert block["estimated_usd"] == 80.30
+
+    def test_TC212_block_pasqal_fresnel(self):
+        """Pasqal Fresnel ($54+ default 60s 가정) → 차단"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("pasqal_fresnel", 100)
+        assert block is not None
+        assert block["estimated_usd"] >= 50
+
+    def test_TC213_block_quantinuum_verify_required(self):
+        """Quantinuum HQC (verify_required) → 차단"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("quantinuum_h2_1", 100)
+        assert block is not None
+        assert "verify_required" in block["reason"]
+
+    def test_TC214_block_unknown_qpu(self):
+        """미등록 QPU (confidence=unknown) → 차단"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("brand_new_qpu_xyz", 100)
+        assert block is not None
+        assert "unknown" in block["reason"]
+
+    # ─── 일반 사용자: 통과 시나리오 (저비용 또는 무료) ───
+
+    def test_TC220_pass_ionq_100shots_below_threshold(self):
+        """IonQ 100 shots = $8.30 < $50 → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("ionq_forte1", 100) is None
+
+    def test_TC221_pass_ionq_500shots_borderline(self):
+        """IonQ 500 shots = $0.30 + $40 = $40.30 < $50 → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("ionq_forte1", 500) is None
+
+    def test_TC222_pass_ionq_621shots_just_below_threshold(self):
+        """IonQ 621 shots = $0.30 + 49.68 = $49.98 (임계값 직전) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("ionq_forte1", 621) is None
+
+    def test_TC223_block_ionq_622shots_just_above_threshold(self):
+        """IonQ 622 shots = $0.30 + 49.76 = $50.06 (임계값 직후) → 차단"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 622)
+        assert block is not None
+        assert block["estimated_usd"] >= 50.0
+
+    def test_TC224_pass_ibm_open_plan_free(self):
+        """IBM Open Plan (free quota) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("ibm_fez", 1024) is None
+
+    def test_TC225_pass_iqm_credits(self):
+        """IQM 지원 크레딧 (currency=credits, exact) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("iqm_emerald", 1024) is None
+
+    def test_TC226_pass_quandela_free_quota(self):
+        """Quandela qpu:ascella (월 200 credits 무료) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("qpu:ascella", 1024) is None
+
+    def test_TC227_pass_quandela_simulator_free(self):
+        """Quandela 시뮬레이터 (free) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("sim:ascella", 1024) is None
+
+    def test_TC228_pass_rigetti_cepheus_low_cost(self):
+        """Rigetti Cepheus 1000 shots = $0.725 → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("rigetti_cepheus", 1000) is None
+
+    def test_TC229_pass_braket_sv1_simulator(self):
+        """Braket SV1 시뮬레이터 (저렴) → 통과"""
+        from mcp_server import _check_cost_safeguard
+        assert _check_cost_safeguard("braket_sv1", 100) is None
+
+    # ─── 차단 메시지 형식 검증 (관리자 컨택 안내, 이메일 X) ───
+
+    def test_TC230_block_message_contains_admin_contact(self):
+        """차단 메시지에 '관리자에게 문의' 안내 포함"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 1000)
+        assert "관리자" in block["message"]
+        assert "문의" in block["message"]
+
+    def test_TC231_block_message_no_email_exposed(self):
+        """차단 메시지에 이메일 주소 표기 안 함 (정책)"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 1000)
+        assert "@" not in block["message"]
+        assert "gmail" not in block["message"].lower()
+
+    def test_TC232_block_message_includes_qpu_and_shots(self):
+        """차단 메시지에 QPU/shots/예상비용 모두 포함"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 1000)
+        assert "ionq_forte1" in block["message"]
+        assert "1000" in block["message"]
+
+    def test_TC233_block_response_has_required_fields(self):
+        """응답 dict에 필수 필드 모두 포함"""
+        from mcp_server import _check_cost_safeguard
+        block = _check_cost_safeguard("ionq_forte1", 1000)
+        for k in ("error", "blocked_by", "reason", "qpu", "shots", "message"):
+            assert k in block, f"missing field: {k}"
+
+    # ─── 임계값 정합성 ───
+
+    def test_TC240_threshold_is_50_usd(self):
+        """기본 임계값 $50 확인"""
+        from mcp_server import COST_SAFEGUARD_THRESHOLD_USD
+        assert COST_SAFEGUARD_THRESHOLD_USD == 50.0
+
+
+# ─────────────────────────────────────────────────────────────
+# 비용 요약 (uqi_billing_summary) — AWS/Azure helper 단위 테스트
+# ─────────────────────────────────────────────────────────────
+
+class TestBillingSummary:
+    """_aws_billing_summary / _azure_billing_summary helper — mock 기반"""
+
+    def test_TC300_aws_success_response_schema(self, monkeypatch):
+        """AWS 정상 응답 schema 검증"""
+        from unittest.mock import MagicMock
+        fake_ce = MagicMock()
+        fake_ce.get_cost_and_usage.return_value = {
+            'ResultsByTime': [{
+                'Groups': [
+                    {'Keys': ['Amazon Braket'],
+                     'Metrics': {'UnblendedCost': {'Amount': '8.30'}}},
+                    {'Keys': ['AWS Storage'],
+                     'Metrics': {'UnblendedCost': {'Amount': '0.0125'}}},
+                ]
+            }]
+        }
+        import boto3
+        monkeypatch.setattr(boto3, "client", lambda *a, **k: fake_ce)
+        from mcp_server import _aws_billing_summary
+        r = _aws_billing_summary()
+        assert r["ok"] is True
+        assert r["currency"] == "USD"
+        assert abs(r["total_usd"] - 8.3125) < 0.001
+        assert "Amazon Braket" in r["by_service"]
+        assert r["by_service"]["Amazon Braket"] == 8.30
+
+    def test_TC301_aws_access_denied_graceful(self, monkeypatch):
+        """AWS 권한 부족 시 graceful 메시지"""
+        from unittest.mock import MagicMock
+        fake_ce = MagicMock()
+        fake_ce.get_cost_and_usage.side_effect = Exception(
+            "AccessDeniedException: User not authorized to perform ce:GetCostAndUsage"
+        )
+        import boto3
+        monkeypatch.setattr(boto3, "client", lambda *a, **k: fake_ce)
+        from mcp_server import _aws_billing_summary
+        r = _aws_billing_summary()
+        assert r["ok"] is False
+        assert "권한 필요" in r["error"]
+        assert "관리자 문의" in r["error"]
+
+    def test_TC302_azure_success_response_schema(self, monkeypatch):
+        """Azure 정상 응답 schema 검증 (KRW 케이스)"""
+        from unittest.mock import MagicMock, patch
+        fake_token = MagicMock()
+        fake_token.token = "fake-bearer-token"
+        fake_cred = MagicMock()
+        fake_cred.get_token.return_value = fake_token
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "properties": {
+                "columns": [{"name": "Cost"}, {"name": "Currency"}],
+                "rows":    [[12345.6789, "KRW"]],
+            }
+        }
+        with patch("azure.identity.ClientSecretCredential", return_value=fake_cred), \
+             patch("requests.post", return_value=fake_resp):
+            from mcp_server import _azure_billing_summary
+            r = _azure_billing_summary()
+        assert r["ok"] is True
+        assert r["currency"] == "KRW"
+        assert abs(r["total"] - 12345.6789) < 0.001
+
+    def test_TC303_azure_401_graceful(self, monkeypatch):
+        """Azure 401 권한 부족 시 graceful 메시지"""
+        from unittest.mock import MagicMock, patch
+        fake_token = MagicMock()
+        fake_token.token = "fake-bearer-token"
+        fake_cred = MagicMock()
+        fake_cred.get_token.return_value = fake_token
+
+        fake_resp = MagicMock()
+        fake_resp.status_code = 401
+        fake_resp.text = "RBACAccessDenied"
+
+        with patch("azure.identity.ClientSecretCredential", return_value=fake_cred), \
+             patch("requests.post", return_value=fake_resp):
+            from mcp_server import _azure_billing_summary
+            r = _azure_billing_summary()
+        assert r["ok"] is False
+        assert "권한 필요" in r["error"]
+        assert "관리자 문의" in r["error"]
+
+    def test_TC304_azure_403_graceful(self, monkeypatch):
+        """Azure 403 forbidden도 동일하게 권한 안내"""
+        from unittest.mock import MagicMock, patch
+        fake_token = MagicMock()
+        fake_token.token = "t"
+        fake_cred = MagicMock()
+        fake_cred.get_token.return_value = fake_token
+        fake_resp = MagicMock()
+        fake_resp.status_code = 403
+        fake_resp.text = "forbidden"
+        with patch("azure.identity.ClientSecretCredential", return_value=fake_cred), \
+             patch("requests.post", return_value=fake_resp):
+            from mcp_server import _azure_billing_summary
+            r = _azure_billing_summary()
+        assert r["ok"] is False
+        assert "권한 필요" in r["error"]
+
+    def test_TC305_azure_empty_rows(self, monkeypatch):
+        """Azure 응답에 rows가 비어있어도 ok=True (사용량 0)"""
+        from unittest.mock import MagicMock, patch
+        fake_token = MagicMock()
+        fake_token.token = "t"
+        fake_cred = MagicMock()
+        fake_cred.get_token.return_value = fake_token
+        fake_resp = MagicMock()
+        fake_resp.status_code = 200
+        fake_resp.json.return_value = {
+            "properties": {"columns": [], "rows": []}
+        }
+        with patch("azure.identity.ClientSecretCredential", return_value=fake_cred), \
+             patch("requests.post", return_value=fake_resp):
+            from mcp_server import _azure_billing_summary
+            r = _azure_billing_summary()
+        assert r["ok"] is True
+        assert r["total"] == 0.0
+
+    def test_TC306_azure_missing_subscription_id(self, monkeypatch):
+        """AZURE_QUANTUM_SUBSCRIPTION_ID 없으면 사전 검사로 즉시 실패"""
+        # 빈 문자열로 set (delenv는 .env 재로드되면 무효, setenv로 명시적 비움)
+        monkeypatch.setenv("AZURE_QUANTUM_SUBSCRIPTION_ID", "")
+        from mcp_server import _azure_billing_summary
+        r = _azure_billing_summary()
+        assert r["ok"] is False
+        assert "SUBSCRIPTION_ID" in (r["error"] or "")
+
+    def test_TC307_billing_summary_response_includes_both_vendors(self):
+        """uqi_billing_summary 응답에 aws/azure 모두 포함"""
+        from mcp_server import _aws_billing_summary, _azure_billing_summary
+        # 직접 helper 호출만 검증 (실 API 결과는 권한 따라 다름)
+        aws = _aws_billing_summary()
+        az = _azure_billing_summary()
+        # 두 helper 모두 dict 반환
+        assert isinstance(aws, dict)
+        assert isinstance(az, dict)
+        # 필수 필드
+        for k in ("ok", "error"):
+            assert k in aws
+            assert k in az
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v",

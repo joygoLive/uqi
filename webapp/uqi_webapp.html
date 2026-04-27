@@ -163,7 +163,9 @@ body.mode-expert .btn-mode-toggle { border-color:var(--accent); color:var(--acce
 
 /* ── Easter-egg gated modes: qpu → qpu+pipeline → full ── */
 .logo { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
-.main-nav .nav-btn[onclick*="knowledge"] { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+/* 이스터에그 트리거 영역 — 모바일 더블탭 줌 차단 (touch-action: manipulation) */
+.main-nav .nav-btn[onclick*="knowledge"],
+.main-nav .nav-btn[onclick*="pipeline"] { user-select:none; -webkit-user-select:none; touch-action:manipulation; }
 /* Notion Archive 카드: 이스터에그로 토글 */
 .notion-archive-card { display:none; }
 body.ee-notion-revealed .notion-archive-card { display:block; }
@@ -937,6 +939,12 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
               <button class="btn-refresh-list" id="btn-job-refresh" onclick="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()"
                 data-i18n="pipeline.job_manager.refresh" style="margin-left:auto">↻ Refresh</button>
             </div>
+            <!-- 💰 비용 요약 (실시간 API — Refresh 클릭 시 함께 갱신) -->
+            <div id="billing-summary"
+                 style="margin-bottom:10px;padding:8px 10px;border:1px solid var(--border1);border-radius:4px;background:var(--bg2);font-size:11px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+              <span style="color:var(--text3)">💰 Billing (MTD)</span>
+              <span class="empty-state" style="color:var(--text3);font-size:11px">Click Refresh to load</span>
+            </div>
             <div class="step-result" id="result-job-history"><div class="empty-state" data-i18n="pipeline.job_manager.empty">Click Refresh to load jobs</div></div>
           </div>
         </div>
@@ -1338,6 +1346,60 @@ function _bindLogoEasterEgg() {
 }
 
 // ─────────────────────────────────────────────────────────
+// Easter-egg: Pipeline nav 탭 3초 이내 7회 클릭 → admin 모드 토글
+// (cost_safeguard 차단 우회 — uqi_qpu_submit에 admin_override 전달)
+// admin 활성 시 nav 탭 라벨이 "Pipeline (admin)"으로 표시되어
+// pipeline 화면 전체에 일괄 적용됨을 시각화.
+// 기존 패턴(Knowledge → Notion Archive)과 동일한 구조.
+// ─────────────────────────────────────────────────────────
+let _uqiAdminClicks = [];
+function _isUqiAdminMode() {
+  return localStorage.getItem('uqi_admin_mode') === '1';
+}
+function _applyUqiAdminMode(enabled) {
+  document.body.classList.toggle('uqi-admin-mode', !!enabled);
+  // 시각적 경고/주의 — QPU Execution 단계 타이틀 옆에 (admin) 배지
+  // (트리거는 Pipeline 탭 클릭이지만, 표시는 비싼 QPU 제출 단계 옆에서 상시 환기)
+  const stepLabel = document.querySelector(
+    '#step-qpu .step-name[data-i18n="pipeline.qpu.name"]'
+  );
+  if (stepLabel) {
+    const existing = stepLabel.querySelector('.uqi-admin-badge');
+    if (existing) existing.remove();
+    if (enabled) {
+      const badge = document.createElement('span');
+      badge.className = 'uqi-admin-badge';
+      badge.textContent = ' (admin)';
+      badge.style.color = '#f93';
+      badge.style.fontWeight = 'bold';
+      stepLabel.appendChild(badge);
+    }
+  }
+}
+function _toggleUqiAdminMode() {
+  const next = !_isUqiAdminMode();
+  localStorage.setItem('uqi_admin_mode', next ? '1' : '0');
+  _applyUqiAdminMode(next);
+}
+function _onPipelineNavClick() {
+  const now = Date.now();
+  _uqiAdminClicks.push(now);
+  _uqiAdminClicks = _uqiAdminClicks.filter(ts => now - ts <= UQI_EE_WINDOW_MS);
+  if (_uqiAdminClicks.length >= UQI_EE_CLICKS) {
+    _uqiAdminClicks = [];
+    _toggleUqiAdminMode();
+  }
+}
+function _bindPipelineAdminEasterEgg() {
+  const btn = document.querySelector('.main-nav .nav-btn[onclick*="pipeline"]');
+  if (!btn || btn._uqiAdminEeBound) return;
+  btn.addEventListener('click', _onPipelineNavClick);
+  btn._uqiAdminEeBound = true;
+  // 페이지 로드 시 기존 모드 복원
+  if (_isUqiAdminMode()) _applyUqiAdminMode(true);
+}
+
+// ─────────────────────────────────────────────────────────
 // Easter-egg: 지식베이스 탭 3초 이내 7회 클릭 → Notion Archive 카드 토글
 // ─────────────────────────────────────────────────────────
 let _uqiKnowledgeClicks = [];
@@ -1506,6 +1568,8 @@ function initApp() {
   // Easter-egg: Notion Archive 카드 노출 상태 복원 + Knowledge 탭 리스너
   _applyNotionReveal(_getNotionRevealed());
   _bindKnowledgeEasterEgg();
+  // Easter-egg: Pipeline 탭 클릭 → admin 모드 (cost_safeguard 우회, QPU Execution 옆 표시)
+  _bindPipelineAdminEasterEgg();
   setTimeout(()=>testConnection(),300);
   document.addEventListener('dragover',e=>e.preventDefault());
   document.addEventListener('drop',e=>e.preventDefault());
@@ -4051,6 +4115,7 @@ async function runQPUSubmit() {
       qpu_name: qpuName,
       shots: parseInt(document.getElementById('qpu-shots').value)||1024,
       confirmed: true,
+      admin_override: _isUqiAdminMode(),
     });
     const data = JSON.parse(getResultText(res));
     if (data.error) { setStepResult('qpu',`<div class="error-state">⚠ ${escHtml(data.error)}</div>`); return; }
@@ -4374,6 +4439,44 @@ async function _jhLoadDistinct(restoreValues) {
 }
 let _jobHistoryLastHtml = null; // 마지막 정상 렌더링 결과 캐시
 let _jobHistoryPage = 1;        // 현재 페이지 (1-based)
+// 💰 Billing Summary (AWS + Azure 실시간 API)
+async function _refreshBillingSummary() {
+  const el = document.getElementById('billing-summary');
+  if (!el) return;
+  el.innerHTML = '<span style="color:var(--text3)">💰 Billing (MTD)</span>'
+               + '<span class="empty-state" style="color:var(--text3);font-size:11px">'
+               + '<span class="spinner"></span> Loading...</span>';
+  try {
+    const res = await callTool('uqi_billing_summary', {});
+    const data = JSON.parse(getResultText(res));
+    const aws  = data.aws  || {};
+    const az   = data.azure || {};
+
+    const fmt = (n, d=2) => (typeof n === 'number') ? n.toFixed(d) : '-';
+    const renderAws = aws.ok
+      ? `<span style="color:var(--text1)">🟧 AWS: <b>$${fmt(aws.total_usd)}</b></span>`
+      : `<span style="color:var(--danger)" title="${escHtml(aws.error||'')}">🟧 AWS: ⚠ 권한 부족</span>`;
+    const renderAz  = az.ok
+      ? `<span style="color:var(--text1)">🟦 Azure: <b>${fmt(az.total)} ${escHtml(az.currency||'')}</b></span>`
+      : `<span style="color:var(--danger)" title="${escHtml(az.error||'')}">🟦 Azure: ⚠ 권한 부족</span>`;
+
+    let fetchedDisp = '';
+    if (data.fetched_at) {
+      const d = new Date(data.fetched_at);
+      if (!isNaN(d.getTime())) fetchedDisp = d.toLocaleTimeString();
+    }
+
+    el.innerHTML =
+      '<span style="color:var(--text3)">💰 Billing (MTD)</span>'
+      + renderAws + renderAz
+      + (fetchedDisp ? `<span style="color:var(--text3);font-size:10px;margin-left:auto">${fetchedDisp}</span>` : '');
+  } catch (e) {
+    el.innerHTML =
+      '<span style="color:var(--text3)">💰 Billing (MTD)</span>'
+      + `<span style="color:var(--danger)">⚠ ${escHtml(e.message)}</span>`;
+  }
+}
+
 async function loadJobHistory(skipCloudPoll = false, page = null) {
   if (page !== null) _jobHistoryPage = page;
   if (_jobHistoryBusy) return; // 이미 로딩 중이면 중복 실행 무시
@@ -4381,6 +4484,8 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   const btn = document.getElementById('btn-job-refresh');
   if (!el) return;
   _jobHistoryBusy = true;
+  // billing summary 병렬 갱신 (job list 로딩과 동시 진행, await 안 함)
+  _refreshBillingSummary();
   if (btn) { btn.disabled = true; btn.textContent = t('pipeline.job_manager.refreshing'); }
 
   const statusFilter  = document.getElementById('jh-status')?.value || '';

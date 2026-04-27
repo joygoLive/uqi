@@ -1,7 +1,7 @@
 aiofile==3.9.0
-amazon-braket-default-simulator==1.32.1
+amazon-braket-default-simulator==1.38.1
 amazon-braket-schemas==1.27.0
-amazon-braket-sdk==1.108.1
+amazon-braket-sdk==1.117.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 antlr4-python3-runtime==4.13.2
@@ -294,10 +294,12 @@ pyzx==0.9.0
 qiskit==2.3.1
 qiskit-aer @ file:///home/sean/work/qiskit/qiskit-aer/dist/qiskit_aer-0.17.2-cp312-cp312-linux_aarch64.whl#sha256=99e969236d04cc6e4886ba64b9ce30d37ee24c9f5252e678ecf3b3a2dc1ac576
 qiskit-algorithms==0.4.0
+qiskit-braket-provider>=0.13.0,<0.14
 qiskit-experiments==0.13.0
 qiskit-finance==0.4.1
 qiskit-ibm-experiment==0.4.8
 qiskit-ibm-runtime==0.45.1
+qiskit-ionq==1.0.2
 qiskit-iqm==18.2
 qiskit-optimization==0.7.0
 qiskit-qir==0.5.0

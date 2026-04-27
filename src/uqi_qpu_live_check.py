@@ -109,10 +109,9 @@ def _check_iqm(qpu_name: str) -> dict:
 
 
 _BRAKET_MAP = {
-    "ionq_forte1":    ("IONQ_FORTE_ARN",     "us-east-1"),
-    "ionq_aria1":     ("IONQ_ARIA_ARN",      "us-east-1"),
-    "rigetti_ankaa3": ("RIGETTI_ANKAA3_ARN", "us-west-1"),
-    "quera_aquila":   ("QuEra_Aquila_ARN",   "us-east-1"),
+    "ionq_forte1":     ("IONQ_FORTE_ARN",      "us-east-1"),
+    "rigetti_cepheus": ("RIGETTI_CEPHEUS_ARN", "us-west-1"),
+    "quera_aquila":    ("QuEra_Aquila_ARN",    "us-east-1"),
 }
 
 

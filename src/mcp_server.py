@@ -151,8 +151,8 @@ IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
 SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
-                   "rigetti_ankaa3",
-                   "ionq_forte1", "ionq_aria1",
+                   "rigetti_cepheus",
+                   "ionq_forte1",
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    "quera_aquila", "pasqal_fresnel",
                    "qpu:ascella", "qpu:belenos",
@@ -1667,6 +1667,51 @@ def _build_qpu_submit_message(d: dict) -> str:
         "※ QPU 큐 대기시간 별도",
         f"shots:       {shots}",
     ]
+
+    # 💰 비용 추정 (selected_qpu + shots 있으면 자동 계산)
+    if selected_qpu and shots:
+        try:
+            from uqi_pricing import estimate_cost
+            cost = estimate_cost(selected_qpu, shots)
+            lines += ["", "💰 예상 비용:"]
+            if cost.get("estimated_usd") is not None and cost["currency"] != "free":
+                lines.append(
+                    f"  {cost['details']}  →  ${cost['estimated_usd']} "
+                    f"(~{cost['estimated_krw']:,}원)"
+                )
+            elif cost.get("estimated_credits") is not None:
+                lines.append(f"  {cost['details']}")
+            elif cost["currency"] == "free":
+                lines.append(f"  무료 — {cost['details']}")
+            elif cost["currency"] == "hqc":
+                lines.append(f"  {cost['details']}")
+            else:
+                lines.append(f"  {cost['details']}")
+            lines.append(f"  신뢰도: {cost['confidence']}")
+            for w in cost.get("warnings", []):
+                lines.append(f"  ⚠ {w}")
+        except Exception as _ce:
+            lines += ["", f"💰 비용 추정 실패: {_ce}"]
+
+    # 🕐 디바이스 가용성 (Braket 디바이스만, AWS API로 execution window 조회)
+    if selected_qpu and (
+        selected_qpu.startswith("ionq_")
+        or selected_qpu.startswith("rigetti_")
+        or selected_qpu.startswith("quera_")
+        or selected_qpu.startswith("braket_")
+    ):
+        try:
+            from uqi_executor_braket import check_device_availability
+            avail = check_device_availability(selected_qpu)
+            lines += ["", "🕐 디바이스 가용성:"]
+            lines.append(f"  {avail['message']}")
+            if avail.get("device_status"):
+                lines.append(f"  device_status: {avail['device_status']}")
+            for w in avail.get("warnings", []):
+                lines.append(f"  ⚠ {w}")
+        except Exception as _ae:
+            lines += ["", f"🕐 가용성 체크 실패: {_ae}"]
+
     if qubit_warnings:
         lines += ["", "⚠️  큐비트 수 초과 (제출 불가):"]
         lines.extend(f"  • {w}" for w in qubit_warnings)
@@ -1696,6 +1741,12 @@ async def uqi_qpu_submit(
     if _check_err:
         return json.dumps({"error": _check_err})
     qpu_name = _resolve_qpu(algorithm_file, qpu_name)
+
+    # IonQ는 shot당 \$0.08 → 기본값 1024이면 task당 ~\$82. 사용자가 default를
+    # 그대로 사용한 경우(=1024)에만 100으로 자동 다운조정. 명시적으로 다른 값을
+    # 넘긴 경우는 사용자 의도 존중. (IonQ Forte-1 최소 100, 최대 5000)
+    if qpu_name.startswith("ionq_") and shots == 1024:
+        shots = 100
 
     def _run():
         import contextlib
@@ -2026,12 +2077,10 @@ async def uqi_qpu_submit(
                         stage1_results[name] = {"error": str(e)}
     
                 # ── Phase 1: 모든 QPU에 대해 캘리브레이션 기반 분석 (노이즈 시뮬 없음) ──
-                # 아날로그, 포토닉, Braket 전용 장비는 Qiskit 트랜스파일 불가 → 스킵
-                # IBM/IQM만 비동기 submit 지원. 나머지는 분석은 하되 실제 submit 불가.
+                # 아날로그, 포토닉 장비는 Qiskit 트랜스파일 불가 → 스킵
+                # IBM/IQM/Braket(IonQ/Rigetti) 비동기 submit 지원.
                 _SKIP_SUBMIT_QPUS = {
                     'quera_aquila', 'pasqal_fresnel',
-                    'ionq_forte1', 'ionq_aria1',
-                    'rigetti_ankaa3',
                     'quantinuum_h2_1', 'quantinuum_h2_2', 'quantinuum_h1_1',
                 }
                 for qpu in available_qpus:
@@ -2391,7 +2440,7 @@ async def uqi_qpu_submit(
                 prog = _submission_progress[sid]
 
                 # executor 1회 생성 (backend 재사용)
-                _ibm_exec = _iqm_exec = None
+                _ibm_exec = _iqm_exec = _braket_exec = None
                 if "ibm" in selected_qpu:
                     from uqi_executor_ibm import UQIExecutorIBM
                     _ibm_exec = UQIExecutorIBM(converter=converter, shots=shots)
@@ -2400,6 +2449,9 @@ async def uqi_qpu_submit(
                     from uqi_executor_iqm import UQIExecutorIQM
                     _iqm_exec = UQIExecutorIQM(converter=converter, shots=shots)
                     _iqm_exec._token = IQM_TOKEN
+                elif selected_qpu.startswith("ionq_") or selected_qpu.startswith("rigetti_"):
+                    from uqi_executor_braket import UQIExecutorBraket
+                    _braket_exec = UQIExecutorBraket(converter=converter, shots=shots)
 
                 for name in circuit_names_to_submit:
                     _saved_jid = {"id": None}  # Perceval 분기 콜백과 outer except 공유
@@ -2440,6 +2492,24 @@ async def uqi_qpu_submit(
                             prog["results"][name] = {
                                 "ok": True, "job_id": sub["job_id"],
                                 "backend": backend_url,
+                            }
+
+                        elif _braket_exec is not None:
+                            sub = _braket_exec._submit_single(
+                                name=name,
+                                qasm=converter.qasm_results.get(name),
+                                backend_name=selected_qpu,
+                            )
+                            if not sub["ok"]:
+                                raise Exception(sub["error"])
+                            _job_store.save_job(
+                                job_id=sub["job_id"], vendor="braket",
+                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "job_id": sub["job_id"],
+                                "backend": selected_qpu, "via": sub.get("via"),
                             }
 
                         elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
@@ -2506,7 +2576,7 @@ async def uqi_qpu_submit(
                             }
                         else:
                             raise ValueError(
-                                f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM만 지원)."
+                                f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM/Braket만 지원)."
                             )
 
                     except Exception as e:
@@ -2573,7 +2643,7 @@ async def uqi_qpu_submit(
 
 @mcp.tool()
 async def uqi_job_status(job_id: str) -> str:
-    """QPU 비동기 제출 job 상태 조회 (IBM/IQM 공통). job_id: 제출 시 받은 ID"""
+    """QPU 비동기 제출 job 상태 조회 (IBM/IQM/Braket 공통). job_id: 제출 시 받은 ID"""
     def _run():
         try:
             # 1) job store에서 캐시 확인
@@ -2609,6 +2679,9 @@ async def uqi_job_status(job_id: str) -> str:
                 backend_url = stored["extra"].get("backend_url", "")
                 result = UQIExecutorIQM.fetch_job_status(
                     job_id, token=IQM_TOKEN, backend_url=backend_url)
+            elif vendor == "braket":
+                from uqi_executor_braket import UQIExecutorBraket
+                result = UQIExecutorBraket.fetch_job_status(job_id)
             else:
                 return json.dumps({"error": f"미지원 vendor: {vendor}"})
 
@@ -2681,6 +2754,9 @@ async def uqi_job_cancel(job_id: str) -> str:
                     backend_url = stored["extra"].get("backend_url", "")
                     cloud_result = UQIExecutorIQM.cancel_job(
                         job_id, token=IQM_TOKEN, backend_url=backend_url)
+                elif vendor == "braket":
+                    from uqi_executor_braket import UQIExecutorBraket
+                    cloud_result = UQIExecutorBraket.cancel_job(job_id)
             except Exception as ce:
                 cloud_result = {"ok": False, "error": str(ce)}
 

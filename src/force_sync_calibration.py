@@ -8,7 +8,7 @@ force_sync_calibration.py
   /home/sean/work/orientom/QUWA/.venv_transpile/bin/python src/force_sync_calibration.py
 
 - .env 파일에서 API 토큰 자동 로드 (uqi/.env)
-- 대상 QPU: ibm_fez, rigetti_ankaa3 (데이터 없는 장비)
+- 대상 QPU: ibm_fez, rigetti_cepheus (데이터 없는 장비)
 - 타임아웃: QPU당 60초
 """
 
@@ -29,7 +29,7 @@ from uqi_calibration import UQICalibration
 
 TARGETS = [
     "ibm_fez",
-    "rigetti_ankaa3",
+    "rigetti_cepheus",
 ]
 
 TIMEOUT_PER_QPU = 60   # 초

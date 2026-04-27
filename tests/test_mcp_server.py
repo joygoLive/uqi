@@ -475,9 +475,9 @@ class TestConstants:
         """ibm_torino 은 지원 QPU 목록에서 제외됨"""
         assert "ibm_torino" not in SUPPORTED_QPUS
 
-    def test_TC057_rigetti_ankaa3_in_supported(self):
-        """rigetti_ankaa3 는 지원 QPU 목록에 포함됨"""
-        assert "rigetti_ankaa3" in SUPPORTED_QPUS
+    def test_TC057_rigetti_cepheus_in_supported(self):
+        """rigetti_cepheus 는 지원 QPU 목록에 포함됨 (Ankaa-3는 retire되어 제거됨)"""
+        assert "rigetti_cepheus" in SUPPORTED_QPUS
 
     def test_TC056_subprocess_in_blocked_patterns(self):
         patterns = [p for p, _ in _BLOCKED_PATTERNS]

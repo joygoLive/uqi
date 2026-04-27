@@ -606,7 +606,6 @@ class UQICalibration:
 
             _ionq_arn_map = {
                 "ionq_forte1": os.getenv("IONQ_FORTE_ARN"),
-                "ionq_aria1":  os.getenv("IONQ_ARIA1_ARN"),
             }
             arn = _ionq_arn_map.get(qpu_name) or os.getenv("IONQ_FORTE_ARN")
 
@@ -660,7 +659,10 @@ class UQICalibration:
                 region_name="us-west-1"
             )
             aws_session = AwsSession(boto_session=boto_session)
-            arn    = os.getenv("RIGETTI_ANKAA3_ARN")
+            _rigetti_arn_map = {
+                "rigetti_cepheus": os.getenv("RIGETTI_CEPHEUS_ARN"),
+            }
+            arn    = _rigetti_arn_map.get(qpu_name) or os.getenv("RIGETTI_CEPHEUS_ARN")
             device = AwsDevice(arn, aws_session=aws_session)
             props  = device.properties.dict()
 
@@ -1150,9 +1152,9 @@ class UQICalibration:
 
         # ── Braket (IonQ / Rigetti / QuEra) ──
         BRAKET_DEVICES = [
-            {"qpu_name": "ionq_forte1",    "arn_env": "IONQ_FORTE_ARN",    "region": "us-east-1", "vendor": "ionq"},
-            {"qpu_name": "rigetti_ankaa3", "arn_env": "RIGETTI_ANKAA3_ARN","region": "us-west-1", "vendor": "rigetti"},
-            {"qpu_name": "quera_aquila",   "arn_env": "QuEra_Aquila_ARN",  "region": "us-east-1", "vendor": "quera"},
+            {"qpu_name": "ionq_forte1",     "arn_env": "IONQ_FORTE_ARN",     "region": "us-east-1", "vendor": "ionq"},
+            {"qpu_name": "rigetti_cepheus", "arn_env": "RIGETTI_CEPHEUS_ARN","region": "us-west-1", "vendor": "rigetti"},
+            {"qpu_name": "quera_aquila",    "arn_env": "QuEra_Aquila_ARN",   "region": "us-east-1", "vendor": "quera"},
         ]
         aws_key    = os.getenv("AWS_ACCESS_KEY_ID")
         aws_secret = os.getenv("AWS_SECRET_ACCESS_KEY")

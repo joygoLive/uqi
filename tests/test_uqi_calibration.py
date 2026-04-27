@@ -154,7 +154,7 @@ class TestDetectVendor:
         assert self.cal._detect_vendor("ionq_forte1") == "ionq"
 
     def test_TC034_rigetti_detected(self):
-        assert self.cal._detect_vendor("rigetti_ankaa3") == "rigetti"
+        assert self.cal._detect_vendor("rigetti_cepheus") == "rigetti"
 
     def test_TC035_ankaa_detected_as_rigetti(self):
         assert self.cal._detect_vendor("ankaa_system") == "rigetti"
@@ -318,8 +318,8 @@ class TestSync:
         with patch.object(self.cal, "_sync_rigetti", return_value=True) as m, \
              patch.object(self.cal, "_append_history"), \
              patch.object(self.cal, "_save"):
-            self.cal.sync("rigetti_ankaa3")
-            m.assert_called_once_with("rigetti_ankaa3")
+            self.cal.sync("rigetti_cepheus")
+            m.assert_called_once_with("rigetti_cepheus")
 
     def test_TC066_quera_routes_to_sync_quera(self):
         with patch.object(self.cal, "_sync_quera", return_value=True) as m, \

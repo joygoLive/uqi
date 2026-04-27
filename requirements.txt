@@ -281,6 +281,7 @@ pyspnego==0.12.0
 pytest==9.0.2
 pytest-base-url==2.1.0
 pytest-cov==7.1.0
+pytest-forked==1.6.0
 pytest-playwright==0.7.2
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2

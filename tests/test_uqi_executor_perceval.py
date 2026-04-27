@@ -53,12 +53,20 @@ def _mock_pcvl(counts_raw=None, max_modes=12, max_photons=6):
             "max_photon_count": max_photons,
         }
     }
-    sampler = MagicMock()
-    # sample_count는 property로 Job 객체를 반환, Job()를 호출하면 결과 dict 반환
+    # sample_count는 property로 Job 객체를 반환.
+    # 코드는 job.get_results() 호출하므로 그 return_value에 결과 박아야 함.
+    # 주의: type(sampler).sample_count = property(...) 패턴은 MagicMock class에
+    # 누적되어 테스트 간 leak 발생 → 각 mock마다 unique subclass + instance 사용.
+    _results_dict = {"results": counts_raw if counts_raw is not None
+                     else {"(1, 0)": 600, "(0, 1)": 400}}
     job_mock = MagicMock()
-    job_mock.return_value = {"results": counts_raw if counts_raw is not None else {"(1, 0)": 600, "(0, 1)": 400}}
+    job_mock.get_results.return_value = _results_dict
+    job_mock.return_value = _results_dict   # legacy 호환 (Job() 직접 호출 케이스)
     job_mock.id = "cloud-job-id-mock"
-    type(sampler).sample_count = property(lambda self: job_mock)
+
+    class _SamplerMock(MagicMock):
+        sample_count = property(lambda self: job_mock)
+    sampler = _SamplerMock()
     pcvl.algorithm.Sampler.return_value = sampler
     session.build_remote_processor.return_value = processor
     pcvl.QuandelaSession.return_value = session

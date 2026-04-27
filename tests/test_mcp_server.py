@@ -634,6 +634,165 @@ class TestResolveQPU:
         assert result == "ibm_fez"
 
 
+# ─────────────────────────────────────────────────────────────
+# _build_qpu_submit_message 통합 테스트 (비용/가용성/출처/SUBMIT_BLOCK)
+# ─────────────────────────────────────────────────────────────
+
+class TestQpuSubmitMessageEnrichment:
+    """_build_qpu_submit_message가 비용/가용성/출처 정보를 자동 노출"""
+
+    @staticmethod
+    def _make_d(qpu, shots=100):
+        return {
+            "selected_qpu":    qpu,
+            "recommended_qpu": qpu,
+            "avg_fidelity":    0.95,
+            "total_cost":      100,
+            "shots":           shots,
+        }
+
+    def test_TC080_message_contains_cost_for_ionq(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("ionq_forte1", 100))
+        assert "💰" in msg
+        assert "8.3" in msg     # IonQ 100 shots = $8.30
+
+    def test_TC081_message_contains_cost_for_ibm(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("ibm_fez", 1024))
+        assert "💰" in msg
+        assert "무료" in msg
+
+    def test_TC082_message_contains_cost_for_iqm(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("iqm_emerald", 1024))
+        assert "💰" in msg
+        assert "credit" in msg.lower()
+
+    def test_TC083_message_contains_cost_for_pasqal(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("pasqal_fresnel", 100))
+        assert "💰" in msg
+        assert "EUR" in msg or "hour" in msg
+
+    def test_TC084_message_contains_cost_for_quandela(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("qpu:ascella", 1024))
+        assert "💰" in msg
+
+    def test_TC085_braket_qpu_has_availability_section(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("ionq_forte1", 100))
+        assert "🕐" in msg
+
+    def test_TC086_non_braket_no_availability_section(self):
+        """IBM/IQM/Quandela는 가용성 미표시 (자사 클라우드 정책)"""
+        from mcp_server import _build_qpu_submit_message
+        for qpu in ["ibm_fez", "iqm_emerald", "qpu:ascella"]:
+            msg = _build_qpu_submit_message(self._make_d(qpu, 100))
+            assert "🕐" not in msg, f"{qpu}는 가용성 표시 안 해야 함"
+
+    def test_TC087_pasqal_has_azure_availability_section(self):
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("pasqal_fresnel", 100))
+        assert "🕐" in msg
+        assert "Azure" in msg
+
+    def _mock_cal_data(self, monkeypatch, data: dict):
+        """UQICalibration().data를 mock으로 주입 — DB 의존 격리"""
+        from unittest.mock import MagicMock
+        fake_cal = MagicMock()
+        fake_cal.data = data
+        monkeypatch.setattr("uqi_calibration.UQICalibration",
+                            lambda *a, **k: fake_cal)
+
+    def test_TC088_braket_data_source_displayed(self, monkeypatch):
+        """Braket 게이트웨이 경유 — 출처 표시"""
+        self._mock_cal_data(monkeypatch, {
+            "ionq_forte1":     {"data_source": "aws_braket"},
+            "rigetti_cepheus": {"data_source": "aws_braket"},
+            "quera_aquila":    {"data_source": "aws_braket"},
+        })
+        from mcp_server import _build_qpu_submit_message
+        for qpu in ["ionq_forte1", "rigetti_cepheus", "quera_aquila"]:
+            msg = _build_qpu_submit_message(self._make_d(qpu, 100))
+            assert "🔄" in msg, f"{qpu} 출처 표시 안 됨"
+            assert "AWS Braket" in msg or "Braket" in msg
+
+    def test_TC089_self_cloud_no_data_source(self, monkeypatch):
+        """자사 클라우드(IBM/IQM/Quandela)는 출처 미표시"""
+        # 이 vendor들은 _sync_*에 data_source 안 박음 → cal.data에 없음
+        self._mock_cal_data(monkeypatch, {})
+        from mcp_server import _build_qpu_submit_message
+        for qpu in ["ibm_fez", "iqm_emerald", "qpu:ascella"]:
+            msg = _build_qpu_submit_message(self._make_d(qpu, 100))
+            assert "🔄" not in msg, f"{qpu}는 출처 표시 안 해야 함"
+
+    def test_TC090_quantinuum_static_data_warning(self, monkeypatch):
+        """Quantinuum 정적 데이터 + 신뢰도 경고 자동 표시"""
+        self._mock_cal_data(monkeypatch, {
+            "quantinuum_h2_1": {
+                "data_source": "pytket_offline_static",
+                "noise_date":  "2025-04-30",
+            },
+        })
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("quantinuum_h2_1", 100))
+        assert "🔄" in msg
+        assert "정적" in msg or "OFFLINE" in msg or "pytket" in msg
+        assert "Nexus" in msg     # Live 데이터는 Nexus 안내
+
+    def test_TC091_pasqal_data_source_azure(self, monkeypatch):
+        """Pasqal calibration data_source = azure_quantum"""
+        self._mock_cal_data(monkeypatch, {
+            "pasqal_fresnel": {"data_source": "azure_quantum"},
+        })
+        from mcp_server import _build_qpu_submit_message
+        msg = _build_qpu_submit_message(self._make_d("pasqal_fresnel", 100))
+        assert "🔄" in msg
+        assert "Azure" in msg
+
+
+# ─────────────────────────────────────────────────────────────
+# SUPPORTED_QPUS 카탈로그 정합성 (본 세션 정책 반영)
+# ─────────────────────────────────────────────────────────────
+
+class TestSupportedQpusCatalog:
+
+    def test_TC100_ionq_aria1_removed(self):
+        """Aria-1 retire 정리"""
+        from mcp_server import SUPPORTED_QPUS
+        assert "ionq_aria1" not in SUPPORTED_QPUS
+
+    def test_TC101_rigetti_ankaa3_removed(self):
+        """Ankaa-3 retire 정리"""
+        from mcp_server import SUPPORTED_QPUS
+        assert "rigetti_ankaa3" not in SUPPORTED_QPUS
+
+    def test_TC102_rigetti_cepheus_present(self):
+        from mcp_server import SUPPORTED_QPUS
+        assert "rigetti_cepheus" in SUPPORTED_QPUS
+
+    def test_TC103_pasqal_fresnel_present(self):
+        from mcp_server import SUPPORTED_QPUS
+        assert "pasqal_fresnel" in SUPPORTED_QPUS
+        assert "pasqal_fresnel_can1" in SUPPORTED_QPUS
+
+    def test_TC104_pasqal_simulator_excluded(self):
+        """정책: Pasqal 시뮬레이터(emu-*)는 카탈로그 제외"""
+        from mcp_server import SUPPORTED_QPUS
+        assert "pasqal_emu_tn" not in SUPPORTED_QPUS
+        assert "pasqal_emu_mps" not in SUPPORTED_QPUS
+        assert "pasqal_emu_sv" not in SUPPORTED_QPUS
+
+    def test_TC105_quantinuum_present_for_analysis(self):
+        """Quantinuum은 분석/추천용으로 카탈로그 유지 (submit은 BLOCK)"""
+        from mcp_server import SUPPORTED_QPUS
+        assert "quantinuum_h2_1" in SUPPORTED_QPUS
+        assert "quantinuum_h2_2" in SUPPORTED_QPUS
+        assert "quantinuum_h1_1" in SUPPORTED_QPUS
+
+
 if __name__ == "__main__":
     import pytest
     pytest.main([__file__, "-v",

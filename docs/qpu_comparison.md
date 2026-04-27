@@ -121,6 +121,19 @@ Fidelity: 100% (시뮬레이터 ideal)
 
 → **SV1 vs IonQ 비교**: 비용 664배, 시간 60배, fidelity -3pp (실 노이즈 측정 값).
 
+### Azure Quantum end-to-end 검증 (Quantinuum syntax checker)
+```
+Target:   quantinuum.sim.h2-1sc (syntax checker)
+회로:     Bell state, 100 shots
+비용:     1 eHQC (무료 한도 내)
+시간:     19.4초 wall-clock (인증 + 제출 + 폴링 17s + 결과)
+결과:    {'00': 100}  ← placeholder (syntax checker는 실행 안 함, 문법만 검증)
+검증 흐름: authn → backend.run() → status poll → result.get_counts() ✅
+```
+
+→ **Azure SDK end-to-end 정상 동작 확인** (Pasqal Fresnel은 Pulser 비호환이라
+   gate 회로로는 직접 검증 불가, 대안으로 Quantinuum syntax checker 활용).
+
 ### 비용 함정 발견
 - IonQ default 1024 shots = **$82.22** (~ 11만원)
 - UQI에서 IonQ 선택 시 자동으로 100 shots로 다운조정 (mcp_server.py 가드)

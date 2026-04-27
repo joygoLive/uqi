@@ -196,14 +196,37 @@ PRICING: dict[str, dict] = {
         "updated_at": "2026-04-27",
     },
 
-    # ────────── Pasqal (공개 무료 API) ──────────
+    # ────────── Pasqal (Azure Quantum 경유, Pay-As-You-Go) ──────────
+    # 실 QPU는 시간 기반 과금 (EUR/QPU-hour). EUR → USD 환산 1.08.
+    # 단순 회로도 수 분 runtime 발생 가능 → 작은 회로도 큰 비용.
     "pasqal_fresnel": {
-        "vendor": "pasqal",
-        "model": "free",
-        "free": True,
+        "vendor": "azure",
+        "azure_provider": "pasqal",
+        "model": "per_hour",
+        "per_hour_eur": 3000.0,
+        "per_hour_usd": 3240.0,           # EUR 3000 × 1.08
         "confidence": "exact",
-        "source": "https://apis.pasqal.cloud/core-fast/api/v1/devices/public-specs (공개 REST API)",
+        "source": "https://learn.microsoft.com/en-us/azure/quantum/pricing (Pasqal PAYG, 확인 2026-04-27)",
         "updated_at": "2026-04-27",
+        "warnings": [
+            "EUR 3,000 / QPU-hour — 시간 기반, 회로 길이가 비용 결정",
+            "단순 회로도 수 분 runtime 발생 가능 — 작은 비용도 수십 USD",
+            "estimate는 60초 runtime 가정 — 실 runtime은 더 길 수 있음",
+        ],
+    },
+    "pasqal_fresnel_can1": {
+        "vendor": "azure",
+        "azure_provider": "pasqal",
+        "model": "per_hour",
+        "per_hour_eur": 3000.0,
+        "per_hour_usd": 3240.0,
+        "confidence": "exact",
+        "source": "https://learn.microsoft.com/en-us/azure/quantum/pricing (Pasqal PAYG)",
+        "updated_at": "2026-04-27",
+        "warnings": [
+            "Canada 리전 — Fresnel과 동일 단가",
+            "EUR 3,000 / QPU-hour",
+        ],
     },
 
     # ────────── Quantinuum (HQC, 별도 계약 필요) ──────────
@@ -324,6 +347,28 @@ def estimate_cost(qpu_name: str, shots: int = 1024,
         result["currency"] = "USD"
         result["details"] = f"${per_min:.3f}/min × {runtime_sec:.0f}s ≈ ${usd:.4f}"
         result["warnings"].append("Runtime은 회로 복잡도에 따라 변동")
+
+    # ───── Azure per_hour (Pasqal Fresnel) ─────
+    elif model == "per_hour":
+        per_hour_usd = pricing["per_hour_usd"]
+        per_hour_eur = pricing.get("per_hour_eur")
+        # runtime 추정: 명시 안 되면 60초 (Pasqal 보수적 가정)
+        runtime_sec = estimated_runtime_sec if estimated_runtime_sec else 60.0
+        usd = per_hour_usd * (runtime_sec / 3600.0)
+        result["estimated_usd"] = round(usd, 4)
+        result["estimated_krw"] = int(usd * USD_TO_KRW)
+        result["currency"] = "USD"
+        eur_str = f" (EUR {per_hour_eur:.0f}/hour)" if per_hour_eur else ""
+        result["details"] = (
+            f"${per_hour_usd:.0f}/hour{eur_str} × {runtime_sec:.0f}s ≈ ${usd:.4f}"
+        )
+        result["warnings"].append(
+            "⚠️ Pasqal Fresnel은 시간 기반 — 실 runtime이 추정보다 길면 비용 급증"
+        )
+        if usd >= 10:
+            result["warnings"].append(
+                f"⚠️ 예상 비용 ${usd:.2f} — 작은 회로도 비싼 편, runtime 신중 결정"
+            )
 
     # ───── IBM Open Plan ─────
     elif model == "free_quota":

@@ -3,6 +3,8 @@ amazon-braket-default-simulator==1.38.1
 amazon-braket-schemas==1.27.0
 amazon-braket-sdk==1.117.0
 annotated-doc==0.0.4
+azure-identity>=1.15
+azure-quantum[qiskit]>=2.0
 annotated-types==0.7.0
 antlr4-python3-runtime==4.13.2
 anyio==4.12.1

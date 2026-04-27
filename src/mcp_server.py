@@ -153,10 +153,17 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "rigetti_cepheus",
                    "ionq_forte1",
+                   # Azure Quantum — Pasqal Fresnel 실 QPU만
+                   "pasqal_fresnel", "pasqal_fresnel_can1",
+                   # Quantinuum — 분석/추천만 가능 (자사 클라우드 통합 전까지 submit 차단)
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
-                   "quera_aquila", "pasqal_fresnel",
+                   # Braket QuEra (AHS — gate 회로 비호환)
+                   "quera_aquila",
+                   # Quandela
                    "qpu:ascella", "qpu:belenos",
                    "sim:ascella", "sim:belenos"]
+# 정책: 실 QPU 위주. Pasqal 시뮬레이터(Azure emu-*) 제외.
+# Quantinuum은 자사 클라우드 통합 예정 — 분석/추천에만 노출, 실 submit은 차단(_SKIP_SUBMIT_QPUS)
 
 _pending_submissions = {}
 
@@ -1693,7 +1700,7 @@ def _build_qpu_submit_message(d: dict) -> str:
         except Exception as _ce:
             lines += ["", f"💰 비용 추정 실패: {_ce}"]
 
-    # 🕐 디바이스 가용성 (Braket 디바이스만, AWS API로 execution window 조회)
+    # 🕐 디바이스 가용성 (Braket 디바이스 — AWS execution window)
     if selected_qpu and (
         selected_qpu.startswith("ionq_")
         or selected_qpu.startswith("rigetti_")
@@ -1711,6 +1718,74 @@ def _build_qpu_submit_message(d: dict) -> str:
                 lines.append(f"  ⚠ {w}")
         except Exception as _ae:
             lines += ["", f"🕐 가용성 체크 실패: {_ae}"]
+
+    # 🕐 디바이스 가용성 (Azure Quantum — target.current_availability)
+    if selected_qpu and selected_qpu.startswith("pasqal_"):
+        try:
+            from uqi_executor_azure import check_device_availability_azure
+            avail = check_device_availability_azure(selected_qpu)
+            lines += ["", "🕐 디바이스 가용성 (Azure Quantum):"]
+            lines.append(f"  {avail['message']}")
+            if avail.get("device_status"):
+                lines.append(f"  device_status: {avail['device_status']}")
+            qt = avail.get("average_queue_time_sec")
+            if qt is not None:
+                lines.append(f"  average_queue_time: {qt}초")
+            for w in avail.get("warnings", []):
+                lines.append(f"  ⚠ {w}")
+        except Exception as _ae:
+            lines += ["", f"🕐 Azure 가용성 체크 실패: {_ae}"]
+
+    # 🔄 캘리브레이션 데이터 입수 경로 (게이트웨이 경유 또는 정적 데이터 시 표시)
+    if selected_qpu:
+        try:
+            from uqi_calibration import UQICalibration
+            _cal = UQICalibration()
+            _cal_entry = _cal.data.get(selected_qpu, {})
+            _src = _cal_entry.get("data_source")
+            if _src:
+                _src_label = {
+                    "aws_braket":            "AWS Braket 게이트웨이 경유",
+                    "azure_quantum":         "Azure Quantum 게이트웨이 경유",
+                    "pytket_offline_static": "정적 번들 (pytket-quantinuum OFFLINE)",
+                }.get(_src, _src)
+                lines += ["", "🔄 캘리브레이션 출처:"]
+                lines.append(f"  {_src_label}")
+                # 정적 데이터인 경우 신선도 평가 + 신뢰도 경고
+                if _src == "pytket_offline_static":
+                    nd = _cal_entry.get("noise_date")
+                    if nd:
+                        try:
+                            from datetime import datetime as _dt
+                            _d = _dt.fromisoformat(nd).date()
+                            _today = _dt.now().date()
+                            _days = (_today - _d).days
+                            if _days > 365:
+                                _months = _days // 30
+                                lines.append(
+                                    f"  ⚠ noise_date={nd} ({_months}개월 경과 — "
+                                    f"⚠️ 신뢰도 낮음, 실 디바이스와 차이 클 수 있음)"
+                                )
+                            elif _days > 180:
+                                lines.append(
+                                    f"  ⚠ noise_date={nd} ({_days}일 경과 — "
+                                    f"신뢰도 보통)"
+                                )
+                            else:
+                                lines.append(f"  ⚠ noise_date={nd}")
+                        except Exception:
+                            lines.append(f"  ⚠ noise_date={nd}")
+                    lines.append(
+                        "  ⚠ 정적 데이터 — pytket-quantinuum 패키지 내장 (live 갱신 안 됨)"
+                    )
+                    lines.append(
+                        "  ⚠ Live 데이터는 Quantinuum Nexus(qnexus) 계약 후 가능"
+                    )
+                    lines.append(
+                        "  ⚠ 분석/추천 결과는 참고용 — 실 제출은 Nexus 통합 후 권장"
+                    )
+        except Exception:
+            pass
 
     if qubit_warnings:
         lines += ["", "⚠️  큐비트 수 초과 (제출 불가):"]
@@ -2080,7 +2155,14 @@ async def uqi_qpu_submit(
                 # 아날로그, 포토닉 장비는 Qiskit 트랜스파일 불가 → 스킵
                 # IBM/IQM/Braket(IonQ/Rigetti) 비동기 submit 지원.
                 _SKIP_SUBMIT_QPUS = {
-                    'quera_aquila', 'pasqal_fresnel',
+                    # AHS analog — gate 회로 비호환 (회로 형식 불일치)
+                    'quera_aquila',
+                    # Pasqal Fresnel — Pulser pulse program 입력 (Qiskit gate 회로 비호환)
+                    # Azure target API: input_data_format='pasqal.pulser.v1'
+                    # 향후 Pulser 알고리즘 워크플로우 지원 시 SKIP에서 제거
+                    'pasqal_fresnel', 'pasqal_fresnel_can1',
+                    # Quantinuum — 자사 클라우드(Nexus) 통합 전까지 submit 차단
+                    # (분석/추천은 가능, 단 캘리브레이션은 정적 OFFLINE 데이터)
                     'quantinuum_h2_1', 'quantinuum_h2_2', 'quantinuum_h1_1',
                 }
                 for qpu in available_qpus:
@@ -2439,8 +2521,38 @@ async def uqi_qpu_submit(
             def _bg_submit(sid=sid):
                 prog = _submission_progress[sid]
 
+                # ── 회로 형식 비호환 / 통합 미완료 QPU 사전 차단 ──
+                # gate 회로(Qiskit) 알고리즘으로는 제출 불가.
+                # 향후 Pulser/AHS 워크플로우 또는 Nexus 통합 시 SKIP에서 제거.
+                _SUBMIT_BLOCK_QPUS = {
+                    'quera_aquila':         'AHS analog (Qiskit gate 회로 비호환)',
+                    'pasqal_fresnel':       'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
+                    'pasqal_fresnel_can1':  'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
+                    'quantinuum_h2_1':      'Quantinuum Nexus 통합 대기',
+                    'quantinuum_h2_2':      'Quantinuum Nexus 통합 대기',
+                    'quantinuum_h1_1':      'Quantinuum Nexus 통합 대기',
+                }
+                if selected_qpu in _SUBMIT_BLOCK_QPUS:
+                    _reason = _SUBMIT_BLOCK_QPUS[selected_qpu]
+                    prog["status"] = "blocked"
+                    prog["error"] = (
+                        f"{selected_qpu} 은(는) 현재 제출 차단됨: {_reason}. "
+                        f"분석/추천만 가능, 실 제출은 호환 알고리즘/통합 후 가능."
+                    )
+                    for _name in circuit_names_to_submit:
+                        prog["results"][_name] = {
+                            "ok": False,
+                            "error": f"[{selected_qpu}] {_reason}",
+                            "blocked": True,
+                        }
+                    print(
+                        f"  [BgSubmit] {selected_qpu} 차단: {_reason}",
+                        file=sys.stderr,
+                    )
+                    return
+
                 # executor 1회 생성 (backend 재사용)
-                _ibm_exec = _iqm_exec = _braket_exec = None
+                _ibm_exec = _iqm_exec = _braket_exec = _azure_exec = None
                 if "ibm" in selected_qpu:
                     from uqi_executor_ibm import UQIExecutorIBM
                     _ibm_exec = UQIExecutorIBM(converter=converter, shots=shots)
@@ -2452,6 +2564,9 @@ async def uqi_qpu_submit(
                 elif selected_qpu.startswith("ionq_") or selected_qpu.startswith("rigetti_"):
                     from uqi_executor_braket import UQIExecutorBraket
                     _braket_exec = UQIExecutorBraket(converter=converter, shots=shots)
+                elif selected_qpu.startswith("pasqal_"):
+                    from uqi_executor_azure import UQIExecutorAzure
+                    _azure_exec = UQIExecutorAzure(converter=converter, shots=shots)
 
                 for name in circuit_names_to_submit:
                     _saved_jid = {"id": None}  # Perceval 분기 콜백과 outer except 공유
@@ -2504,6 +2619,24 @@ async def uqi_qpu_submit(
                                 raise Exception(sub["error"])
                             _job_store.save_job(
                                 job_id=sub["job_id"], vendor="braket",
+                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            )
+                            prog["results"][name] = {
+                                "ok": True, "job_id": sub["job_id"],
+                                "backend": selected_qpu, "via": sub.get("via"),
+                            }
+
+                        elif _azure_exec is not None:
+                            sub = _azure_exec._submit_single(
+                                name=name,
+                                qasm=converter.qasm_results.get(name),
+                                backend_name=selected_qpu,
+                            )
+                            if not sub["ok"]:
+                                raise Exception(sub["error"])
+                            _job_store.save_job(
+                                job_id=sub["job_id"], vendor="azure",
                                 qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                 extra={"via": sub.get("via"), "backend": selected_qpu},
                             )
@@ -2576,7 +2709,7 @@ async def uqi_qpu_submit(
                             }
                         else:
                             raise ValueError(
-                                f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM/Braket만 지원)."
+                                f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM/Braket/Azure만 지원)."
                             )
 
                     except Exception as e:
@@ -2643,7 +2776,7 @@ async def uqi_qpu_submit(
 
 @mcp.tool()
 async def uqi_job_status(job_id: str) -> str:
-    """QPU 비동기 제출 job 상태 조회 (IBM/IQM/Braket 공통). job_id: 제출 시 받은 ID"""
+    """QPU 비동기 제출 job 상태 조회 (IBM/IQM/Braket/Azure 공통). job_id: 제출 시 받은 ID"""
     def _run():
         try:
             # 1) job store에서 캐시 확인
@@ -2682,6 +2815,9 @@ async def uqi_job_status(job_id: str) -> str:
             elif vendor == "braket":
                 from uqi_executor_braket import UQIExecutorBraket
                 result = UQIExecutorBraket.fetch_job_status(job_id)
+            elif vendor == "azure":
+                from uqi_executor_azure import UQIExecutorAzure
+                result = UQIExecutorAzure.fetch_job_status(job_id)
             else:
                 return json.dumps({"error": f"미지원 vendor: {vendor}"})
 
@@ -2757,6 +2893,9 @@ async def uqi_job_cancel(job_id: str) -> str:
                 elif vendor == "braket":
                     from uqi_executor_braket import UQIExecutorBraket
                     cloud_result = UQIExecutorBraket.cancel_job(job_id)
+                elif vendor == "azure":
+                    from uqi_executor_azure import UQIExecutorAzure
+                    cloud_result = UQIExecutorAzure.cancel_job(job_id)
             except Exception as ce:
                 cloud_result = {"ok": False, "error": str(ce)}
 

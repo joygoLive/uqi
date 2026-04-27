@@ -626,6 +626,7 @@ class UQICalibration:
 
             self.data[qpu_name] = {
                 "vendor":       "ionq",
+                "data_source":  "aws_braket",   # AWS Braket 게이트웨이 경유
                 "num_qubits":   n_qubits,
                 "avg_t1_ms":    t1_us / 1000.0,
                 "avg_t2_ms":    None,
@@ -683,6 +684,7 @@ class UQICalibration:
 
             self.data[qpu_name] = {
                 "vendor":       "rigetti",
+                "data_source":  "aws_braket",   # AWS Braket 게이트웨이 경유
                 "num_qubits":   n_qubits,
                 "avg_t1_ms":    None,
                 "avg_t2_ms":    None,
@@ -745,6 +747,7 @@ class UQICalibration:
 
             self.data[qpu_name] = {
                 "vendor":            "quera",
+                "data_source":       "aws_braket",   # AWS Braket 게이트웨이 경유
                 "type":              "neutral_atom",
                 "num_qubits":        n_qubits,
                 "avg_t1_ms":         float(coherence_time * 1e3) if coherence_time else 75.0,
@@ -812,6 +815,9 @@ class UQICalibration:
 
             self.data[qpu_name] = {
                 "vendor":              "pasqal",
+                # Pasqal Fresnel은 Azure Quantum 게이트웨이 통해 사용
+                # (실 specs는 Pasqal Cloud public-specs API에서 가져옴 — 동일 디바이스)
+                "data_source":         "azure_quantum",
                 "type":                "neutral_atom",
                 "num_qubits":          n_qubits,
                 "avg_t1_ms":           t1_ms,
@@ -925,6 +931,10 @@ class UQICalibration:
 
             self.data[qpu_name] = {
                 "vendor":         "quantinuum",
+                # 정적 OFFLINE 번들 데이터 (pytket-quantinuum 패키지 내장).
+                # Live data는 자사 Nexus(qnexus 패키지) 계약 후 가능.
+                # noise_date 필드로 데이터 신선도 확인 가능.
+                "data_source":    "pytket_offline_static",
                 "num_qubits":     machine.get('n_qubits'),
                 "avg_1q_error":   ns.get('1q_gate_error', {}).get('p1'),
                 "avg_2q_error":   ns.get('2q_gate_error', {}).get('p2'),

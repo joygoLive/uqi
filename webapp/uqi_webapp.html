@@ -3800,8 +3800,8 @@ function _resetAllStepResults() {
   _lastOptimizeData = null;
   // QASM 캐시 클리어 (이전 알고리즘 데이터 잔상 방지)
   for (const k in _qasmStore) delete _qasmStore[k];
-  // 펼친 step 카드 모두 collapse (단 'analyze' 는 default open 으로 유지)
-  const _stepsToCollapse = ['optimize','noise','qec-analyze','qec-apply','qpu','job-history'];
+  // 펼친 step 카드 모두 collapse (analyze 포함 — 완전 초기화)
+  const _stepsToCollapse = ['analyze','optimize','noise','qec-analyze','qec-apply','qpu','job-history'];
   for (const sname of _stepsToCollapse) {
     if (_openSteps.has(sname)) {
       _openSteps.delete(sname);

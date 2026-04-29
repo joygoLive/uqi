@@ -572,6 +572,7 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         return _json.dumps({
             "ok":             True,
             "confirmed":      False,
+            "status":         "awaiting_confirmation",   # webapp Confirm 버튼 표시 트리거
             "selected_qpu":   qpu_name,
             "framework":      framework,
             "shots":          shots,

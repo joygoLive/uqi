@@ -2119,8 +2119,7 @@ async def uqi_qpu_submit(
                             _saved_jid["id"] = jid
                             try:
                                 _job_store.save_job(
-                                    job_id=jid, vendor="quandela",
-                                    qpu_name=qpu_name, circuit_name=_name, shots=shots,
+                                    job_id=jid, qpu_name=qpu_name, circuit_name=_name, shots=shots,
                                     extra={"backend": qpu_name, "platform": platform},
                                 )
                             except Exception as _se:
@@ -2145,8 +2144,7 @@ async def uqi_qpu_submit(
                             if not _saved_jid["id"]:
                                 # 콜백 미실행 (제출 자체 실패 등) — 지금이라도 등록
                                 _job_store.save_job(
-                                    job_id=_jid, vendor="quandela",
-                                    qpu_name=qpu_name, circuit_name=name, shots=shots,
+                                    job_id=_jid, qpu_name=qpu_name, circuit_name=name, shots=shots,
                                     extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
                                 )
 
@@ -2665,7 +2663,7 @@ async def uqi_qpu_submit(
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
                             _job_store.save_job(
-                                job_id=sub["job_id"], vendor="ibm",
+                                job_id=sub["job_id"],
                                 qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                 extra={"via": sub.get("via"), "backend": selected_qpu},
                             )
@@ -2685,7 +2683,7 @@ async def uqi_qpu_submit(
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
                             _job_store.save_job(
-                                job_id=sub["job_id"], vendor="iqm",
+                                job_id=sub["job_id"],
                                 qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                 extra={"backend_url": backend_url},
                             )
@@ -2703,7 +2701,7 @@ async def uqi_qpu_submit(
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
                             _job_store.save_job(
-                                job_id=sub["job_id"], vendor="braket",
+                                job_id=sub["job_id"],
                                 qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                 extra={"via": sub.get("via"), "backend": selected_qpu},
                             )
@@ -2721,7 +2719,7 @@ async def uqi_qpu_submit(
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
                             _job_store.save_job(
-                                job_id=sub["job_id"], vendor="azure",
+                                job_id=sub["job_id"],
                                 qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                 extra={"via": sub.get("via"), "backend": selected_qpu},
                             )
@@ -2746,7 +2744,7 @@ async def uqi_qpu_submit(
                                 _saved_jid["id"] = jid
                                 try:
                                     _job_store.save_job(
-                                        job_id=jid, vendor="quandela",
+                                        job_id=jid,
                                         qpu_name=selected_qpu, circuit_name=_name, shots=shots,
                                         extra={"backend": selected_qpu, "platform": platform},
                                     )
@@ -2768,8 +2766,7 @@ async def uqi_qpu_submit(
                                     or _juuid.uuid4().hex)
                             if not _saved_jid["id"]:
                                 _job_store.save_job(
-                                    job_id=_jid, vendor="quandela",
-                                    qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                    job_id=_jid, qpu_name=selected_qpu, circuit_name=name, shots=shots,
                                     extra={"backend": selected_qpu, "exec_time": round(exec_time, 2)},
                                 )
 
@@ -2872,11 +2869,17 @@ async def uqi_job_status(job_id: str) -> str:
             # 완료/취소/확정실패 상태면 클라우드 재조회 없이 즉시 리턴
             # error는 polling 버그로 인한 오기록일 수 있으므로 클라우드 재조회 허용
             # failed는 IQM 장비 확정 실패 — 재시도 불필요
+            qpu_name = stored["qpu_name"]
+            # SDK 분기용 vendor 키 ('ibm'/'iqm'/'braket'/'azure'/'quandela') — pricing 모델에서 추출
+            from uqi_pricing import get_pricing
+            _pmeta = get_pricing(qpu_name) or {}
+            vendor = _pmeta.get("vendor", "")
             if stored["status"] in ("done", "cancelled", "failed"):
                 return json.dumps({
                     "job_id":  job_id,
-                    "vendor":  stored["vendor"],
-                    "qpu":     stored["qpu_name"],
+                    "vendor":  vendor,
+                    "runtime": stored.get("runtime"),
+                    "qpu":     qpu_name,
                     "status":  stored["status"],
                     "counts":  stored["counts"],
                     "error":   stored["error"],
@@ -2885,9 +2888,7 @@ async def uqi_job_status(job_id: str) -> str:
                     "updated_at":   stored["updated_at"],
                 }, ensure_ascii=False)
 
-            # 2) 클라우드 API 폴링
-            vendor = stored["vendor"]
-            qpu_name = stored["qpu_name"]
+            # 2) 클라우드 API 폴링 (vendor / qpu_name 위에서 추출)
 
             if vendor == "ibm":
                 from uqi_executor_ibm import UQIExecutorIBM
@@ -2962,7 +2963,10 @@ async def uqi_job_cancel(job_id: str) -> str:
                 })
             # error 상태는 로컬 버그 오기록일 수 있으므로 클라우드 취소 시도 허용
 
-            vendor = stored["vendor"]
+            # SDK 분기용 vendor 키 — pricing 모델에서 추출 (qpu_name 기반)
+            from uqi_pricing import get_pricing
+            _pmeta = get_pricing(stored["qpu_name"]) or {}
+            vendor = _pmeta.get("vendor", "")
             cloud_result = {"ok": False, "error": "클라우드 취소 미지원"}
 
             # 클라우드 취소 시도 (실패해도 로컬 취소는 진행)
@@ -3195,42 +3199,54 @@ def _enrich_job_with_cost_timing(job: dict) -> dict:
     캐싱: status=done인 job의 timing은 extra에 저장 → 다음 호출 시 재사용.
     """
     status = job.get("status", "")
-    vendor = job.get("vendor", "")
     qpu_name = job.get("qpu_name", "")
     shots = int(job.get("shots") or 0)
     extra = job.get("extra") or {}
 
-    # 1. 비용 추정 + QPU 정체성(제조사/모델/청구처) — cancelled/error 제외
+    # 1. 4축 정체성 — 모든 status 에서 항상 채움 (cancelled/error 도 표시단에서 필요)
+    try:
+        from uqi_pricing import (parse_qpu_full, _MODALITY_LABELS, _ANALOG_QPUS)
+        # DB 의 catalog 컬럼 우선, 없으면 catalog 매핑 fallback
+        qpu_vendor   = job.get("qpu_vendor")
+        qpu_model    = job.get("qpu_model")
+        qpu_family   = job.get("qpu_family")
+        qpu_runtime  = job.get("runtime")
+        qpu_modality = job.get("qpu_modality")
+        if not (qpu_vendor and qpu_model and qpu_runtime and qpu_modality):
+            _meta = parse_qpu_full(qpu_name)
+            qpu_vendor   = qpu_vendor   or _meta["vendor"]
+            qpu_model    = qpu_model    or _meta["model"]
+            qpu_family   = qpu_family   if qpu_family is not None else _meta.get("family")
+            qpu_runtime  = qpu_runtime  or _meta["runtime"]
+            qpu_modality = qpu_modality or _meta["modality"]
+        job["qpu_vendor"]         = qpu_vendor
+        job["qpu_model"]          = qpu_model
+        job["qpu_family"]         = qpu_family
+        job["qpu_runtime"]        = qpu_runtime
+        job["qpu_modality"]       = qpu_modality
+        job["qpu_modality_label"] = _MODALITY_LABELS.get(qpu_modality, qpu_modality or "Unknown")
+        job["qpu_is_analog"]      = qpu_name in _ANALOG_QPUS
+    except Exception:
+        # catalog 매핑 실패 — 'Unknown' 유지 (webapp 에서 안전 fallback)
+        pass
+
+    # 2. 비용 추정 — cancelled/error 제외
     if status not in ("cancelled", "canceled", "error", "failed"):
         try:
             from uqi_pricing import (estimate_cost, format_actual_cost,
-                                     format_actual_cost_token,
-                                     get_cost_source, parse_qpu_identity)
+                                     format_actual_cost_token, get_pricing)
             cost = estimate_cost(qpu_name, shots)
-
-            # 청구처(billing source) — jobs.db의 vendor 필드(=실 등록 시점 게이트웨이) 우선
-            #   예: vendor=azure 로 등록된 quantinuum_h2_1sc → 청구처 = Azure Quantum
-            #       vendor=braket 로 등록된 ionq_forte1     → 청구처 = AWS Braket
-            # 매핑이 없을 때만 pricing 모델의 vendor로 fallback
-            _src_vendor = vendor
-            if not _src_vendor:
-                from uqi_pricing import get_pricing
-                _pmeta = get_pricing(qpu_name) or {}
-                _src_vendor = _pmeta.get("vendor")
-
-            # QPU 제조사 + 모델명 (청구처와 별개)
-            _qpu_vendor, _qpu_model = parse_qpu_identity(qpu_name)
-
+            # pricing 모델의 vendor 키 (cost 표시 분기용 — 'ibm'/'braket'/'azure' 등)
+            _pmeta = get_pricing(qpu_name) or {}
+            _pricing_vendor = _pmeta.get("vendor", "")
             job["cost"] = {
                 "estimated":     cost,
-                "display":       format_actual_cost(vendor, qpu_name, cost),
-                "display_token": format_actual_cost_token(vendor, qpu_name, cost),
-                "vendor":        vendor,                 # legacy 호환
-                "source":        get_cost_source(_src_vendor, qpu_name),
-                "source_vendor": _src_vendor,
+                "display":       format_actual_cost(_pricing_vendor, qpu_name, cost),
+                "display_token": format_actual_cost_token(_pricing_vendor, qpu_name, cost),
+                "vendor":        _pricing_vendor,         # legacy 호환 (pricing 모델 vendor)
+                "source":        job.get("qpu_runtime"),  # billing source = catalog runtime
+                "source_vendor": _pricing_vendor,         # legacy 호환
             }
-            job["qpu_vendor"] = _qpu_vendor              # 제조사 (Rigetti/IonQ/IBM/...)
-            job["qpu_model"]  = _qpu_model               # 모델명 (Cepheus-1-108Q/Forte-1/Fez/...)
         except Exception as _ce:
             job["cost"] = {"error": str(_ce)}
 
@@ -3324,6 +3340,7 @@ async def uqi_job_list(
     search_vendor:  str  = "",    # vendor 부분 일치 검색
     search_qpu:     str  = "",    # qpu_name 부분 일치 검색
     search_circuit: str  = "",    # circuit_name 부분 일치 검색
+    search_modality:str  = "",    # modality 정확 일치 (superconducting/ion-trap/neutral-atom/photonic)
     distinct_values:bool = False, # True: 필터 드롭다운용 고유값 목록만 반환
 ) -> str:
     """QPU job 이력 조회. distinct_values=True 시 vendor/qpu_name/circuit_name 고유값 목록 반환"""
@@ -3337,21 +3354,28 @@ async def uqi_job_list(
             conn = _sq.connect(str(db_path), timeout=10)
             conn.row_factory = _sq.Row
 
-            # distinct_values 모드: 필터 드롭다운 초기화용
+            # distinct_values 모드: 필터 드롭다운 초기화용 (Phase 2 — DB catalog 컬럼 직접 사용)
+            #   vendors    = jobs.qpu_vendor   distinct (예: IBM/IQM/IonQ/...)
+            #   qpus       = jobs.qpu_name     distinct (raw id, webapp 에서 라벨 변환)
+            #   modalities = jobs.qpu_modality distinct (사용된 modality 만)
+            #   circuits   = jobs.circuit_name distinct
             if distinct_values:
                 import json as _json
-                vendors  = [r[0] for r in conn.execute(
-                    "SELECT DISTINCT vendor FROM jobs WHERE vendor IS NOT NULL ORDER BY vendor").fetchall()]
-                qpus     = [r[0] for r in conn.execute(
+                vendors    = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT qpu_vendor FROM jobs WHERE qpu_vendor IS NOT NULL ORDER BY qpu_vendor").fetchall()]
+                qpus       = [r[0] for r in conn.execute(
                     "SELECT DISTINCT qpu_name FROM jobs WHERE qpu_name IS NOT NULL ORDER BY qpu_name").fetchall()]
-                circuits = [r[0] for r in conn.execute(
+                modalities = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT qpu_modality FROM jobs WHERE qpu_modality IS NOT NULL ORDER BY qpu_modality").fetchall()]
+                circuits   = [r[0] for r in conn.execute(
                     "SELECT DISTINCT circuit_name FROM jobs WHERE circuit_name IS NOT NULL ORDER BY circuit_name").fetchall()]
-                job_ids  = [r[0] for r in conn.execute(
+                job_ids    = [r[0] for r in conn.execute(
                     "SELECT job_id FROM jobs ORDER BY submitted_at DESC LIMIT 200").fetchall()]
                 conn.close()
                 return _json.dumps({"ok": True, "distinct": {
                     "vendors": vendors, "qpus": qpus,
                     "circuits": circuits, "job_ids": job_ids,
+                    "modalities": modalities,
                 }}, ensure_ascii=False)
 
             conditions = []
@@ -3372,15 +3396,20 @@ async def uqi_job_list(
             if search_id:
                 conditions.append("LOWER(job_id) LIKE LOWER(?)")
                 params.append(f"%{search_id}%")
+            # Phase 2: 검색은 DB 의 catalog 컬럼 직접 비교 (IN 절 / 매핑 불필요)
             if search_vendor:
-                conditions.append("LOWER(vendor) LIKE LOWER(?)")
-                params.append(f"%{search_vendor}%")
+                # qpu_vendor 정확 일치 (대소문자 통일 — DB 에 'IBM','IQM' 등 저장)
+                conditions.append("qpu_vendor = ?")
+                params.append(search_vendor)
             if search_qpu:
                 conditions.append("LOWER(qpu_name) LIKE LOWER(?)")
                 params.append(f"%{search_qpu}%")
             if search_circuit:
                 conditions.append("LOWER(circuit_name) LIKE LOWER(?)")
                 params.append(f"%{search_circuit}%")
+            if search_modality:
+                conditions.append("qpu_modality = ?")
+                params.append(search_modality)
 
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -3414,6 +3443,7 @@ async def uqi_job_list(
                     "status": status or "all", "days": days, "limit": limit, "offset": offset,
                     "search_id": search_id, "search_vendor": search_vendor,
                     "search_qpu": search_qpu, "search_circuit": search_circuit,
+                    "search_modality": search_modality,
                 },
             }, ensure_ascii=False, default=str)
         except Exception as e:

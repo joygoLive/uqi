@@ -1,11 +1,16 @@
 # uqi_job_store.py
 # QPU 비동기 job 관리 — SQLite 기반 통합 job store
-# IBM / IQM / 기타 벤더 job_id 통합 추적
+# IBM / IQM / Braket / Azure / Quandela 통합 추적
 #
-# 테이블: jobs
+# 테이블: jobs (Phase 2 — 4축 catalog 통합)
 #   job_id        TEXT PRIMARY KEY
-#   vendor        TEXT   (ibm | iqm | perceval | ...)
-#   qpu_name      TEXT
+#   runtime       TEXT   실 실행/청구 클라우드 (IBM Quantum / IQM Resonance /
+#                        AWS Braket / Azure Quantum / Quandela Cloud / ...)
+#   qpu_vendor    TEXT   제조사 (IBM / IQM / IonQ / Rigetti / Pasqal / ...)
+#   qpu_model     TEXT   모델명 (Fez / Emerald / Forte-1 / ...)
+#   qpu_family    TEXT   마이크로아키텍처 (Heron R2 / sim / ...) — nullable
+#   qpu_modality  TEXT   큐비트 구현 (superconducting / ion-trap / neutral-atom / photonic)
+#   qpu_name      TEXT   raw qpu_id (ibm_fez / qpu:ascella / sim:ascella) — backward compat
 #   circuit_name  TEXT
 #   shots         INTEGER
 #   status        TEXT   (submitted | running | done | error | cancelled)
@@ -13,9 +18,13 @@
 #   error         TEXT
 #   submitted_at  TEXT   (ISO8601)
 #   updated_at    TEXT   (ISO8601)
-#   extra         TEXT   (JSON — via, backend_url 등 벤더별 메타)
+#   extra         TEXT   (JSON — vendor 별 메타)
+#
+# 마이그레이션: 기존 vendor 컬럼 (게이트웨이 의미) → runtime 으로 의미 명시 + 신규 4축 컬럼.
+# init_db() 가 멱등 자동 마이그레이션 처리. 첫 마이그레이션 시 *.bak 백업 자동 생성.
 
 import json
+import shutil
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,12 +42,79 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _existing_columns(conn: sqlite3.Connection) -> set[str]:
+    return {r[1] for r in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+
+
+def _migrate_to_v2(conn: sqlite3.Connection) -> None:
+    """기존 v1 스키마 (vendor 컬럼) → v2 (runtime + 4축 catalog 컬럼) 자동 마이그레이션.
+
+    멱등 — 이미 v2 면 no-op.
+
+    1) 신규 컬럼 추가 (없으면)
+    2) qpu_name → catalog 매핑으로 신규 컬럼 채우기 (NULL 인 row 만)
+    3) 옛 vendor 컬럼 DROP (이미 없으면 skip)
+    """
+    cols = _existing_columns(conn)
+    new_cols = [
+        ("runtime",      "TEXT"),
+        ("qpu_vendor",   "TEXT"),
+        ("qpu_model",    "TEXT"),
+        ("qpu_family",   "TEXT"),
+        ("qpu_modality", "TEXT"),
+    ]
+    needs_migration = any(c not in cols for c, _ in new_cols) or "vendor" in cols
+    if not needs_migration:
+        return
+
+    # 자동 백업 (첫 마이그레이션 시 1회)
+    if _DB_PATH.exists():
+        bak = _DB_PATH.with_suffix(".db.bak.v1")
+        if not bak.exists():
+            try:
+                shutil.copy2(_DB_PATH, bak)
+            except Exception:
+                pass  # 백업 실패해도 마이그레이션 자체는 진행
+
+    # 1) 컬럼 추가
+    for col, typ in new_cols:
+        if col not in cols:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {col} {typ}")
+
+    # 2) 기존 row 채우기 (qpu_name → catalog 매핑)
+    #    parse_qpu_full 은 catalog 매핑 + 휴리스틱 fallback 모두 처리
+    from uqi_pricing import parse_qpu_full
+    rows = conn.execute("SELECT job_id, qpu_name FROM jobs WHERE qpu_vendor IS NULL").fetchall()
+    for row in rows:
+        meta = parse_qpu_full(row[1] or "")
+        conn.execute("""
+            UPDATE jobs
+            SET runtime=?, qpu_vendor=?, qpu_model=?, qpu_family=?, qpu_modality=?
+            WHERE job_id=?
+        """, (
+            meta["runtime"], meta["vendor"], meta["model"],
+            meta.get("family"), meta["modality"], row[0],
+        ))
+
+    # 3) 옛 vendor 컬럼 DROP (SQLite 3.35+)
+    cols = _existing_columns(conn)
+    if "vendor" in cols:
+        conn.execute("ALTER TABLE jobs DROP COLUMN vendor")
+
+    conn.commit()
+
+
 def init_db():
     with _connect() as conn:
+        # 1) 신규 DB: v2 스키마로 바로 생성
         conn.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
                 job_id        TEXT PRIMARY KEY,
-                vendor        TEXT NOT NULL,
+                runtime       TEXT,
+                qpu_vendor    TEXT,
+                qpu_model     TEXT,
+                qpu_family    TEXT,
+                qpu_modality  TEXT,
                 qpu_name      TEXT NOT NULL,
                 circuit_name  TEXT,
                 shots         INTEGER,
@@ -51,26 +127,47 @@ def init_db():
             )
         """)
         conn.commit()
+        # 2) 기존 v1 DB: 자동 마이그레이션 (멱등)
+        _migrate_to_v2(conn)
 
 
 def save_job(
     job_id:       str,
-    vendor:       str,
     qpu_name:     str,
     circuit_name: str = "",
     shots:        int = 0,
     extra:        dict = None,
+    runtime:      str = None,
+    qpu_vendor:   str = None,
+    qpu_model:    str = None,
+    qpu_family:   str = None,
+    qpu_modality: str = None,
 ) -> None:
-    """신규 job 저장 (submitted 상태)"""
+    """신규 job 저장 (submitted 상태).
+
+    runtime / qpu_vendor / qpu_model / qpu_family / qpu_modality 는 미지정 시
+    qpu_name 을 catalog 매핑으로 자동 추출 (호출 측 편의).
+    """
+    if any(v is None for v in (runtime, qpu_vendor, qpu_model, qpu_modality)):
+        from uqi_pricing import parse_qpu_full
+        meta = parse_qpu_full(qpu_name)
+        runtime      = runtime      or meta["runtime"]
+        qpu_vendor   = qpu_vendor   or meta["vendor"]
+        qpu_model    = qpu_model    or meta["model"]
+        qpu_family   = qpu_family   if qpu_family is not None else meta.get("family")
+        qpu_modality = qpu_modality or meta["modality"]
+
     now = _now()
     with _connect() as conn:
         conn.execute("""
             INSERT OR REPLACE INTO jobs
-                (job_id, vendor, qpu_name, circuit_name, shots,
+                (job_id, runtime, qpu_vendor, qpu_model, qpu_family, qpu_modality,
+                 qpu_name, circuit_name, shots,
                  status, submitted_at, updated_at, extra)
-            VALUES (?, ?, ?, ?, ?, 'submitted', ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?)
         """, (
-            job_id, vendor, qpu_name, circuit_name, shots,
+            job_id, runtime, qpu_vendor, qpu_model, qpu_family, qpu_modality,
+            qpu_name, circuit_name, shots,
             now, now,
             json.dumps(extra or {}, ensure_ascii=False),
         ))
@@ -127,14 +224,17 @@ def get_job(job_id: str) -> dict | None:
     return d
 
 
-def list_pending_jobs(vendor: str = None) -> list[dict]:
-    """status가 submitted/running 인 job 목록"""
+def list_pending_jobs(runtime: str = None) -> list[dict]:
+    """status가 submitted/running 인 job 목록.
+
+    runtime 인자 (예: 'AWS Braket', 'IBM Quantum') 로 특정 cloud 만 필터 가능.
+    """
     with _connect() as conn:
-        if vendor:
+        if runtime:
             rows = conn.execute(
-                "SELECT * FROM jobs WHERE status IN ('submitted','running') AND vendor=?"
+                "SELECT * FROM jobs WHERE status IN ('submitted','running') AND runtime=?"
                 " ORDER BY submitted_at DESC",
-                (vendor,)
+                (runtime,)
             ).fetchall()
         else:
             rows = conn.execute(
@@ -177,5 +277,5 @@ def cancel_job(job_id: str) -> bool:
     return True
 
 
-# 모듈 import 시 자동 초기화
+# 모듈 import 시 자동 초기화 (+ 멱등 자동 마이그레이션)
 init_db()

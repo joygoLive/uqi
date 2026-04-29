@@ -377,6 +377,176 @@ def test_TC139b_token_paid_returns_none():
 
 
 # ─────────────────────────────────────────────────────────────
+# _QPU_CATALOG / parse_qpu_full — 4축 정체성 (vendor/model/runtime/modality)
+# ─────────────────────────────────────────────────────────────
+
+from uqi_pricing import (
+    parse_qpu_full, list_qpus_by_modality,
+    _QPU_CATALOG, _ANALOG_QPUS, _MODALITY_LABELS,
+)
+
+
+def test_TC160_catalog_keys_have_required_fields():
+    """모든 catalog 항목이 4개 축(vendor/model/runtime/modality) 필수 필드 보유"""
+    required = {"vendor", "model", "runtime", "modality"}
+    for qpu_id, meta in _QPU_CATALOG.items():
+        assert required.issubset(meta.keys()), f"{qpu_id} missing fields"
+        assert meta["modality"] in _MODALITY_LABELS, \
+            f"{qpu_id} has unknown modality '{meta['modality']}'"
+
+def test_TC161_parse_qpu_full_known_qpus():
+    """대표 QPU들의 4축 매핑이 사용자 합의안과 일치"""
+    f = parse_qpu_full("iqm_emerald")
+    assert f["vendor"] == "IQM"
+    assert f["model"]  == "Emerald"
+    assert f["runtime"] == "IQM Resonance"
+    assert f["modality"] == "superconducting"
+    assert f["modality_label"] == "Superconducting"
+    assert f["is_analog"] is False
+
+    f = parse_qpu_full("ionq_forte1")
+    assert f["vendor"] == "IonQ"
+    assert f["runtime"] == "AWS Braket"
+    assert f["modality"] == "ion-trap"
+    assert f["modality_label"] == "Ion Trap"
+
+    f = parse_qpu_full("pasqal_fresnel")
+    assert f["vendor"] == "Pasqal"
+    assert f["runtime"] == "Azure Quantum"
+    assert f["modality"] == "neutral-atom"
+    assert f["is_analog"] is True
+
+    f = parse_qpu_full("quantinuum_h2_1sc")
+    assert f["vendor"] == "Quantinuum"
+    assert f["runtime"] == "Azure Quantum"
+    assert f["modality"] == "ion-trap"
+
+    f = parse_qpu_full("qpu:ascella")
+    assert f["vendor"] == "Quandela"
+    assert f["runtime"] == "Quandela Cloud"
+    assert f["modality"] == "photonic"
+
+def test_TC162_parse_qpu_full_unknown_fallback():
+    """매핑 미등록 시 휴리스틱 fallback (modality=unknown)"""
+    f = parse_qpu_full("totally_unknown_xyz")
+    assert f["vendor"] == "Totally"
+    assert f["modality"] == "unknown"
+    assert f["modality_label"] == "Unknown"
+
+def test_TC163_legacy_parse_qpu_identity_compatible():
+    """parse_qpu_identity() (legacy wrapper) 가 (vendor, model) tuple 그대로 반환.
+
+    Note: family 필드 분리 후 model 은 짧아짐 — IBM Fez 의 family('Heron R2') 는
+    parse_qpu_full() 에서만 분리된 키로 노출. legacy wrapper 는 model 만 반환.
+    """
+    from uqi_pricing import parse_qpu_identity
+    v, m = parse_qpu_identity("rigetti_cepheus")
+    assert v == "Rigetti"
+    assert m == "Cepheus-1-108Q"
+    # IBM 의 family 분리 검증
+    v, m = parse_qpu_identity("ibm_fez")
+    assert v == "IBM"
+    assert m == "Fez"   # family('Heron R2') 는 별도 필드로 빠짐
+
+def test_TC164_get_cost_source_uses_catalog():
+    """get_cost_source 가 qpu_name 명시 시 catalog runtime 우선 사용"""
+    from uqi_pricing import get_cost_source
+    # catalog 우선: vendor 인자가 어떻든 qpu_name 의 runtime 우선
+    assert get_cost_source("ibm", "ibm_fez") == "IBM Quantum"
+    assert get_cost_source("braket", "ionq_forte1") == "AWS Braket"
+    assert get_cost_source("azure", "quantinuum_h2_1sc") == "Azure Quantum"
+    # qpu_name 미지정 시 vendor fallback
+    assert get_cost_source("braket") == "AWS Braket"
+    assert get_cost_source("iqm") == "IQM Resonance"
+
+def test_TC165_list_qpus_by_modality():
+    """modality 별 QPU 그룹화 — Job Manager 검색 필터에서 사용"""
+    sc = set(list_qpus_by_modality("superconducting"))
+    assert "ibm_fez" in sc
+    assert "iqm_emerald" in sc
+    assert "rigetti_cepheus" in sc
+    assert "ionq_forte1" not in sc   # ion-trap
+
+    ion = set(list_qpus_by_modality("ion-trap"))
+    assert "ionq_forte1" in ion
+    assert "quantinuum_h2_1sc" in ion
+
+    na = set(list_qpus_by_modality("neutral-atom"))
+    assert "pasqal_fresnel" in na
+    assert "quera_aquila" in na
+
+    ph = set(list_qpus_by_modality("photonic"))
+    assert "qpu:ascella" in ph
+    assert "sim:ascella" in ph
+
+    # 매칭 없는 modality
+    assert list_qpus_by_modality("nonexistent") == []
+
+def test_TC166_analog_set_correctness():
+    """_ANALOG_QPUS 가 AHS 모드 QPU만 포함 (gate 회로 비호환)"""
+    assert "pasqal_fresnel" in _ANALOG_QPUS
+    assert "quera_aquila" in _ANALOG_QPUS
+    # gate-mode QPU 는 analog 아님
+    assert "ibm_fez" not in _ANALOG_QPUS
+    assert "ionq_forte1" not in _ANALOG_QPUS
+    assert "qpu:ascella" not in _ANALOG_QPUS
+
+def test_TC167a_family_field_known_qpus():
+    """family 필드 — 마이크로아키텍처/계열 분리 (카드=model, 상세=model+family)"""
+    # IBM Heron R2 family
+    assert parse_qpu_full("ibm_fez")["family"] == "Heron R2"
+    assert parse_qpu_full("ibm_marrakesh")["family"] == "Heron R2"
+    assert parse_qpu_full("ibm_kingston")["family"] == "Heron R2"
+    # Quandela sim family (qpu/sim 구분용)
+    assert parse_qpu_full("sim:ascella")["family"] == "sim"
+    assert parse_qpu_full("sim:belenos")["family"] == "sim"
+    # Quandela 실 QPU 는 family 없음
+    assert parse_qpu_full("qpu:ascella")["family"] is None
+    assert parse_qpu_full("qpu:belenos")["family"] is None
+    # Quantinuum SC/E family
+    assert parse_qpu_full("quantinuum_h2_1sc")["family"] == "Syntax Checker"
+    assert parse_qpu_full("quantinuum_h2_1e")["family"] == "Emulator"
+    # 일반 QPU 는 family 없음
+    assert parse_qpu_full("ionq_forte1")["family"] is None
+    assert parse_qpu_full("iqm_emerald")["family"] is None
+    assert parse_qpu_full("rigetti_cepheus")["family"] is None
+    # Rigetti retired
+    assert parse_qpu_full("rigetti_ankaa3")["family"] == "retired"
+
+def test_TC167b_catalog_keys_match_supported_qpus():
+    """SUPPORTED_QPUS 의 모든 QPU 가 catalog 에 등록되어 있는지"""
+    # mcp_server.py 의 SUPPORTED_QPUS 와 일치 (변경 시 두 곳 동기화 필요)
+    expected = {
+        "ibm_fez", "ibm_marrakesh", "ibm_kingston",
+        "iqm_garnet", "iqm_emerald", "iqm_sirius",
+        "ionq_forte1", "rigetti_cepheus",
+        "pasqal_fresnel", "pasqal_fresnel_can1",
+        "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
+        "quera_aquila",
+        "qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos",
+    }
+    for qpu in expected:
+        assert qpu in _QPU_CATALOG, f"{qpu} missing from catalog"
+
+
+def test_TC167_jobs_db_historic_qpu_names_all_mapped():
+    """jobs.db 에 등장 가능한 historic qpu_name 들이 모두 catalog 에 있는지.
+
+    DB 마이그레이션 없이 enrich 단계에서 매핑하므로, 누락 시 프론트에 'unknown'
+    노출됨. Phase 1 시점의 historic qpu_name 13종 보장.
+    """
+    historic = [
+        "ibm_fez", "ibm_kingston", "ibm_marrakesh",
+        "iqm_garnet", "iqm_emerald", "iqm_sirius",
+        "ionq_forte1", "rigetti_cepheus",
+        "quantinuum_h2_1sc",
+        "qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos",
+    ]
+    for q in historic:
+        assert q in _QPU_CATALOG, f"historic qpu '{q}' not in catalog"
+
+
+# ─────────────────────────────────────────────────────────────
 # format_duration — 사람 읽기 좋게
 # ─────────────────────────────────────────────────────────────
 
@@ -419,8 +589,9 @@ def test_TC151_source_azure():
     assert get_cost_source("azure") == "Azure Quantum"
 
 def test_TC152_source_ibm():
+    # Phase 1 재분류 후 라벨: "IBM Quantum" (기존 "IBM Open Plan" 은 요금제 이름이라 변경)
     s = get_cost_source("ibm")
-    assert "IBM" in s and "Open" in s
+    assert s == "IBM Quantum"
 
 def test_TC153_source_iqm():
     s = get_cost_source("iqm")
@@ -431,10 +602,9 @@ def test_TC154_source_quandela():
     assert "Quandela" in s
 
 def test_TC155_source_quantinuum():
+    # Phase 1: Quantinuum 은 Azure Quantum 경유로만 접근 → 라벨 단순화
     s = get_cost_source("quantinuum")
-    assert "Quantinuum" in s
-    # Nexus 또는 Azure 둘 중 하나 안내
-    assert ("Nexus" in s) or ("Azure" in s)
+    assert s == "Azure Quantum"
 
 def test_TC156_source_pasqal():
     s = get_cost_source("pasqal")

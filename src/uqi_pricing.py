@@ -542,78 +542,164 @@ def format_actual_cost_token(vendor: str, qpu_name: str,
     return None
 
 
-# QPU 이름 → (제조사, 모델명) 매핑
-# 청구처(billing source)와 다름. 청구처는 게이트웨이/자사 클라우드 (get_cost_source).
-_QPU_IDENTITY_MAP: dict[str, tuple[str, str]] = {
-    # 제조사       모델명
-    "ionq_forte1":         ("IonQ",       "Forte-1"),
-    "rigetti_cepheus":     ("Rigetti",    "Cepheus-1-108Q"),
-    "rigetti_ankaa3":      ("Rigetti",    "Ankaa-3 (retired)"),
-    "quera_aquila":        ("QuEra",      "Aquila"),
-    "pasqal_fresnel":      ("Pasqal",     "Fresnel"),
-    "pasqal_fresnel_can1": ("Pasqal",     "Fresnel-CAN1"),
-    "ibm_fez":             ("IBM",        "Fez (Heron R2)"),
-    "ibm_marrakesh":       ("IBM",        "Marrakesh (Heron R2)"),
-    "ibm_kingston":        ("IBM",        "Kingston (Heron R2)"),
-    "iqm_garnet":          ("IQM",        "Garnet"),
-    "iqm_emerald":         ("IQM",        "Emerald"),
-    "iqm_sirius":          ("IQM",        "Sirius"),
-    "qpu:ascella":         ("Quandela",   "Ascella"),
-    "qpu:belenos":         ("Quandela",   "Belenos"),
-    "sim:ascella":         ("Quandela",   "Ascella (sim)"),
-    "sim:belenos":         ("Quandela",   "Belenos (sim)"),
-    "quantinuum_h2_1":     ("Quantinuum", "H2-1"),
-    "quantinuum_h2_2":     ("Quantinuum", "H2-2"),
-    "quantinuum_h1_1":     ("Quantinuum", "H1-1"),
-    "quantinuum_h2_1sc":   ("Quantinuum", "H2-1SC"),    # Syntax Checker (Azure)
-    "quantinuum_h2_1e":    ("Quantinuum", "H2-1E"),     # Emulator (Azure)
-    "braket_sv1":          ("Amazon",     "SV1 (sim)"),
-    "braket_dm1":          ("Amazon",     "DM1 (sim)"),
-    "braket_tn1":          ("Amazon",     "TN1 (sim)"),
+# ─────────────────────────────────────────────────────────────────
+# QPU 통합 카탈로그 — 4축 (vendor / model / runtime / modality)
+# ─────────────────────────────────────────────────────────────────
+#  vendor    : 제조사 (IBM, IQM, IonQ, Rigetti, Pasqal, ...)
+#  model     : 모델명 (Fez, Emerald, Forte-1, Cepheus-1-108Q, ...)
+#  runtime   : 실 실행/청구 클라우드 (IBM Quantum, IQM Resonance,
+#              AWS Braket, Azure Quantum, Quandela Cloud)
+#  modality  : 큐비트 구현 (superconducting | ion-trap | neutral-atom | photonic)
+#              ※ 표시 라벨은 webapp 에서 'Superconducting'/'Ion Trap'/...
+# ─────────────────────────────────────────────────────────────────
+#  family 필드 = 마이크로아키텍처/계열 (예: IBM Heron R2). 카드/드롭다운은 model 만 표시,
+#                 상세 카드에서만 family 부제 노출.
+_QPU_CATALOG: dict[str, dict] = {
+    # ── IBM (자사 IBM Quantum, 초전도) ──
+    "ibm_fez":             {"vendor": "IBM",        "model": "Fez",            "family": "Heron R2", "runtime": "IBM Quantum",   "modality": "superconducting"},
+    "ibm_marrakesh":       {"vendor": "IBM",        "model": "Marrakesh",      "family": "Heron R2", "runtime": "IBM Quantum",   "modality": "superconducting"},
+    "ibm_kingston":        {"vendor": "IBM",        "model": "Kingston",       "family": "Heron R2", "runtime": "IBM Quantum",   "modality": "superconducting"},
+    # ── IQM (자사 IQM Resonance, 초전도) ──
+    "iqm_garnet":          {"vendor": "IQM",        "model": "Garnet",         "runtime": "IQM Resonance", "modality": "superconducting"},
+    "iqm_emerald":         {"vendor": "IQM",        "model": "Emerald",        "runtime": "IQM Resonance", "modality": "superconducting"},
+    "iqm_sirius":          {"vendor": "IQM",        "model": "Sirius",         "runtime": "IQM Resonance", "modality": "superconducting"},
+    # ── AWS Braket 경유 ──
+    "ionq_forte1":         {"vendor": "IonQ",       "model": "Forte-1",        "runtime": "AWS Braket",    "modality": "ion-trap"},
+    "rigetti_cepheus":     {"vendor": "Rigetti",    "model": "Cepheus-1-108Q", "runtime": "AWS Braket",    "modality": "superconducting"},
+    "rigetti_ankaa3":      {"vendor": "Rigetti",    "model": "Ankaa-3",        "family": "retired",  "runtime": "AWS Braket",    "modality": "superconducting"},
+    "quera_aquila":        {"vendor": "QuEra",      "model": "Aquila",         "runtime": "AWS Braket",    "modality": "neutral-atom"},
+    "braket_sv1":          {"vendor": "Amazon",     "model": "SV1",            "family": "sim",      "runtime": "AWS Braket",    "modality": "superconducting"},
+    "braket_dm1":          {"vendor": "Amazon",     "model": "DM1",            "family": "sim",      "runtime": "AWS Braket",    "modality": "superconducting"},
+    "braket_tn1":          {"vendor": "Amazon",     "model": "TN1",            "family": "sim",      "runtime": "AWS Braket",    "modality": "superconducting"},
+    # ── Azure Quantum 경유 ──
+    "pasqal_fresnel":      {"vendor": "Pasqal",     "model": "Fresnel",        "runtime": "Azure Quantum", "modality": "neutral-atom"},
+    "pasqal_fresnel_can1": {"vendor": "Pasqal",     "model": "Fresnel-CAN1",   "runtime": "Azure Quantum", "modality": "neutral-atom"},
+    "quantinuum_h2_1":     {"vendor": "Quantinuum", "model": "H2-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
+    "quantinuum_h2_2":     {"vendor": "Quantinuum", "model": "H2-2",           "runtime": "Azure Quantum", "modality": "ion-trap"},
+    "quantinuum_h1_1":     {"vendor": "Quantinuum", "model": "H1-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
+    "quantinuum_h2_1sc":   {"vendor": "Quantinuum", "model": "H2-1SC",         "family": "Syntax Checker", "runtime": "Azure Quantum", "modality": "ion-trap"},
+    "quantinuum_h2_1e":    {"vendor": "Quantinuum", "model": "H2-1E",          "family": "Emulator",       "runtime": "Azure Quantum", "modality": "ion-trap"},
+    # ── Quandela (자사 Quandela Cloud, 광자) ──
+    "qpu:ascella":         {"vendor": "Quandela",   "model": "Ascella",        "runtime": "Quandela Cloud","modality": "photonic"},
+    "qpu:belenos":         {"vendor": "Quandela",   "model": "Belenos",        "runtime": "Quandela Cloud","modality": "photonic"},
+    "sim:ascella":         {"vendor": "Quandela",   "model": "Ascella",        "family": "sim",      "runtime": "Quandela Cloud","modality": "photonic"},
+    "sim:belenos":         {"vendor": "Quandela",   "model": "Belenos",        "family": "sim",      "runtime": "Quandela Cloud","modality": "photonic"},
+}
+
+# Analog 회로 모드 QPU (gate 회로 비호환 — AHS 전용)
+# UI 카드/디테일에서 보조 뱃지로 표시. 검색 필터에는 영향 없음.
+_ANALOG_QPUS: set[str] = {"pasqal_fresnel", "pasqal_fresnel_can1", "quera_aquila"}
+
+# Modality 표시 라벨 (내부 키 → UI 라벨)
+# webapp 의 기존 radar tab (line 569~572) 표기와 일치
+_MODALITY_LABELS: dict[str, str] = {
+    "superconducting": "Superconducting",
+    "ion-trap":        "Ion Trap",
+    "neutral-atom":    "Neutral Atom",
+    "photonic":        "Photonic",
 }
 
 
-def parse_qpu_identity(qpu_name: str) -> tuple[str, str]:
-    """QPU 이름 → (제조사, 모델명) 분리.
+def parse_qpu_full(qpu_name: str) -> dict:
+    """QPU 이름 → 4축 메타데이터 dict.
 
-    예:
-      "rigetti_cepheus" → ("Rigetti", "Cepheus-1-108Q")
-      "pasqal_fresnel"  → ("Pasqal", "Fresnel")
-      "ibm_fez"         → ("IBM", "Fez (Heron R2)")
-      "qpu:ascella"     → ("Quandela", "Ascella")
+    Returns:
+        {
+            "qpu_id":   "iqm_emerald",       # 원본 ID
+            "vendor":   "IQM",               # 제조사
+            "model":    "Emerald",           # 모델명
+            "runtime":  "IQM Resonance",     # 실행/청구 클라우드
+            "modality": "superconducting",   # 큐비트 구현
+            "modality_label": "Superconducting",  # UI 표시 라벨
+            "is_analog": False,              # AHS analog 모드 여부
+        }
 
-    매핑 미등록 시: 휴리스틱(prefix split)로 fallback.
+    매핑 미등록 시 휴리스틱(prefix split) fallback (modality/runtime 은 'unknown').
     """
-    if qpu_name in _QPU_IDENTITY_MAP:
-        return _QPU_IDENTITY_MAP[qpu_name]
-    # 휴리스틱
+    entry = _QPU_CATALOG.get(qpu_name)
+    if entry:
+        modality = entry["modality"]
+        return {
+            "qpu_id":         qpu_name,
+            "vendor":         entry["vendor"],
+            "model":          entry["model"],
+            "family":         entry.get("family"),    # None or e.g. "Heron R2"
+            "runtime":        entry["runtime"],
+            "modality":       modality,
+            "modality_label": _MODALITY_LABELS.get(modality, modality),
+            "is_analog":      qpu_name in _ANALOG_QPUS,
+        }
+    # 휴리스틱 fallback — 모델/벤더만 추정, runtime/modality 미상
     if qpu_name.startswith(("qpu:", "sim:")):
         suffix = qpu_name.split(":", 1)[1]
-        return ("Quandela", suffix.title())
+        return {
+            "qpu_id":         qpu_name,
+            "vendor":         "Quandela",
+            "model":          suffix.title(),
+            "family":         None,
+            "runtime":        "Quandela Cloud",
+            "modality":       "photonic",
+            "modality_label": "Photonic",
+            "is_analog":      False,
+        }
     if "_" in qpu_name:
         prefix, model = qpu_name.split("_", 1)
-        return (prefix.title(), model.replace("_", "-").title())
-    return ("Unknown", qpu_name)
+        return {
+            "qpu_id":         qpu_name,
+            "vendor":         prefix.title(),
+            "model":          model.replace("_", "-").title(),
+            "family":         None,
+            "runtime":        "—",
+            "modality":       "unknown",
+            "modality_label": "Unknown",
+            "is_analog":      False,
+        }
+    return {
+        "qpu_id":         qpu_name,
+        "vendor":         "Unknown",
+        "model":          qpu_name,
+        "family":         None,
+        "runtime":        "—",
+        "modality":       "unknown",
+        "modality_label": "Unknown",
+        "is_analog":      False,
+    }
+
+
+def list_qpus_by_modality(modality: str) -> list[str]:
+    """주어진 modality 에 해당하는 QPU id 목록.
+
+    Job Manager 의 search_modality 필터에서 SQL `WHERE qpu_name IN (...)` 절
+    구성에 사용. 매칭 없으면 빈 리스트.
+    """
+    return [qid for qid, meta in _QPU_CATALOG.items() if meta["modality"] == modality]
+
+
+def parse_qpu_identity(qpu_name: str) -> tuple[str, str]:
+    """[Legacy] QPU 이름 → (제조사, 모델명) 분리. parse_qpu_full() wrapper.
+
+    신규 코드는 parse_qpu_full() 사용 권장. 본 함수는 하위 호환 유지용.
+    """
+    full = parse_qpu_full(qpu_name)
+    return (full["vendor"], full["model"])
 
 
 def get_cost_source(vendor: str, qpu_name: str = "") -> str:
-    """비용 추정의 출처(게이트웨이 또는 자사 클라우드) 라벨 반환.
+    """[Legacy] 비용 추정의 출처(게이트웨이 또는 자사 클라우드) 라벨.
 
-    벤더 → 게이트웨이/자사 클라우드 매핑:
-      - braket    → AWS Braket
-      - azure     → Azure Quantum
-      - ibm       → IBM Open Plan
-      - iqm       → IQM Resonance
-      - quandela  → Quandela Cloud
-      - quantinuum → Quantinuum Nexus / Azure
-      - pasqal    → Pasqal Cloud  (자사 — Azure 게이트웨이 거치지 않은 경우)
+    qpu_name 이 catalog 에 있으면 catalog 의 runtime 값 우선 사용.
+    그 외에는 vendor 키 fallback (기존 동작 유지).
     """
+    # catalog 우선 (qpu_name 명시된 경우)
+    if qpu_name and qpu_name in _QPU_CATALOG:
+        return _QPU_CATALOG[qpu_name]["runtime"]
+    # vendor fallback
     if vendor == "braket":      return "AWS Braket"
     if vendor == "azure":       return "Azure Quantum"
-    if vendor == "ibm":         return "IBM Open Plan"
+    if vendor == "ibm":         return "IBM Quantum"
     if vendor == "iqm":         return "IQM Resonance"
     if vendor == "quandela":    return "Quandela Cloud"
-    if vendor == "quantinuum":  return "Quantinuum Nexus / Azure"
+    if vendor == "quantinuum":  return "Azure Quantum"
     if vendor == "pasqal":      return "Pasqal Cloud"
     return "—"
 

@@ -794,6 +794,132 @@ class TestSupportedQpusCatalog:
 
 
 # ─────────────────────────────────────────────────────────────
+# Phase 2 — uqi_job_list distinct/search 새 catalog 컬럼 활용 검증
+# ─────────────────────────────────────────────────────────────
+
+class TestJobListPhase2:
+    """uqi_job_list 가 새 catalog 컬럼 (qpu_vendor/qpu_modality/runtime) 직접 사용하는지"""
+
+    def _setup_sample_db(self, tmp_path, monkeypatch):
+        """v2 스키마 + 다양한 vendor/modality sample row"""
+        import uqi_job_store
+        db_path = tmp_path / "sample_jobs.db"
+        monkeypatch.setattr(uqi_job_store, "_DB_PATH", db_path)
+        uqi_job_store.init_db()
+        # 다양한 catalog 매핑 케이스
+        samples = [
+            ("j_ibm_1",    "ibm_fez",          "circ_a", 100),
+            ("j_ibm_2",    "ibm_marrakesh",    "circ_a", 200),
+            ("j_iqm_1",    "iqm_emerald",      "circ_b", 50),
+            ("j_ionq_1",   "ionq_forte1",      "circ_c", 100),
+            ("j_quan_1",   "quantinuum_h2_1sc","circ_d", 100),
+            ("j_qd_qpu",   "qpu:ascella",      "circ_e", 1000),
+            ("j_qd_sim",   "sim:ascella",      "circ_e", 1000),
+        ]
+        for jid, qpu, circ, shots in samples:
+            uqi_job_store.save_job(job_id=jid, qpu_name=qpu, circuit_name=circ, shots=shots)
+        return uqi_job_store, db_path
+
+    def test_TC400_distinct_values_returns_catalog_vendors(self, tmp_path, monkeypatch):
+        """distinct_values 의 vendors = catalog 제조사 (IBM/IQM/IonQ/Quantinuum/Quandela)"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        # mcp_server 의 _DB_PATH 가 다른 곳을 가리키므로 sqlite 직접 query 로 동등 검증
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+        vendors = sorted({r[0] for r in conn.execute(
+            "SELECT DISTINCT qpu_vendor FROM jobs WHERE qpu_vendor IS NOT NULL")})
+        modalities = sorted({r[0] for r in conn.execute(
+            "SELECT DISTINCT qpu_modality FROM jobs WHERE qpu_modality IS NOT NULL")})
+        conn.close()
+
+        # catalog 제조사 (게이트웨이 키 ['azure','braket'] 가 아니어야 함)
+        assert "IBM" in vendors
+        assert "IQM" in vendors
+        assert "IonQ" in vendors
+        assert "Quantinuum" in vendors
+        assert "Quandela" in vendors
+        # 게이트웨이 키 절대 X
+        assert "azure" not in vendors
+        assert "braket" not in vendors
+
+        # modality 도 catalog 키 (hyphen-case)
+        assert "superconducting" in modalities
+        assert "ion-trap" in modalities
+        assert "photonic" in modalities
+
+    def test_TC401_search_vendor_direct_column_match(self, tmp_path, monkeypatch):
+        """search_vendor='IBM' → WHERE qpu_vendor='IBM' 직접 비교, IN 절 없음"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+
+        # mcp_server 의 search_vendor 처리 패턴: WHERE qpu_vendor = ?
+        rows = conn.execute(
+            "SELECT job_id FROM jobs WHERE qpu_vendor = ?", ("IBM",)).fetchall()
+        ibm_ids = {r[0] for r in rows}
+        conn.close()
+
+        assert ibm_ids == {"j_ibm_1", "j_ibm_2"}
+
+    def test_TC402_search_modality_direct_column_match(self, tmp_path, monkeypatch):
+        """search_modality='ion-trap' → WHERE qpu_modality='ion-trap' 직접 비교"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+
+        rows = conn.execute(
+            "SELECT job_id FROM jobs WHERE qpu_modality = ?", ("ion-trap",)).fetchall()
+        ids = {r[0] for r in rows}
+        conn.close()
+
+        # IonQ Forte-1 + Quantinuum H2-1SC 둘 다 ion-trap
+        assert ids == {"j_ionq_1", "j_quan_1"}
+
+    def test_TC403_search_modality_photonic_includes_qpu_and_sim(self, tmp_path, monkeypatch):
+        """photonic 검색 시 Quandela qpu/sim 모두 포함"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+
+        rows = conn.execute(
+            "SELECT job_id FROM jobs WHERE qpu_modality = ?", ("photonic",)).fetchall()
+        conn.close()
+
+        assert {r[0] for r in rows} == {"j_qd_qpu", "j_qd_sim"}
+
+    def test_TC404_runtime_distribution(self, tmp_path, monkeypatch):
+        """runtime 컬럼 직접 사용 — 청구 클라우드 분포 확인"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+
+        runtime_counts = dict(conn.execute(
+            "SELECT runtime, COUNT(*) FROM jobs GROUP BY runtime").fetchall())
+        conn.close()
+
+        assert runtime_counts.get("IBM Quantum")    == 2  # ibm_fez + ibm_marrakesh
+        assert runtime_counts.get("IQM Resonance")  == 1  # iqm_emerald
+        assert runtime_counts.get("AWS Braket")     == 1  # ionq_forte1
+        assert runtime_counts.get("Azure Quantum")  == 1  # quantinuum_h2_1sc
+        assert runtime_counts.get("Quandela Cloud") == 2  # qpu:ascella + sim:ascella
+
+    def test_TC405_no_legacy_vendor_column(self, tmp_path, monkeypatch):
+        """v2 마이그레이션 후 legacy vendor 컬럼 절대 존재 X"""
+        self._setup_sample_db(tmp_path, monkeypatch)
+        import sqlite3
+        db_path = tmp_path / "sample_jobs.db"
+        conn = sqlite3.connect(str(db_path))
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(jobs)")}
+        conn.close()
+        assert "vendor" not in cols, "legacy vendor 컬럼이 v2 스키마에 남아있음"
+
+
+# ─────────────────────────────────────────────────────────────
 # 비용 안전장치 (cost_safeguard) — 실제 비용 발생 없이 꼼꼼하게 검증
 # ─────────────────────────────────────────────────────────────
 

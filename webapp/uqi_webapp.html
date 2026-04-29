@@ -317,6 +317,8 @@ body.mode-expert .step-desc { display:none; }
 .step-chevron.open { transform:rotate(180deg); }
 .job-table { width:100%; border-collapse:collapse; font-size:10px; }
 .job-table th { color:var(--text3); font-weight:500; padding:5px 8px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
+/* 검색 셀렉터 컬럼과 일반 컬럼의 헤더 높이 정렬용 invisible spacer (select height + margin-top 와 동일) */
+.job-table th .th-spacer { margin-top:3px; height:21px; }
 .job-table td { padding:6px 8px; border-bottom:1px solid rgba(255,255,255,0.04); vertical-align:middle; color:var(--text2); }
 .job-table tr:hover td { background:rgba(255,255,255,0.02); }
 .job-status-badge { display:inline-block; font-size:8px; padding:2px 6px; border-radius:8px; font-weight:600; white-space:nowrap; }
@@ -939,7 +941,7 @@ footer { margin-top:50px; padding:20px 0; border-top:1px solid var(--border); te
                   <option value="100">100</option>
                 </select>
               </div>
-              <button class="btn-refresh-list" id="btn-job-refresh" onclick="_jobHistoryBusy=false; _jobHistoryPage=1; loadJobHistory()"
+              <button class="btn-refresh-list" id="btn-job-refresh" onclick="_jobHistoryBusy=false; _jhDistinctCache=null; _jobHistoryPage=1; _jhLoadDistinct().then(()=>loadJobHistory()); _refreshBillingSummary()"
                 data-i18n="pipeline.job_manager.refresh" style="margin-left:auto">↻ Refresh</button>
             </div>
             <!-- 💰 비용 요약 (실시간 API — Refresh 클릭 시 함께 갱신) -->
@@ -1080,8 +1082,8 @@ const _LOCALES = {
   fr: null,
 };
 // 인라인 폴백 로케일 (fetch 실패 시 또는 file:// 프로토콜)
-const _LOCALE_EN = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"BASIC","header.mode_expert":"PRO","header.server_label":"Server","header.connect":"Connect","header.lock":"LOCK","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","header.theme_toggle_to_midnight":"✦","header.theme_toggle_to_nord":"❄","status.disconnected":"disconnected","status.connected":"connected","status.connecting":"Connecting...","status.reconnecting":"Reconnecting...","status.not_connected":"Not connected","lock.subtitle":"QUANTUM INTELLIGENCE","lock.unlock":"UNLOCK","lock.incorrect_password":"Incorrect password","footer.text":"UQI · Universal Quantum Intelligence · Internal Tool","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ Refresh","qpu.loading":"Loading QPU status...","qpu.refreshing":"Refreshing...","qpu.no_qpus":"No QPUs available","qpu.load_fail":"Failed to load QPU list","qpu.loading_calibration":"Loading calibration...","qpu.cache_refresh_recommended":"· Refresh recommended","qpu.close":"Close","qpu.refresh_cal":"↻ Refresh Cal","qpu.deep_analysis":"QPU Deep Analysis","qpu.performance_radar":"Performance Radar","qpu.distribution_box":"Distribution (Box Plot)","qpu.log_scale":"log scale","qpu.all_qpus":"All QPUs","qpu.auto_recommended":"Auto (Recommended)","qpu.online":"Online","qpu.offline":"Offline","qpu.photonic":"Photonic","qpu.no_modality":"No modality selected","qpu.no_distribution":"No distribution data for selected modality.","qpu.boxplot_desc":"Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ Upload","pipeline.dgx":"📂 DGX","pipeline.drop_hint":"Drop .py here or click to browse","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"Logical complexity — qubits, gates, depth, T-gate ratio","pipeline.analyze.run":"RUN ANALYSIS","pipeline.analyze.running":"Analyzing...","pipeline.analyze.empty":"Run analysis to see results","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"Physical mapping to target QPU — gate/depth reduction via auto transpile","pipeline.optimize.run":"RUN OPTIMIZATION","pipeline.optimize.running":"Optimizing...","pipeline.optimize.combination":"Combination","pipeline.optimize.options":"Options","pipeline.optimize.verify":"Verify equivalence","pipeline.optimize.empty":"Run optimization to see results","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU-realistic fidelity — calibration-based noise model on optimized circuit","pipeline.noise.run":"RUN NOISE SIMULATION","pipeline.noise.running":"Simulating...","pipeline.noise.empty":"Run noise simulation to see results","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"Error correction necessity — T2 ratio, fidelity, recommended codes","pipeline.qec_analyze.run":"RUN QEC ANALYSIS","pipeline.qec_analyze.running":"Analyzing...","pipeline.qec_analyze.empty":"Run QEC analysis to see results","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"Encode circuit with QEC code — compare fidelity before/after","pipeline.qec_apply.run":"RUN QEC APPLY","pipeline.qec_apply.running":"Applying...","pipeline.qec_apply.empty":"Run QEC apply to see results","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU simulation speed — statevector throughput comparison","pipeline.gpu.run":"RUN BENCHMARK","pipeline.gpu.running":"Benchmarking...","pipeline.gpu.empty":"Run benchmark to see results","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"Submit to real quantum hardware — transpiles & executes on actual QPU","pipeline.qpu.run":"SUBMIT TO QPU","pipeline.qpu.running":"Submitting...","pipeline.qpu.confirm":"CONFIRM SUBMIT","pipeline.qpu.empty":"Run analysis first, then confirm to submit","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"Monitor & manage submitted QPU jobs — check status, view results, cancel jobs","pipeline.job_manager.refresh":"↻ Refresh","pipeline.job_manager.refreshing":"↻ Refreshing...","pipeline.job_manager.empty":"Click Refresh to load jobs","pipeline.job_manager.status_label":"Status","pipeline.job_manager.period_label":"Period","pipeline.job_manager.show_label":"Show","pipeline.job_manager.all":"All","pipeline.job_manager.active":"Active","pipeline.job_manager.done":"Done","pipeline.job_manager.cancelled":"Cancelled","pipeline.job_manager.error":"Error","pipeline.job_manager.all_time":"All time","pipeline.job_manager.today":"Today","pipeline.job_manager.last_7d":"Last 7 days","pipeline.job_manager.last_30d":"Last 30 days","job.status.checking":"Checking...","job.status.check":"↻ Check Status","job.status.last_checked":"Last checked:","job.status.error_badge":"ERROR","job.status.cancelled_badge":"CANCELLED","job.status.done_badge":"✓ DONE","job.status.cancelled_msg":"Job was cancelled.","job.status.running_msg":"job is running on QPU queue.","job.status.cancel":"✕ Cancel Job","job.status.cancelling":"Cancelling...","job.results.title":"Measurement Results","job.results.total_shots":"Total Shots","job.results.unique_states":"Unique States","step.badge.done":"✓ Done","step.badge.error":"✗ Error","btn.loading":"...","btn.uploading":"⟳ Uploading...","btn.upload_fail":"Upload failed","btn.download":"⬇ Download","btn.view":"👁 View","btn.refresh_list":"↻ Refresh","cache.badge":"⚡ Cached result loaded from previous run.","cache.invalidate":"↺ Invalidate Cache","cache.invalidated_msg":"Cache invalidated ({deleted} entries deleted)\nRe-run to fetch fresh results.","cache.fail":"Failed","cache.stale":"· Refresh recommended","alert.select_file":"Please select or upload an algorithm file","alert.select_file_first":"Please select a file first","alert.only_py":"Only Python (.py) files are allowed","alert.file_exists":"'{name}' already exists on DGX — rename the file and try again","knowledge.title":"Search Knowledge Base","knowledge.query_type":"Query Type","knowledge.semantic_query":"Semantic Query","knowledge.qpu_filter":"QPU Filter","knowledge.sdk_filter":"SDK Filter","knowledge.framework_filter":"Framework Filter","knowledge.limit":"Limit","knowledge.run_search":"RUN SEARCH","knowledge.searching":"Searching...","knowledge.semantic_title":"SEMANTIC SEARCH","knowledge.run_semantic":"SEMANTIC SEARCH","knowledge.results_count":"Results: {count}","knowledge.click_details":"Click for details","knowledge.no_results":"Run a search to see results","rag.type.stats":"Stats Overview","rag.type.best_combination":"Best Optimizations","rag.type.suspicious_optimizations":"Optimization Alerts","rag.type.qec_results":"QEC Results","rag.type.gpu_benchmark":"GPU Benchmarks","rag.type.pipeline_issues":"Pipeline Errors","rag.type.noise_simulation":"Noise Simulation","rag.type.security_block":"Security Blocks","pipeline.noise.engine":"Simulation Engine","pipeline.qec_apply.code":"QEC Code","pipeline.shots":"Shots","pipeline.qpu.warn":"This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use \"Analyze (No Submit)\" first to preview the transpiled circuit before confirming.","pipeline.qpu.analyze_btn":"ANALYZE (NO SUBMIT)","pipeline.qpu.confirm_btn":"⚡ CONFIRM & SUBMIT TO QPU","knowledge.structured_results":"Structured Search Results","knowledge.semantic_results":"Semantic Results","knowledge.semantic_hint":"Press Enter to search · Shift+Enter for new line\nChroma vector similarity search","rag.type_desc.stats":"Knowledge base record count and per-type breakdown","rag.type_desc.best_combination":"Optimization runs ranked by gate reduction — filter by QPU or qubit count","rag.type_desc.suspicious_optimizations":"Optimizations flagged for review: empty circuit, non-equivalence, or unverified 100% reduction","rag.type_desc.qec_results":"Top QEC experiments by fidelity improvement — effective cases only","rag.type_desc.gpu_benchmark":"GPU simulation speedup rankings — top CPU vs GPU acceleration results","rag.type_desc.pipeline_issues":"Pipeline error log — failures and root causes per stage & SDK","rag.type_desc.noise_simulation":"Calibration-based noise model results ranked by fidelity — best and worst circuit behavior on QPU noise","rag.type_desc.security_block":"Static analysis blocks — dangerous imports or patterns detected in algorithm files","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"Circuit optimization runs — gate/depth reduction results per combination & QPU","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU job execution records — shots, fidelity, job IDs, and result metadata","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU simulation performance comparisons","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"Errors and failures encountered during pipeline stages, with root causes","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"Transpilation success/failure patterns and workarounds per SDK & QPU","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"Quantum error correction experiment results — fidelity before/after encoding","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"QPU online/offline status snapshots over time","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"Requests blocked by static security policy — suspicious imports or patterns","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"Internally cached computation results for performance optimization","hint.opt.combination":"transpiler + qubit routing algorithm","hint.opt.opt_engine":"unitary synthesis","hint.opt.map_engine":"QPU topology routing","hint.opt.complexity":"Gate count & depth reduction through transpilation to QPU native gate set and qubit topology","hint.opt.profile":"T-ratio: T-gate fraction (costly on fault-tolerant hardware) · 2Q-ratio: two-qubit gate density (dominant error source on NISQ)","hint.opt.time":"Optimize: unitary synthesis & gate cancellation · Mapping: SABRE/routing to QPU connectivity graph","hint.noise.fidelity":"F = 1 − TVD · Fidelity near 1.0 means QPU noise barely perturbs the output distribution · TVD = max probability difference between ideal and noisy outcomes","hint.noise.dominant":"Most frequently measured bitstring — if noise shifts this state, the circuit's computational result is corrupted","hint.gpu.speedup":"Statevector simulation: GPU parallelizes 2ⁿ complex amplitudes simultaneously","hint.gpu.timing":"Wall-clock time for full statevector evolution — measures actual hardware throughput difference","hint.qec.fidelity":"F = 1 − TVD(ideal, noisy) — how well the QEC code restores the quantum state distribution corrupted by QPU noise","hint.qec.overhead":"Physical resource cost of encoding — QEC requires redundant qubits & ancilla gates to detect/correct errors","hint.security.reason":"Algorithm files run inside the QPU pipeline — unrestricted OS/network access could exfiltrate calibration data or manipulate results","hint.pipeline.analyze":"Circuit extraction & gate-level analysis — failure here usually means syntax error or unsupported gate set","hint.pipeline.optimize":"Transpilation to QPU native gate set + SABRE qubit routing — failure often means connectivity mismatch","hint.pipeline.noise":"Calibration-based noise model simulation — requires successful transpilation to physical circuit first","hint.pipeline.qec_analyze":"T2/fidelity threshold analysis to determine if QEC is needed for the target QPU","hint.pipeline.qec_apply":"Logical-to-physical encoding with QEC code — increases qubit/gate count significantly","hint.pipeline.gpu":"Statevector simulation on CPU vs CUDA GPU — GPU unavailability or OOM are common causes","hint.pipeline.qpu":"Real QPU job submission — transpile errors, qubit count exceeded, or cloud API failure","knowledge.rag_query_placeholder":"e.g. high fidelity experiment on iqm_garnet\nPennyLane circuit optimization success\nHigh speedup result in GPU benchmark","knowledge.semantic_placeholder":"Search in natural language...\ne.g. high gate reduction optimization on ibm_fez\nPennyLane fidelity above 0.9","kb.show":"Show","kb.all":"All","kb.records":"records","kb.range":"{from}–{to} of {total}","kb.prev":"← Prev","kb.next":"Next →","kb.click_details":"click row for details","kb.col.date":"Date","kb.col.circuit_qpu":"Circuit · QPU","kb.col.circuit_framework":"Circuit · Framework","kb.col.circuit_file_qpu":"Circuit · File · QPU","kb.col.combination":"Combination","kb.col.fidelity":"Fidelity","kb.stats.total_records":"total records","kb.stats.updated":"Updated","kb.stats.fail":"Failed to load stats.","kb.best_comb.empty":"No optimization history found.","kb.best_comb.run_hint":"Run the Optimize step first to save results.","kb.best_comb.gate_red":"Gate Reduction","kb.best_comb.depth_red":"Depth Red.","kb.best_comb.qubits":"Qubits","kb.suspicious.empty":"No optimization alerts found.","kb.suspicious.reason.empty_circuit":"Empty Circuit","kb.suspicious.reason.not_equiv":"Not Equivalent","kb.suspicious.reason.unverified":"Unverified 100% Reduction","kb.suspicious.col.gate_red":"Gate Red.","kb.suspicious.col.reasons":"Reasons","kb.suspicious.footer":"{count} alerts · click row for details","kb.gpu.empty":"No GPU benchmark records found.","kb.gpu.empty2":"No successful GPU acceleration records yet.","kb.gpu.run_hint":"Run the GPU Benchmark step to collect data.","kb.gpu.col.speedup":"GPU Speedup","kb.gpu.col.cpu_time":"CPU Time","kb.gpu.col.gpu_time":"GPU Time","kb.gpu.footer":"GPU-accelerated only · {excluded} non-accelerated excluded · click row for details","kb.qec.empty":"No QEC experiment records found.","kb.qec.empty2":"No effective QEC experiments yet.","kb.qec.run_hint":"Run QEC Apply step to collect data.","kb.qec.col.code":"QEC Code","kb.qec.col.improvement":"Improvement","kb.qec.footer":"Effective only · {excluded} ineffective excluded · click row for details","kb.pipeline.empty":"No pipeline errors recorded.","kb.pipeline.col.stage_sdk":"Stage · SDK","kb.pipeline.col.severity":"Severity","kb.pipeline.col.issue":"Issue","kb.pipeline.col.solution":"Solution","kb.noise.empty":"No noise simulation records found.","kb.noise.run_hint":"Run the Noise Simulation step to collect data.","kb.noise.empty_fidelity":"No noise simulation records with fidelity data.","kb.noise.col.tvd":"TVD","kb.noise.col.shots":"Shots","kb.noise.best_first":"best first","kb.noise.worst_first":"worst first","kb.security.empty":"No security blocks recorded.","kb.security.col.file_tool":"File · Tool","kb.security.col.reason":"Reason","kb.security.col.pattern":"Pattern","kb.security.footer":"🔒 {count} blocks · click row for details","qpu.no_cal":"No Cal.","qpu.loading_short":"Loading","pipeline.job_manager.cost_source.aws_braket":"AWS Braket","pipeline.job_manager.cost_source.azure_quantum":"Azure Quantum","pipeline.job_manager.cost_source.ibm_open":"IBM Open Plan","pipeline.job_manager.cost_source.iqm_resonance":"IQM Resonance","pipeline.job_manager.cost_source.quandela_cloud":"Quandela Cloud","pipeline.job_manager.cost_source.quantinuum":"Quantinuum Nexus / Azure","pipeline.job_manager.cost_source.pasqal_cloud":"Pasqal Cloud","pipeline.job_manager.cost_source.unknown":"Unknown","pipeline.job_manager.cost_display.free":"Free","pipeline.job_manager.cost_display.free_open_plan":"Free (Open Plan)","pipeline.job_manager.cost_display.hqc_separate":"HQC (separate)","pipeline.job_manager.timing.queue_included":"⚠ queue included","pipeline.job_manager.timing.execution_only":"✓ execution only","pipeline.job_manager.timing.quantum_only":"✓ quantum time","pipeline.job_manager.billing.title":"💰 Billing (MTD)","pipeline.job_manager.billing.permission_denied":"⚠ permission required","pipeline.job_manager.billing.loading":"Loading...","pipeline.job_manager.billing.click_to_load":"Click Refresh to load"};
-const _LOCALE_KO = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"기초","header.mode_expert":"전문","header.server_label":"서버","header.connect":"연결","header.lock":"잠금","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","header.theme_toggle_to_midnight":"✦","header.theme_toggle_to_nord":"❄","status.disconnected":"미연결","status.connected":"연결됨","status.connecting":"연결 중...","status.reconnecting":"재연결 중...","status.not_connected":"미연결","lock.subtitle":"퀀텀 인텔리전스","lock.unlock":"잠금 해제","lock.incorrect_password":"비밀번호가 틀렸습니다","footer.text":"UQI · Universal Quantum Intelligence · 내부 도구","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ 새로고침","qpu.loading":"QPU 상태 로딩 중...","qpu.refreshing":"새로고침 중...","qpu.no_qpus":"사용 가능한 QPU 없음","qpu.load_fail":"QPU 목록 로드 실패","qpu.loading_calibration":"캘리브레이션 로딩 중...","qpu.cache_refresh_recommended":"· 새로고침 권장","qpu.close":"닫기","qpu.refresh_cal":"↻ 캘 새로고침","qpu.deep_analysis":"QPU 심층 분석","qpu.performance_radar":"성능 레이더","qpu.distribution_box":"분포 (박스 플롯)","qpu.log_scale":"로그 스케일","qpu.all_qpus":"전체 QPU","qpu.auto_recommended":"자동 (추천)","qpu.online":"온라인","qpu.offline":"오프라인","qpu.photonic":"포토닉","qpu.no_modality":"모달리티 미선택","qpu.no_distribution":"선택한 모달리티의 분포 데이터 없음.","qpu.boxplot_desc":"Box = 중간 50% 큐비트 분포 (Q1–Q3)<br>Whisker = 이상치 제외 최소/최대","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ 업로드","pipeline.dgx":"📂 DGX","pipeline.drop_hint":".py 파일을 여기에 놓거나 클릭하여 찾아보기","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"논리적 복잡도 — 큐비트, 게이트, 깊이, T-게이트 비율","pipeline.analyze.run":"분석 실행","pipeline.analyze.running":"분석 중...","pipeline.analyze.empty":"분석을 실행하여 결과를 확인하세요","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"대상 QPU에 대한 물리적 매핑 — 자동 트랜스파일로 게이트/깊이 감소","pipeline.optimize.run":"최적화 실행","pipeline.optimize.running":"최적화 중...","pipeline.optimize.combination":"조합","pipeline.optimize.options":"옵션","pipeline.optimize.verify":"동등성 검증","pipeline.optimize.empty":"최적화를 실행하여 결과를 확인하세요","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU 충실도 추정 — 최적화된 회로에 캘리브레이션 기반 노이즈 모델","pipeline.noise.run":"노이즈 시뮬레이션 실행","pipeline.noise.running":"시뮬레이션 중...","pipeline.noise.empty":"노이즈 시뮬레이션을 실행하여 결과를 확인하세요","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"오류 정정 필요성 — T2 비율, 충실도, 추천 코드","pipeline.qec_analyze.run":"QEC 분析 실행","pipeline.qec_analyze.running":"분析 중...","pipeline.qec_analyze.empty":"QEC 분析을 실행하여 결과를 확인하세요","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"QEC 코드로 회로 인코딩 — 적용 전후 충실도 비교","pipeline.qec_apply.run":"QEC 적용 실행","pipeline.qec_apply.running":"적용 중...","pipeline.qec_apply.empty":"QEC 적용을 실행하여 결과를 확인하세요","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU 시뮬레이션 속도 — 상태벡터 처리량 비교","pipeline.gpu.run":"벤치마크 실행","pipeline.gpu.running":"벤치마킹 중...","pipeline.gpu.empty":"벤치마크를 실행하여 결과를 확인하세요","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"실제 양자 하드웨어에 제출 — 트랜스파일 후 실제 QPU에서 실행","pipeline.qpu.run":"QPU에 제출","pipeline.qpu.running":"제출 중...","pipeline.qpu.confirm":"제출 확인","pipeline.qpu.empty":"먼저 분석을 실행한 후 확인하여 제출하세요","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"제출된 QPU 작업 모니터링 및 관리 — 상태 확인, 결과 조회, 작업 취소","pipeline.job_manager.refresh":"↻ 새로고침","pipeline.job_manager.refreshing":"↻ 새로고침 중...","pipeline.job_manager.empty":"새로고침을 클릭하여 작업 목록 로드","pipeline.job_manager.status_label":"상태","pipeline.job_manager.period_label":"기간","pipeline.job_manager.show_label":"표시","pipeline.job_manager.all":"전체","pipeline.job_manager.active":"진행 중","pipeline.job_manager.done":"완료","pipeline.job_manager.cancelled":"취소됨","pipeline.job_manager.error":"오류","pipeline.job_manager.all_time":"전체 기간","pipeline.job_manager.today":"오늘","pipeline.job_manager.last_7d":"최근 7일","pipeline.job_manager.last_30d":"최근 30일","job.status.checking":"확인 중...","job.status.check":"↻ 상태 확인","job.status.last_checked":"마지막 확인:","job.status.error_badge":"오류","job.status.cancelled_badge":"취소됨","job.status.done_badge":"✓ 완료","job.status.cancelled_msg":"작업이 취소되었습니다.","job.status.running_msg":"QPU 큐에서 실행 중입니다.","job.status.cancel":"✕ 작업 취소","job.status.cancelling":"취소 중...","job.results.title":"측정 결과","job.results.total_shots":"총 샷 수","job.results.unique_states":"고유 상태 수","step.badge.done":"✓ 완료","step.badge.error":"✗ 오류","btn.loading":"...","btn.uploading":"⟳ 업로드 중...","btn.upload_fail":"업로드 실패","btn.download":"⬇ 다운로드","btn.view":"👁 보기","btn.refresh_list":"↻ 새로고침","cache.badge":"⚡ 이전 실행의 캐시된 결과를 불러왔습니다.","cache.invalidate":"↺ 캐시 무효화","cache.invalidated_msg":"캐시가 무효화되었습니다 ({deleted}개 삭제)\n재실행하여 새 결과를 가져오세요.","cache.fail":"실패","cache.stale":"· 새로고침 권장","alert.select_file":"알고리즘 파일을 선택하거나 업로드하세요","alert.select_file_first":"먼저 파일을 선택하세요","alert.only_py":"Python (.py) 파일만 허용됩니다","alert.file_exists":"DGX에 '{name}' 파일이 이미 존재합니다 — 파일명을 변경 후 다시 업로드해 주세요","knowledge.title":"Knowledge Base","knowledge.query_type":"쿼리 유형","knowledge.semantic_query":"시맨틱 쿼리","knowledge.qpu_filter":"QPU 필터","knowledge.sdk_filter":"SDK 필터","knowledge.framework_filter":"Framework 필터","knowledge.limit":"제한","knowledge.run_search":"검색 실행","knowledge.searching":"검색 중...","knowledge.semantic_title":"SEMANTIC SEARCH","knowledge.run_semantic":"시맨틱 검색 실행","knowledge.results_count":"결과: {count}개","knowledge.click_details":"클릭하여 상세 보기","knowledge.no_results":"검색을 실행하여 결과를 확인하세요","rag.type.stats":"통계 개요","rag.type.best_combination":"회로 최적화","rag.type.suspicious_optimizations":"최적화 경보","rag.type.qec_results":"QEC 결과","rag.type.gpu_benchmark":"GPU 벤치마크","rag.type.pipeline_issues":"파이프라인 오류","rag.type.noise_simulation":"노이즈 시뮬레이션","rag.type.security_block":"보안 차단","pipeline.noise.engine":"시뮬레이션 엔진","pipeline.qec_apply.code":"QEC 코드","pipeline.shots":"샷 수","pipeline.qpu.warn":"<strong>실제 QPU</strong>에 제출되며 <strong>비용이 발생</strong>합니다. 확인 전 \"분석 (제출 없음)\"으로 트랜스파일된 회로를 미리 확인하세요.","pipeline.qpu.analyze_btn":"분석 (제출 없음)","pipeline.qpu.confirm_btn":"⚡ 확인 후 QPU에 제출","knowledge.structured_results":"구조화 검색 결과","knowledge.semantic_results":"Semantic Results","knowledge.semantic_hint":"Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색","rag.type_desc.stats":"지식베이스 레코드 수 및 유형별 현황","rag.type_desc.best_combination":"게이트 감소율 순 최적화 이력 — QPU 또는 큐비트 수로 필터","rag.type_desc.suspicious_optimizations":"검토 필요 최적화: 빈 회로, 비동등, 미검증 100% 감소","rag.type_desc.qec_results":"충실도 개선율 상위 QEC 실험 — 효과적인 케이스만 표시","rag.type_desc.gpu_benchmark":"GPU 시뮬레이션 속도 향상 랭킹 — CPU 대비 최고 가속 결과","rag.type_desc.pipeline_issues":"파이프라인 오류 로그 — 단계·SDK별 실패 및 근본 원인","rag.type_desc.noise_simulation":"캘리브레이션 기반 노이즈 모델 결과 — 충실도 순 랭킹, QPU 노이즈 환경의 최상/최악 회로 동작","rag.type_desc.security_block":"정적 분석 차단 — 알고리즘 파일 내 위험 임포트·패턴 감지","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"회로 최적화 실행 — 조합 및 QPU별 게이트/깊이 감소 결과","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU 작업 실행 기록 — 샷 수, 충실도, 작업 ID, 결과 메타데이터","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU 시뮬레이션 성능 비교","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"파이프라인 단계별 오류 및 실패, 근본 원인 포함","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"SDK 및 QPU별 트랜스파일 성공/실패 패턴 및 해결 방법","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"양자 오류 정정 실험 결과 — 인코딩 전후 충실도","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"시간별 QPU 온라인/오프라인 상태 스냅샷","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"정적 보안 정책에 의해 차단된 요청 — 의심스러운 임포트 또는 패턴","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"양자 프레임워크 간 회로 변환 패턴 (예: Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"성능 최적화를 위한 내부 캐시된 연산 결과","hint.opt.combination":"트랜스파일러 + 큐비트 라우팅 알고리즘","hint.opt.opt_engine":"유니터리 합성","hint.opt.map_engine":"QPU 토폴로지 라우팅","hint.opt.complexity":"QPU 네이티브 게이트셋 및 큐비트 토폴로지로의 트랜스파일을 통한 게이트 수 및 깊이 감소","hint.opt.profile":"T-비율: T-게이트 비율 (내결함성 하드웨어에서 비용 높음) · 2Q-비율: 2큐비트 게이트 밀도 (NISQ 주요 오류 원인)","hint.opt.time":"최적화: 유니터리 합성 및 게이트 소거 · 매핑: QPU 연결 그래프에 SABRE/라우팅 적용","hint.noise.fidelity":"F = 1 − TVD · 충실도가 1.0에 가까울수록 QPU 노이즈가 출력 분포에 미치는 영향이 작음 · TVD = 이상적 결과와 노이즈 결과 간 최대 확률 차이","hint.noise.dominant":"가장 자주 측정되는 비트열 — 노이즈로 인해 이 상태가 변하면 회로의 계산 결과가 손상됨","hint.gpu.speedup":"상태벡터 시뮬레이션: GPU는 2ⁿ개의 복소 진폭을 병렬로 처리","hint.gpu.timing":"전체 상태벡터 전개의 실제 실행 시간 — 실제 하드웨어 처리량 차이를 측정","hint.qec.fidelity":"F = 1 − TVD(이상, 노이즈) — QEC 코드가 QPU 노이즈로 인해 손상된 양자 상태 분포를 얼마나 잘 복원하는지","hint.qec.overhead":"인코딩의 물리적 자원 비용 — QEC는 오류 감지/정정을 위해 중복 큐비트 및 앤실라 게이트 필요","hint.security.reason":"알고리즘 파일은 QPU 파이프라인 내부에서 실행됨 — OS/네트워크 무제한 접근 시 캘리브레이션 데이터 유출 또는 결과 조작 가능","hint.pipeline.analyze":"회로 추출 및 게이트 수준 분석 — 실패 시 주로 문법 오류 또는 지원되지 않는 게이트셋","hint.pipeline.optimize":"QPU 네이티브 게이트셋으로 트랜스파일 + SABRE 큐비트 라우팅 — 실패 시 주로 연결성 불일치","hint.pipeline.noise":"캘리브레이션 기반 노이즈 모델 시뮬레이션 — 물리 회로로의 트랜스파일 성공 후 실행 가능","hint.pipeline.qec_analyze":"T2/충실도 임계값 분석으로 대상 QPU에 QEC 필요 여부 판단","hint.pipeline.qec_apply":"QEC 코드로 논리→물리 인코딩 — 큐비트/게이트 수 대폭 증가","hint.pipeline.gpu":"CPU vs CUDA GPU 상태벡터 시뮬레이션 — GPU 미사용 또는 메모리 부족(OOM)이 주요 원인","hint.pipeline.qpu":"실제 QPU 작업 제출 — 트랜스파일 오류, 큐비트 수 초과, 또는 클라우드 API 장애","knowledge.rag_query_placeholder":"예: iqm_garnet에서 고충실도 실험\nPennyLane 회로 최적화 성공\nGPU 벤치마크 고속도 결과","knowledge.semantic_placeholder":"자연어로 검색...\n예: ibm_fez에서 고게이트 감소 최적화\nPennyLane 충실도 0.9 이상","kb.show":"표시","kb.all":"전체","kb.records":"건","kb.range":"{from}–{to} / {total}건","kb.prev":"← 이전","kb.next":"다음 →","kb.click_details":"행 클릭하여 상세 보기","kb.col.date":"날짜","kb.col.circuit_qpu":"회로 · QPU","kb.col.circuit_framework":"회로 · 프레임워크","kb.col.circuit_file_qpu":"회로 · 파일 · QPU","kb.col.combination":"조합","kb.col.fidelity":"충실도","kb.stats.total_records":"전체 레코드","kb.stats.updated":"업데이트","kb.stats.fail":"통계 로드 실패.","kb.best_comb.empty":"최적화 이력이 없습니다.","kb.best_comb.run_hint":"먼저 최적화 단계를 실행하여 결과를 저장하세요.","kb.best_comb.gate_red":"게이트 감소","kb.best_comb.depth_red":"깊이 감소","kb.best_comb.qubits":"큐비트","kb.suspicious.empty":"최적화 알림이 없습니다.","kb.suspicious.reason.empty_circuit":"빈 회로","kb.suspicious.reason.not_equiv":"비동등","kb.suspicious.reason.unverified":"미검증 100% 감소","kb.suspicious.col.gate_red":"게이트 감소","kb.suspicious.col.reasons":"사유","kb.suspicious.footer":"{count}개 알림 · 행 클릭하여 상세 보기","kb.gpu.empty":"GPU 벤치마크 레코드가 없습니다.","kb.gpu.empty2":"성공적인 GPU 가속 레코드가 아직 없습니다.","kb.gpu.run_hint":"GPU 벤치마크 단계를 실행하여 데이터를 수집하세요.","kb.gpu.col.speedup":"GPU 가속비","kb.gpu.col.cpu_time":"CPU 시간","kb.gpu.col.gpu_time":"GPU 시간","kb.gpu.footer":"GPU 가속 결과만 표시 · {excluded}개 비가속 제외 · 행 클릭하여 상세 보기","kb.qec.empty":"QEC 실험 레코드가 없습니다.","kb.qec.empty2":"효과적인 QEC 실험이 아직 없습니다.","kb.qec.run_hint":"QEC 적용 단계를 실행하여 데이터를 수집하세요.","kb.qec.col.code":"QEC 코드","kb.qec.col.improvement":"향상도","kb.qec.footer":"유효 실험만 표시 · {excluded}개 비유효 제외 · 행 클릭하여 상세 보기","kb.pipeline.empty":"파이프라인 오류가 없습니다.","kb.pipeline.col.stage_sdk":"단계 · SDK","kb.pipeline.col.severity":"심각도","kb.pipeline.col.issue":"문제","kb.pipeline.col.solution":"해결책","kb.noise.empty":"노이즈 시뮬레이션 레코드가 없습니다.","kb.noise.run_hint":"노이즈 시뮬레이션 단계를 실행하여 데이터를 수집하세요.","kb.noise.empty_fidelity":"충실도 데이터가 있는 노이즈 시뮬레이션 레코드가 없습니다.","kb.noise.col.tvd":"TVD","kb.noise.col.shots":"측정 수","kb.noise.best_first":"상위 먼저","kb.noise.worst_first":"하위 먼저","kb.security.empty":"보안 차단 기록이 없습니다.","kb.security.col.file_tool":"파일 · 도구","kb.security.col.reason":"사유","kb.security.col.pattern":"패턴","kb.security.footer":"🔒 {count}개 차단 · 행 클릭하여 상세 보기","qpu.no_cal":"캘리브레이션 없음","qpu.loading_short":"로딩 중","pipeline.job_manager.cost_source.aws_braket":"AWS Braket","pipeline.job_manager.cost_source.azure_quantum":"Azure Quantum","pipeline.job_manager.cost_source.ibm_open":"IBM Open Plan","pipeline.job_manager.cost_source.iqm_resonance":"IQM Resonance","pipeline.job_manager.cost_source.quandela_cloud":"Quandela Cloud","pipeline.job_manager.cost_source.quantinuum":"Quantinuum Nexus / Azure","pipeline.job_manager.cost_source.pasqal_cloud":"Pasqal Cloud","pipeline.job_manager.cost_source.unknown":"미상","pipeline.job_manager.cost_display.free":"무료","pipeline.job_manager.cost_display.free_open_plan":"무료 (Open Plan)","pipeline.job_manager.cost_display.hqc_separate":"HQC (별도)","pipeline.job_manager.timing.queue_included":"⚠ 큐 포함","pipeline.job_manager.timing.execution_only":"✓ 큐 제외","pipeline.job_manager.timing.quantum_only":"✓ 양자 시간","pipeline.job_manager.billing.title":"💰 청구 (당월)","pipeline.job_manager.billing.permission_denied":"⚠ 권한 부족","pipeline.job_manager.billing.loading":"로딩 중...","pipeline.job_manager.billing.click_to_load":"새로고침 클릭"};
+const _LOCALE_EN = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"BASIC","header.mode_expert":"PRO","header.server_label":"Server","header.connect":"Connect","header.lock":"LOCK","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","header.theme_toggle_to_midnight":"✦","header.theme_toggle_to_nord":"❄","status.disconnected":"disconnected","status.connected":"connected","status.connecting":"Connecting...","status.reconnecting":"Reconnecting...","status.not_connected":"Not connected","lock.subtitle":"QUANTUM INTELLIGENCE","lock.unlock":"UNLOCK","lock.incorrect_password":"Incorrect password","footer.text":"UQI · Universal Quantum Intelligence · Internal Tool","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ Refresh","qpu.loading":"Loading QPU status...","qpu.refreshing":"Refreshing...","qpu.no_qpus":"No QPUs available","qpu.load_fail":"Failed to load QPU list","qpu.loading_calibration":"Loading calibration...","qpu.cache_refresh_recommended":"· Refresh recommended","qpu.close":"Close","qpu.refresh_cal":"↻ Refresh Cal","qpu.deep_analysis":"QPU Deep Analysis","qpu.performance_radar":"Performance Radar","qpu.distribution_box":"Distribution (Box Plot)","qpu.log_scale":"log scale","qpu.all_qpus":"All QPUs","qpu.auto_recommended":"Auto (Recommended)","qpu.online":"Online","qpu.offline":"Offline","qpu.photonic":"Photonic","qpu.no_modality":"No modality selected","qpu.no_distribution":"No distribution data for selected modality.","qpu.boxplot_desc":"Box = middle 50% qubit distribution (Q1–Q3)<br>Whisker = min/max excluding outliers","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ Upload","pipeline.dgx":"📂 DGX","pipeline.drop_hint":"Drop .py here or click to browse","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"Logical complexity — qubits, gates, depth, T-gate ratio","pipeline.analyze.run":"RUN ANALYSIS","pipeline.analyze.running":"Analyzing...","pipeline.analyze.empty":"Run analysis to see results","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"Physical mapping to target QPU — gate/depth reduction via auto transpile","pipeline.optimize.run":"RUN OPTIMIZATION","pipeline.optimize.running":"Optimizing...","pipeline.optimize.combination":"Combination","pipeline.optimize.options":"Options","pipeline.optimize.verify":"Verify equivalence","pipeline.optimize.empty":"Run optimization to see results","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU-realistic fidelity — calibration-based noise model on optimized circuit","pipeline.noise.run":"RUN NOISE SIMULATION","pipeline.noise.running":"Simulating...","pipeline.noise.empty":"Run noise simulation to see results","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"Error correction necessity — T2 ratio, fidelity, recommended codes","pipeline.qec_analyze.run":"RUN QEC ANALYSIS","pipeline.qec_analyze.running":"Analyzing...","pipeline.qec_analyze.empty":"Run QEC analysis to see results","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"Encode circuit with QEC code — compare fidelity before/after","pipeline.qec_apply.run":"RUN QEC APPLY","pipeline.qec_apply.running":"Applying...","pipeline.qec_apply.empty":"Run QEC apply to see results","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU simulation speed — statevector throughput comparison","pipeline.gpu.run":"RUN BENCHMARK","pipeline.gpu.running":"Benchmarking...","pipeline.gpu.empty":"Run benchmark to see results","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"Submit to real quantum hardware — transpiles & executes on actual QPU","pipeline.qpu.run":"SUBMIT TO QPU","pipeline.qpu.running":"Submitting...","pipeline.qpu.confirm":"CONFIRM SUBMIT","pipeline.qpu.empty":"Run analysis first, then confirm to submit","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"Monitor & manage submitted QPU jobs — check status, view results, cancel jobs","pipeline.job_manager.refresh":"↻ Refresh","pipeline.job_manager.refreshing":"↻ Refreshing...","pipeline.job_manager.empty":"Click Refresh to load jobs","pipeline.job_manager.status_label":"Status","pipeline.job_manager.period_label":"Period","pipeline.job_manager.show_label":"Show","pipeline.job_manager.all":"All","pipeline.job_manager.active":"Active","pipeline.job_manager.done":"Done","pipeline.job_manager.cancelled":"Cancelled","pipeline.job_manager.error":"Error","pipeline.job_manager.all_time":"All time","pipeline.job_manager.today":"Today","pipeline.job_manager.last_7d":"Last 7 days","pipeline.job_manager.last_30d":"Last 30 days","job.status.checking":"Checking...","job.status.check":"↻ Check Status","job.status.last_checked":"Last checked:","job.status.error_badge":"ERROR","job.status.cancelled_badge":"CANCELLED","job.status.done_badge":"✓ DONE","job.status.cancelled_msg":"Job was cancelled.","job.status.running_msg":"job is running on QPU queue.","job.status.cancel":"✕ Cancel Job","job.status.cancelling":"Cancelling...","job.results.title":"Measurement Results","job.results.total_shots":"Total Shots","job.results.unique_states":"Unique States","step.badge.done":"✓ Done","step.badge.error":"✗ Error","btn.loading":"...","btn.uploading":"⟳ Uploading...","btn.upload_fail":"Upload failed","btn.download":"⬇ Download","btn.view":"👁 View","btn.refresh_list":"↻ Refresh","cache.badge":"⚡ Cached result loaded from previous run.","cache.invalidate":"↺ Invalidate Cache","cache.invalidated_msg":"Cache invalidated ({deleted} entries deleted)\nRe-run to fetch fresh results.","cache.fail":"Failed","cache.stale":"· Refresh recommended","alert.select_file":"Please select or upload an algorithm file","alert.select_file_first":"Please select a file first","alert.only_py":"Only Python (.py) files are allowed","alert.file_exists":"'{name}' already exists on DGX — rename the file and try again","knowledge.title":"Search Knowledge Base","knowledge.query_type":"Query Type","knowledge.semantic_query":"Semantic Query","knowledge.qpu_filter":"QPU Filter","knowledge.sdk_filter":"SDK Filter","knowledge.framework_filter":"Framework Filter","knowledge.limit":"Limit","knowledge.run_search":"RUN SEARCH","knowledge.searching":"Searching...","knowledge.semantic_title":"SEMANTIC SEARCH","knowledge.run_semantic":"SEMANTIC SEARCH","knowledge.results_count":"Results: {count}","knowledge.click_details":"Click for details","knowledge.no_results":"Run a search to see results","rag.type.stats":"Stats Overview","rag.type.best_combination":"Best Optimizations","rag.type.suspicious_optimizations":"Optimization Alerts","rag.type.qec_results":"QEC Results","rag.type.gpu_benchmark":"GPU Benchmarks","rag.type.pipeline_issues":"Pipeline Errors","rag.type.noise_simulation":"Noise Simulation","rag.type.security_block":"Security Blocks","pipeline.noise.engine":"Simulation Engine","pipeline.qec_apply.code":"QEC Code","pipeline.shots":"Shots","pipeline.qpu.warn":"This submits to a <strong>real QPU</strong> and <strong>incurs cost</strong>. Use \"Analyze (No Submit)\" first to preview the transpiled circuit before confirming.","pipeline.qpu.analyze_btn":"ANALYZE (NO SUBMIT)","pipeline.qpu.confirm_btn":"⚡ CONFIRM & SUBMIT TO QPU","knowledge.structured_results":"Structured Search Results","knowledge.semantic_results":"Semantic Results","knowledge.semantic_hint":"Press Enter to search · Shift+Enter for new line\nChroma vector similarity search","rag.type_desc.stats":"Knowledge base record count and per-type breakdown","rag.type_desc.best_combination":"Optimization runs ranked by gate reduction — filter by QPU or qubit count","rag.type_desc.suspicious_optimizations":"Optimizations flagged for review: empty circuit, non-equivalence, or unverified 100% reduction","rag.type_desc.qec_results":"Top QEC experiments by fidelity improvement — effective cases only","rag.type_desc.gpu_benchmark":"GPU simulation speedup rankings — top CPU vs GPU acceleration results","rag.type_desc.pipeline_issues":"Pipeline error log — failures and root causes per stage & SDK","rag.type_desc.noise_simulation":"Calibration-based noise model results ranked by fidelity — best and worst circuit behavior on QPU noise","rag.type_desc.security_block":"Static analysis blocks — dangerous imports or patterns detected in algorithm files","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"Circuit optimization runs — gate/depth reduction results per combination & QPU","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU job execution records — shots, fidelity, job IDs, and result metadata","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU simulation performance comparisons","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"Errors and failures encountered during pipeline stages, with root causes","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"Transpilation success/failure patterns and workarounds per SDK & QPU","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"Quantum error correction experiment results — fidelity before/after encoding","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"QPU online/offline status snapshots over time","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"Requests blocked by static security policy — suspicious imports or patterns","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"Circuit conversion patterns between quantum frameworks (e.g. Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"Internally cached computation results for performance optimization","hint.opt.combination":"transpiler + qubit routing algorithm","hint.opt.opt_engine":"unitary synthesis","hint.opt.map_engine":"QPU topology routing","hint.opt.complexity":"Gate count & depth reduction through transpilation to QPU native gate set and qubit topology","hint.opt.profile":"T-ratio: T-gate fraction (costly on fault-tolerant hardware) · 2Q-ratio: two-qubit gate density (dominant error source on NISQ)","hint.opt.time":"Optimize: unitary synthesis & gate cancellation · Mapping: SABRE/routing to QPU connectivity graph","hint.noise.fidelity":"F = 1 − TVD · Fidelity near 1.0 means QPU noise barely perturbs the output distribution · TVD = max probability difference between ideal and noisy outcomes","hint.noise.dominant":"Most frequently measured bitstring — if noise shifts this state, the circuit's computational result is corrupted","hint.gpu.speedup":"Statevector simulation: GPU parallelizes 2ⁿ complex amplitudes simultaneously","hint.gpu.timing":"Wall-clock time for full statevector evolution — measures actual hardware throughput difference","hint.qec.fidelity":"F = 1 − TVD(ideal, noisy) — how well the QEC code restores the quantum state distribution corrupted by QPU noise","hint.qec.overhead":"Physical resource cost of encoding — QEC requires redundant qubits & ancilla gates to detect/correct errors","hint.security.reason":"Algorithm files run inside the QPU pipeline — unrestricted OS/network access could exfiltrate calibration data or manipulate results","hint.pipeline.analyze":"Circuit extraction & gate-level analysis — failure here usually means syntax error or unsupported gate set","hint.pipeline.optimize":"Transpilation to QPU native gate set + SABRE qubit routing — failure often means connectivity mismatch","hint.pipeline.noise":"Calibration-based noise model simulation — requires successful transpilation to physical circuit first","hint.pipeline.qec_analyze":"T2/fidelity threshold analysis to determine if QEC is needed for the target QPU","hint.pipeline.qec_apply":"Logical-to-physical encoding with QEC code — increases qubit/gate count significantly","hint.pipeline.gpu":"Statevector simulation on CPU vs CUDA GPU — GPU unavailability or OOM are common causes","hint.pipeline.qpu":"Real QPU job submission — transpile errors, qubit count exceeded, or cloud API failure","knowledge.rag_query_placeholder":"e.g. high fidelity experiment on iqm_garnet\nPennyLane circuit optimization success\nHigh speedup result in GPU benchmark","knowledge.semantic_placeholder":"Search in natural language...\ne.g. high gate reduction optimization on ibm_fez\nPennyLane fidelity above 0.9","kb.show":"Show","kb.all":"All","kb.records":"records","kb.range":"{from}–{to} of {total}","kb.prev":"← Prev","kb.next":"Next →","kb.click_details":"click row for details","kb.col.date":"Date","kb.col.circuit_qpu":"Circuit · QPU","kb.col.circuit_framework":"Circuit · Framework","kb.col.circuit_file_qpu":"Circuit · File · QPU","kb.col.combination":"Combination","kb.col.fidelity":"Fidelity","kb.stats.total_records":"total records","kb.stats.updated":"Updated","kb.stats.fail":"Failed to load stats.","kb.best_comb.empty":"No optimization history found.","kb.best_comb.run_hint":"Run the Optimize step first to save results.","kb.best_comb.gate_red":"Gate Reduction","kb.best_comb.depth_red":"Depth Red.","kb.best_comb.qubits":"Qubits","kb.suspicious.empty":"No optimization alerts found.","kb.suspicious.reason.empty_circuit":"Empty Circuit","kb.suspicious.reason.not_equiv":"Not Equivalent","kb.suspicious.reason.unverified":"Unverified 100% Reduction","kb.suspicious.col.gate_red":"Gate Red.","kb.suspicious.col.reasons":"Reasons","kb.suspicious.footer":"{count} alerts · click row for details","kb.gpu.empty":"No GPU benchmark records found.","kb.gpu.empty2":"No successful GPU acceleration records yet.","kb.gpu.run_hint":"Run the GPU Benchmark step to collect data.","kb.gpu.col.speedup":"GPU Speedup","kb.gpu.col.cpu_time":"CPU Time","kb.gpu.col.gpu_time":"GPU Time","kb.gpu.footer":"GPU-accelerated only · {excluded} non-accelerated excluded · click row for details","kb.qec.empty":"No QEC experiment records found.","kb.qec.empty2":"No effective QEC experiments yet.","kb.qec.run_hint":"Run QEC Apply step to collect data.","kb.qec.col.code":"QEC Code","kb.qec.col.improvement":"Improvement","kb.qec.footer":"Effective only · {excluded} ineffective excluded · click row for details","kb.pipeline.empty":"No pipeline errors recorded.","kb.pipeline.col.stage_sdk":"Stage · SDK","kb.pipeline.col.severity":"Severity","kb.pipeline.col.issue":"Issue","kb.pipeline.col.solution":"Solution","kb.noise.empty":"No noise simulation records found.","kb.noise.run_hint":"Run the Noise Simulation step to collect data.","kb.noise.empty_fidelity":"No noise simulation records with fidelity data.","kb.noise.col.tvd":"TVD","kb.noise.col.shots":"Shots","kb.noise.best_first":"best first","kb.noise.worst_first":"worst first","kb.security.empty":"No security blocks recorded.","kb.security.col.file_tool":"File · Tool","kb.security.col.reason":"Reason","kb.security.col.pattern":"Pattern","kb.security.footer":"🔒 {count} blocks · click row for details","qpu.no_cal":"No Cal.","qpu.loading_short":"Loading","pipeline.job_manager.cost_source.aws_braket":"AWS Braket","pipeline.job_manager.cost_source.azure_quantum":"Azure Quantum","pipeline.job_manager.cost_source.ibm_open":"IBM Quantum","pipeline.job_manager.cost_source.iqm_resonance":"IQM Resonance","pipeline.job_manager.cost_source.quandela_cloud":"Quandela Cloud","pipeline.job_manager.cost_source.quantinuum":"Azure Quantum","pipeline.job_manager.cost_source.pasqal_cloud":"Pasqal Cloud","pipeline.job_manager.cost_source.unknown":"Unknown","pipeline.job_manager.cost_display.free":"Free","pipeline.job_manager.cost_display.free_open_plan":"Free (Open Plan)","pipeline.job_manager.cost_display.hqc_separate":"HQC (separate)","pipeline.job_manager.timing.queue_included":"⚠ queue included","pipeline.job_manager.timing.execution_only":"✓ execution only","pipeline.job_manager.timing.quantum_only":"✓ quantum time","pipeline.job_manager.billing.title":"💰 Billing (MTD)","pipeline.job_manager.billing.permission_denied":"⚠ permission required","pipeline.job_manager.billing.loading":"Loading...","pipeline.job_manager.billing.click_to_load":"Click Refresh to load"};
+const _LOCALE_KO = {"nav.qpus":"QPUs","nav.pipeline":"Pipeline","nav.knowledge":"Knowledge","header.mode_beginner":"기초","header.mode_expert":"전문","header.server_label":"서버","header.connect":"연결","header.lock":"잠금","header.theme_toggle_to_light":"☀","header.theme_toggle_to_dark":"☾","header.theme_toggle_to_midnight":"✦","header.theme_toggle_to_nord":"❄","status.disconnected":"미연결","status.connected":"연결됨","status.connecting":"연결 중...","status.reconnecting":"재연결 중...","status.not_connected":"미연결","lock.subtitle":"퀀텀 인텔리전스","lock.unlock":"잠금 해제","lock.incorrect_password":"비밀번호가 틀렸습니다","footer.text":"UQI · Universal Quantum Intelligence · 내부 도구","qpu.title":"Quantum Processing Units","qpu.refresh":"↻ 새로고침","qpu.loading":"QPU 상태 로딩 중...","qpu.refreshing":"새로고침 중...","qpu.no_qpus":"사용 가능한 QPU 없음","qpu.load_fail":"QPU 목록 로드 실패","qpu.loading_calibration":"캘리브레이션 로딩 중...","qpu.cache_refresh_recommended":"· 새로고침 권장","qpu.close":"닫기","qpu.refresh_cal":"↻ 캘 새로고침","qpu.deep_analysis":"QPU 심층 분석","qpu.performance_radar":"성능 레이더","qpu.distribution_box":"분포 (박스 플롯)","qpu.log_scale":"로그 스케일","qpu.all_qpus":"전체 QPU","qpu.auto_recommended":"자동 (추천)","qpu.online":"온라인","qpu.offline":"오프라인","qpu.photonic":"포토닉","qpu.no_modality":"모달리티 미선택","qpu.no_distribution":"선택한 모달리티의 분포 데이터 없음.","qpu.boxplot_desc":"Box = 중간 50% 큐비트 분포 (Q1–Q3)<br>Whisker = 이상치 제외 최소/최대","pipeline.algorithm_file":"Algorithm File","pipeline.upload":"⬆ 업로드","pipeline.dgx":"📂 DGX","pipeline.drop_hint":".py 파일을 여기에 놓거나 클릭하여 찾아보기","pipeline.target_qpu":"Target QPU","pipeline.steps_hint":"각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.","pipeline.analyze.name":"Circuit Analysis","pipeline.analyze.desc":"논리적 복잡도 — 큐비트, 게이트, 깊이, T-게이트 비율","pipeline.analyze.run":"분석 실행","pipeline.analyze.running":"분석 중...","pipeline.analyze.empty":"분석을 실행하여 결과를 확인하세요","pipeline.optimize.name":"Optimization","pipeline.optimize.desc":"대상 QPU에 대한 물리적 매핑 — 자동 트랜스파일로 게이트/깊이 감소","pipeline.optimize.run":"최적화 실행","pipeline.optimize.running":"최적화 중...","pipeline.optimize.combination":"조합","pipeline.optimize.options":"옵션","pipeline.optimize.verify":"동등성 검증","pipeline.optimize.empty":"최적화를 실행하여 결과를 확인하세요","pipeline.noise.name":"Noise Simulation","pipeline.noise.desc":"QPU 충실도 추정 — 최적화된 회로에 캘리브레이션 기반 노이즈 모델","pipeline.noise.run":"노이즈 시뮬레이션 실행","pipeline.noise.running":"시뮬레이션 중...","pipeline.noise.empty":"노이즈 시뮬레이션을 실행하여 결과를 확인하세요","pipeline.qec_analyze.name":"QEC Analysis","pipeline.qec_analyze.desc":"오류 정정 필요성 — T2 비율, 충실도, 추천 코드","pipeline.qec_analyze.run":"QEC 분析 실행","pipeline.qec_analyze.running":"분析 중...","pipeline.qec_analyze.empty":"QEC 분析을 실행하여 결과를 확인하세요","pipeline.qec_apply.name":"QEC Apply","pipeline.qec_apply.desc":"QEC 코드로 회로 인코딩 — 적용 전후 충실도 비교","pipeline.qec_apply.run":"QEC 적용 실행","pipeline.qec_apply.running":"적용 중...","pipeline.qec_apply.empty":"QEC 적용을 실행하여 결과를 확인하세요","pipeline.gpu.name":"GPU Benchmark","pipeline.gpu.desc":"CPU vs GPU 시뮬레이션 속도 — 상태벡터 처리량 비교","pipeline.gpu.run":"벤치마크 실행","pipeline.gpu.running":"벤치마킹 중...","pipeline.gpu.empty":"벤치마크를 실행하여 결과를 확인하세요","pipeline.qpu.name":"QPU Execution","pipeline.qpu.desc":"실제 양자 하드웨어에 제출 — 트랜스파일 후 실제 QPU에서 실행","pipeline.qpu.run":"QPU에 제출","pipeline.qpu.running":"제출 중...","pipeline.qpu.confirm":"제출 확인","pipeline.qpu.empty":"먼저 분석을 실행한 후 확인하여 제출하세요","pipeline.job_manager.name":"QPU Job Manager","pipeline.job_manager.desc":"제출된 QPU 작업 모니터링 및 관리 — 상태 확인, 결과 조회, 작업 취소","pipeline.job_manager.refresh":"↻ 새로고침","pipeline.job_manager.refreshing":"↻ 새로고침 중...","pipeline.job_manager.empty":"새로고침을 클릭하여 작업 목록 로드","pipeline.job_manager.status_label":"상태","pipeline.job_manager.period_label":"기간","pipeline.job_manager.show_label":"표시","pipeline.job_manager.all":"전체","pipeline.job_manager.active":"진행 중","pipeline.job_manager.done":"완료","pipeline.job_manager.cancelled":"취소됨","pipeline.job_manager.error":"오류","pipeline.job_manager.all_time":"전체 기간","pipeline.job_manager.today":"오늘","pipeline.job_manager.last_7d":"최근 7일","pipeline.job_manager.last_30d":"최근 30일","job.status.checking":"확인 중...","job.status.check":"↻ 상태 확인","job.status.last_checked":"마지막 확인:","job.status.error_badge":"오류","job.status.cancelled_badge":"취소됨","job.status.done_badge":"✓ 완료","job.status.cancelled_msg":"작업이 취소되었습니다.","job.status.running_msg":"QPU 큐에서 실행 중입니다.","job.status.cancel":"✕ 작업 취소","job.status.cancelling":"취소 중...","job.results.title":"측정 결과","job.results.total_shots":"총 샷 수","job.results.unique_states":"고유 상태 수","step.badge.done":"✓ 완료","step.badge.error":"✗ 오류","btn.loading":"...","btn.uploading":"⟳ 업로드 중...","btn.upload_fail":"업로드 실패","btn.download":"⬇ 다운로드","btn.view":"👁 보기","btn.refresh_list":"↻ 새로고침","cache.badge":"⚡ 이전 실행의 캐시된 결과를 불러왔습니다.","cache.invalidate":"↺ 캐시 무효화","cache.invalidated_msg":"캐시가 무효화되었습니다 ({deleted}개 삭제)\n재실행하여 새 결과를 가져오세요.","cache.fail":"실패","cache.stale":"· 새로고침 권장","alert.select_file":"알고리즘 파일을 선택하거나 업로드하세요","alert.select_file_first":"먼저 파일을 선택하세요","alert.only_py":"Python (.py) 파일만 허용됩니다","alert.file_exists":"DGX에 '{name}' 파일이 이미 존재합니다 — 파일명을 변경 후 다시 업로드해 주세요","knowledge.title":"Knowledge Base","knowledge.query_type":"쿼리 유형","knowledge.semantic_query":"시맨틱 쿼리","knowledge.qpu_filter":"QPU 필터","knowledge.sdk_filter":"SDK 필터","knowledge.framework_filter":"Framework 필터","knowledge.limit":"제한","knowledge.run_search":"검색 실행","knowledge.searching":"검색 중...","knowledge.semantic_title":"SEMANTIC SEARCH","knowledge.run_semantic":"시맨틱 검색 실행","knowledge.results_count":"결과: {count}개","knowledge.click_details":"클릭하여 상세 보기","knowledge.no_results":"검색을 실행하여 결과를 확인하세요","rag.type.stats":"통계 개요","rag.type.best_combination":"회로 최적화","rag.type.suspicious_optimizations":"최적화 경보","rag.type.qec_results":"QEC 결과","rag.type.gpu_benchmark":"GPU 벤치마크","rag.type.pipeline_issues":"파이프라인 오류","rag.type.noise_simulation":"노이즈 시뮬레이션","rag.type.security_block":"보안 차단","pipeline.noise.engine":"시뮬레이션 엔진","pipeline.qec_apply.code":"QEC 코드","pipeline.shots":"샷 수","pipeline.qpu.warn":"<strong>실제 QPU</strong>에 제출되며 <strong>비용이 발생</strong>합니다. 확인 전 \"분석 (제출 없음)\"으로 트랜스파일된 회로를 미리 확인하세요.","pipeline.qpu.analyze_btn":"분석 (제출 없음)","pipeline.qpu.confirm_btn":"⚡ 확인 후 QPU에 제출","knowledge.structured_results":"구조화 검색 결과","knowledge.semantic_results":"Semantic Results","knowledge.semantic_hint":"Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색","rag.type_desc.stats":"지식베이스 레코드 수 및 유형별 현황","rag.type_desc.best_combination":"게이트 감소율 순 최적화 이력 — QPU 또는 큐비트 수로 필터","rag.type_desc.suspicious_optimizations":"검토 필요 최적화: 빈 회로, 비동등, 미검증 100% 감소","rag.type_desc.qec_results":"충실도 개선율 상위 QEC 실험 — 효과적인 케이스만 표시","rag.type_desc.gpu_benchmark":"GPU 시뮬레이션 속도 향상 랭킹 — CPU 대비 최고 가속 결과","rag.type_desc.pipeline_issues":"파이프라인 오류 로그 — 단계·SDK별 실패 및 근본 원인","rag.type_desc.noise_simulation":"캘리브레이션 기반 노이즈 모델 결과 — 충실도 순 랭킹, QPU 노이즈 환경의 최상/최악 회로 동작","rag.type_desc.security_block":"정적 분석 차단 — 알고리즘 파일 내 위험 임포트·패턴 감지","rag.meta.optimization.label":"Optimizations","rag.meta.optimization.desc":"회로 최적화 실행 — 조합 및 QPU별 게이트/깊이 감소 결과","rag.meta.execution.label":"Executions","rag.meta.execution.desc":"QPU 작업 실행 기록 — 샷 수, 충실도, 작업 ID, 결과 메타데이터","rag.meta.gpu_benchmark.label":"GPU Benchmarks","rag.meta.gpu_benchmark.desc":"CPU vs GPU 시뮬레이션 성능 비교","rag.meta.pipeline_issue.label":"Pipeline Issues","rag.meta.pipeline_issue.desc":"파이프라인 단계별 오류 및 실패, 근본 원인 포함","rag.meta.transpile_pattern.label":"Transpile Patterns","rag.meta.transpile_pattern.desc":"SDK 및 QPU별 트랜스파일 성공/실패 패턴 및 해결 방법","rag.meta.qec_experiment.label":"QEC Experiments","rag.meta.qec_experiment.desc":"양자 오류 정정 실험 결과 — 인코딩 전후 충실도","rag.meta.qpu_availability.label":"QPU Availability","rag.meta.qpu_availability.desc":"시간별 QPU 온라인/오프라인 상태 스냅샷","rag.meta.security_block.label":"Security Blocks","rag.meta.security_block.desc":"정적 보안 정책에 의해 차단된 요청 — 의심스러운 임포트 또는 패턴","rag.meta.conversion_pattern.label":"Conversion Patterns","rag.meta.conversion_pattern.desc":"양자 프레임워크 간 회로 변환 패턴 (예: Qiskit ↔ TKET)","rag.meta.cache.label":"Cache","rag.meta.cache.desc":"성능 최적화를 위한 내부 캐시된 연산 결과","hint.opt.combination":"트랜스파일러 + 큐비트 라우팅 알고리즘","hint.opt.opt_engine":"유니터리 합성","hint.opt.map_engine":"QPU 토폴로지 라우팅","hint.opt.complexity":"QPU 네이티브 게이트셋 및 큐비트 토폴로지로의 트랜스파일을 통한 게이트 수 및 깊이 감소","hint.opt.profile":"T-비율: T-게이트 비율 (내결함성 하드웨어에서 비용 높음) · 2Q-비율: 2큐비트 게이트 밀도 (NISQ 주요 오류 원인)","hint.opt.time":"최적화: 유니터리 합성 및 게이트 소거 · 매핑: QPU 연결 그래프에 SABRE/라우팅 적용","hint.noise.fidelity":"F = 1 − TVD · 충실도가 1.0에 가까울수록 QPU 노이즈가 출력 분포에 미치는 영향이 작음 · TVD = 이상적 결과와 노이즈 결과 간 최대 확률 차이","hint.noise.dominant":"가장 자주 측정되는 비트열 — 노이즈로 인해 이 상태가 변하면 회로의 계산 결과가 손상됨","hint.gpu.speedup":"상태벡터 시뮬레이션: GPU는 2ⁿ개의 복소 진폭을 병렬로 처리","hint.gpu.timing":"전체 상태벡터 전개의 실제 실행 시간 — 실제 하드웨어 처리량 차이를 측정","hint.qec.fidelity":"F = 1 − TVD(이상, 노이즈) — QEC 코드가 QPU 노이즈로 인해 손상된 양자 상태 분포를 얼마나 잘 복원하는지","hint.qec.overhead":"인코딩의 물리적 자원 비용 — QEC는 오류 감지/정정을 위해 중복 큐비트 및 앤실라 게이트 필요","hint.security.reason":"알고리즘 파일은 QPU 파이프라인 내부에서 실행됨 — OS/네트워크 무제한 접근 시 캘리브레이션 데이터 유출 또는 결과 조작 가능","hint.pipeline.analyze":"회로 추출 및 게이트 수준 분석 — 실패 시 주로 문법 오류 또는 지원되지 않는 게이트셋","hint.pipeline.optimize":"QPU 네이티브 게이트셋으로 트랜스파일 + SABRE 큐비트 라우팅 — 실패 시 주로 연결성 불일치","hint.pipeline.noise":"캘리브레이션 기반 노이즈 모델 시뮬레이션 — 물리 회로로의 트랜스파일 성공 후 실행 가능","hint.pipeline.qec_analyze":"T2/충실도 임계값 분석으로 대상 QPU에 QEC 필요 여부 판단","hint.pipeline.qec_apply":"QEC 코드로 논리→물리 인코딩 — 큐비트/게이트 수 대폭 증가","hint.pipeline.gpu":"CPU vs CUDA GPU 상태벡터 시뮬레이션 — GPU 미사용 또는 메모리 부족(OOM)이 주요 원인","hint.pipeline.qpu":"실제 QPU 작업 제출 — 트랜스파일 오류, 큐비트 수 초과, 또는 클라우드 API 장애","knowledge.rag_query_placeholder":"예: iqm_garnet에서 고충실도 실험\nPennyLane 회로 최적화 성공\nGPU 벤치마크 고속도 결과","knowledge.semantic_placeholder":"자연어로 검색...\n예: ibm_fez에서 고게이트 감소 최적화\nPennyLane 충실도 0.9 이상","kb.show":"표시","kb.all":"전체","kb.records":"건","kb.range":"{from}–{to} / {total}건","kb.prev":"← 이전","kb.next":"다음 →","kb.click_details":"행 클릭하여 상세 보기","kb.col.date":"날짜","kb.col.circuit_qpu":"회로 · QPU","kb.col.circuit_framework":"회로 · 프레임워크","kb.col.circuit_file_qpu":"회로 · 파일 · QPU","kb.col.combination":"조합","kb.col.fidelity":"충실도","kb.stats.total_records":"전체 레코드","kb.stats.updated":"업데이트","kb.stats.fail":"통계 로드 실패.","kb.best_comb.empty":"최적화 이력이 없습니다.","kb.best_comb.run_hint":"먼저 최적화 단계를 실행하여 결과를 저장하세요.","kb.best_comb.gate_red":"게이트 감소","kb.best_comb.depth_red":"깊이 감소","kb.best_comb.qubits":"큐비트","kb.suspicious.empty":"최적화 알림이 없습니다.","kb.suspicious.reason.empty_circuit":"빈 회로","kb.suspicious.reason.not_equiv":"비동등","kb.suspicious.reason.unverified":"미검증 100% 감소","kb.suspicious.col.gate_red":"게이트 감소","kb.suspicious.col.reasons":"사유","kb.suspicious.footer":"{count}개 알림 · 행 클릭하여 상세 보기","kb.gpu.empty":"GPU 벤치마크 레코드가 없습니다.","kb.gpu.empty2":"성공적인 GPU 가속 레코드가 아직 없습니다.","kb.gpu.run_hint":"GPU 벤치마크 단계를 실행하여 데이터를 수집하세요.","kb.gpu.col.speedup":"GPU 가속비","kb.gpu.col.cpu_time":"CPU 시간","kb.gpu.col.gpu_time":"GPU 시간","kb.gpu.footer":"GPU 가속 결과만 표시 · {excluded}개 비가속 제외 · 행 클릭하여 상세 보기","kb.qec.empty":"QEC 실험 레코드가 없습니다.","kb.qec.empty2":"효과적인 QEC 실험이 아직 없습니다.","kb.qec.run_hint":"QEC 적용 단계를 실행하여 데이터를 수집하세요.","kb.qec.col.code":"QEC 코드","kb.qec.col.improvement":"향상도","kb.qec.footer":"유효 실험만 표시 · {excluded}개 비유효 제외 · 행 클릭하여 상세 보기","kb.pipeline.empty":"파이프라인 오류가 없습니다.","kb.pipeline.col.stage_sdk":"단계 · SDK","kb.pipeline.col.severity":"심각도","kb.pipeline.col.issue":"문제","kb.pipeline.col.solution":"해결책","kb.noise.empty":"노이즈 시뮬레이션 레코드가 없습니다.","kb.noise.run_hint":"노이즈 시뮬레이션 단계를 실행하여 데이터를 수집하세요.","kb.noise.empty_fidelity":"충실도 데이터가 있는 노이즈 시뮬레이션 레코드가 없습니다.","kb.noise.col.tvd":"TVD","kb.noise.col.shots":"측정 수","kb.noise.best_first":"상위 먼저","kb.noise.worst_first":"하위 먼저","kb.security.empty":"보안 차단 기록이 없습니다.","kb.security.col.file_tool":"파일 · 도구","kb.security.col.reason":"사유","kb.security.col.pattern":"패턴","kb.security.footer":"🔒 {count}개 차단 · 행 클릭하여 상세 보기","qpu.no_cal":"캘리브레이션 없음","qpu.loading_short":"로딩 중","pipeline.job_manager.cost_source.aws_braket":"AWS Braket","pipeline.job_manager.cost_source.azure_quantum":"Azure Quantum","pipeline.job_manager.cost_source.ibm_open":"IBM Quantum","pipeline.job_manager.cost_source.iqm_resonance":"IQM Resonance","pipeline.job_manager.cost_source.quandela_cloud":"Quandela Cloud","pipeline.job_manager.cost_source.quantinuum":"Azure Quantum","pipeline.job_manager.cost_source.pasqal_cloud":"Pasqal Cloud","pipeline.job_manager.cost_source.unknown":"미상","pipeline.job_manager.cost_display.free":"무료","pipeline.job_manager.cost_display.free_open_plan":"무료 (Open Plan)","pipeline.job_manager.cost_display.hqc_separate":"HQC (별도)","pipeline.job_manager.timing.queue_included":"⚠ 큐 포함","pipeline.job_manager.timing.execution_only":"✓ 큐 제외","pipeline.job_manager.timing.quantum_only":"✓ 양자 시간","pipeline.job_manager.billing.title":"💰 청구 (당월)","pipeline.job_manager.billing.permission_denied":"⚠ 권한 부족","pipeline.job_manager.billing.loading":"로딩 중...","pipeline.job_manager.billing.click_to_load":"새로고침 클릭"};
 
 _LOCALES.en = _LOCALE_EN;
 _LOCALES.ko = _LOCALE_KO;
@@ -1624,6 +1626,64 @@ function switchMain(name,el) {
 // ─────────────────────────────────────────────────────────
 let _qpuData = {};
 
+// ── QPU 4축 카탈로그 (백엔드 src/uqi_pricing.py::_QPU_CATALOG 와 1:1 동기화) ──
+//   vendor    : 제조사 — 카드 vendor 배지에 노출
+//   model     : 모델명 — 카드 메인 제목 (짧게)
+//   family    : 마이크로아키텍처/계열 — 상세 카드에서만 부제로 노출 (없으면 생략)
+//   runtime   : 실 실행/청구 클라우드
+//   modality  : 큐비트 구현 — 검색/배지 색상 결정
+const _QPU_CATALOG_JS = {
+  // IBM (자사 IBM Quantum, 초전도)
+  "ibm_fez":             {vendor: "IBM",        model: "Fez",            family: "Heron R2", runtime: "IBM Quantum",   modality: "superconducting"},
+  "ibm_marrakesh":       {vendor: "IBM",        model: "Marrakesh",      family: "Heron R2", runtime: "IBM Quantum",   modality: "superconducting"},
+  "ibm_kingston":        {vendor: "IBM",        model: "Kingston",       family: "Heron R2", runtime: "IBM Quantum",   modality: "superconducting"},
+  // IQM (자사 IQM Resonance, 초전도)
+  "iqm_garnet":          {vendor: "IQM",        model: "Garnet",         runtime: "IQM Resonance", modality: "superconducting"},
+  "iqm_emerald":         {vendor: "IQM",        model: "Emerald",        runtime: "IQM Resonance", modality: "superconducting"},
+  "iqm_sirius":          {vendor: "IQM",        model: "Sirius",         runtime: "IQM Resonance", modality: "superconducting"},
+  // AWS Braket 경유
+  "ionq_forte1":         {vendor: "IonQ",       model: "Forte-1",        runtime: "AWS Braket",    modality: "ion-trap"},
+  "rigetti_cepheus":     {vendor: "Rigetti",    model: "Cepheus-1-108Q", runtime: "AWS Braket",    modality: "superconducting"},
+  "rigetti_ankaa3":      {vendor: "Rigetti",    model: "Ankaa-3",        family: "retired",  runtime: "AWS Braket",    modality: "superconducting"},
+  "quera_aquila":        {vendor: "QuEra",      model: "Aquila",         runtime: "AWS Braket",    modality: "neutral-atom"},
+  // Azure Quantum 경유
+  "pasqal_fresnel":      {vendor: "Pasqal",     model: "Fresnel",        runtime: "Azure Quantum", modality: "neutral-atom"},
+  "pasqal_fresnel_can1": {vendor: "Pasqal",     model: "Fresnel-CAN1",   runtime: "Azure Quantum", modality: "neutral-atom"},
+  "quantinuum_h2_1":     {vendor: "Quantinuum", model: "H2-1",           runtime: "Azure Quantum", modality: "ion-trap"},
+  "quantinuum_h2_2":     {vendor: "Quantinuum", model: "H2-2",           runtime: "Azure Quantum", modality: "ion-trap"},
+  "quantinuum_h1_1":     {vendor: "Quantinuum", model: "H1-1",           runtime: "Azure Quantum", modality: "ion-trap"},
+  "quantinuum_h2_1sc":   {vendor: "Quantinuum", model: "H2-1SC",         family: "Syntax Checker", runtime: "Azure Quantum", modality: "ion-trap"},
+  "quantinuum_h2_1e":    {vendor: "Quantinuum", model: "H2-1E",          family: "Emulator",       runtime: "Azure Quantum", modality: "ion-trap"},
+  // Quandela (자사 Quandela Cloud, 광자)
+  "qpu:ascella":         {vendor: "Quandela",   model: "Ascella",        runtime: "Quandela Cloud",modality: "photonic"},
+  "qpu:belenos":         {vendor: "Quandela",   model: "Belenos",        runtime: "Quandela Cloud",modality: "photonic"},
+  "sim:ascella":         {vendor: "Quandela",   model: "Ascella",        family: "sim",      runtime: "Quandela Cloud",modality: "photonic"},
+  "sim:belenos":         {vendor: "Quandela",   model: "Belenos",        family: "sim",      runtime: "Quandela Cloud",modality: "photonic"},
+};
+
+// modality 시각 정보 (라벨 + 카드 배지 색)
+const _MODALITY_DISPLAY = {
+  "superconducting": {label: "Superconducting", short: "SC",      color: "var(--accent)"},
+  "ion-trap":        {label: "Ion Trap",        short: "Ion",     color: "var(--warn)"},
+  "neutral-atom":    {label: "Neutral Atom",    short: "Neutral", color: "#f97316"},
+  "photonic":        {label: "Photonic",        short: "Photonic",color: "var(--accent2)"},
+};
+
+// QPU id → 4축 메타데이터 (catalog 매핑 우선, 미등록 시 fallback)
+function qpuMeta(qpu) {
+  if (_QPU_CATALOG_JS[qpu]) return _QPU_CATALOG_JS[qpu];
+  // fallback — 휴리스틱
+  if (qpu.startsWith("qpu:") || qpu.startsWith("sim:")) {
+    const suffix = qpu.split(":", 2)[1];
+    return {vendor: "Quandela", model: suffix, runtime: "Quandela Cloud", modality: "photonic"};
+  }
+  if (qpu.includes("_")) {
+    const [pfx, ...rest] = qpu.split("_");
+    return {vendor: pfx[0].toUpperCase()+pfx.slice(1), model: rest.join("-"), runtime: "—", modality: "unknown"};
+  }
+  return {vendor: "Unknown", model: qpu, runtime: "—", modality: "unknown"};
+}
+
 const _QPU_CACHE_KEY = 'uqi_qpu_cache_v9';
 const _QPU_CACHE_TTL = 12 * 60 * 60 * 1000; // 12시간
 
@@ -1815,27 +1875,19 @@ function renderQPUGrid(qpus) {
     const isOnline = photonicOnline || (!isPhotonic && !d.error && d.num_qubits != null && d.num_qubits > 0);
     const cls = isPhotonic ? 'photonic' : (isOnline ? 'online' : 'offline');
     const dotCls = isOnline ? 'online' : (isPhotonic ? 'photonic' : 'offline');
-    const statusLabel = isOnline ? t('qpu.online') : (isPhotonic && d._loading ? t('qpu.loading_short') : isPhotonic ? t('qpu.no_cal') : t('qpu.offline'));
-    const _QPU_TYPE_MAP = {
-      'ibm':      { label: 'Superconducting', color: 'var(--accent)' },
-      'iqm':      { label: 'Superconducting', color: 'var(--accent)' },
-      'rigetti':  { label: 'Superconducting', color: 'var(--accent)' },
-      'ionq':        { label: 'Ion Trap',     color: 'var(--warn)' },
-      'quantinuum':  { label: 'Ion Trap',     color: 'var(--warn)' },
-      'quera':       { label: 'Neutral Atom', color: '#f97316' },
-      'pasqal':      { label: 'Neutral Atom', color: '#f97316' },
-      'photonic':    { label: 'Photonic',     color: 'var(--accent2)' },
-    };
-    const _typeKey = isPhotonic ? 'photonic'
-      : qpu.startsWith('ibm') ? 'ibm'
-      : qpu.startsWith('iqm') ? 'iqm'
+    // 호버용 tooltip 텍스트 (사용자 요청: 라벨 텍스트 제거, 색상으로만 시각화)
+    const statusTitle = isOnline ? t('qpu.online') : (isPhotonic && d._loading ? t('qpu.loading_short') : isPhotonic ? t('qpu.no_cal') : t('qpu.offline'));
+    // 4축 catalog 메타 — 카드 제목/배지에 사용
+    const _meta = qpuMeta(qpu);
+    const _modalityDisp = _MODALITY_DISPLAY[_meta.modality] || {label: 'Unknown', short: '?', color: 'var(--text3)'};
+    // 기존 _typeKey/_typeInfo 호환 (아래 metricsHtml 분기에서 참조)
+    const _typeKey = _meta.modality === 'photonic' ? 'photonic'
       : qpu.startsWith('ionq') ? 'ionq'
       : qpu.startsWith('quantinuum') ? 'quantinuum'
-      : qpu.startsWith('rigetti') ? 'rigetti'
       : qpu.startsWith('quera') ? 'quera'
       : qpu.startsWith('pasqal') ? 'pasqal'
-      : 'ibm';
-    const _typeInfo = _QPU_TYPE_MAP[_typeKey];
+      : 'gate-default';
+    const _typeInfo = {label: _modalityDisp.label, color: _modalityDisp.color};
 
     let metricsHtml = '';
     if (isPhotonic) {
@@ -1918,13 +1970,13 @@ function renderQPUGrid(qpus) {
     html += `
       <div class="qpu-card ${cls}" onclick="showQPUDetail('${qpu}', this)">
         <div class="qpu-card-header">
-          <div class="qpu-card-name">${qpu}</div>
-          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;min-width:0">
-            <span style="font-size:9px;color:${_typeInfo.color};background:var(--surface2);border:1px solid ${_typeInfo.color};border-radius:3px;padding:1px 5px;opacity:0.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:80px">${_typeInfo.label}</span>
-            <div class="qpu-status-badge" style="white-space:nowrap;flex-shrink:0">
-              <div class="qpu-dot ${dotCls}"></div>
-              <span style="color:var(--text3);font-size:10px">${statusLabel}</span>
-            </div>
+          <div style="min-width:0;flex:1;display:flex;align-items:center;gap:6px">
+            <span style="font-size:9px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-weight:600;flex-shrink:0">${escHtml(_meta.vendor)}</span>
+            <div class="qpu-card-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(qpu)}">${escHtml(_meta.model)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;flex-shrink:0">
+            <span title="${_modalityDisp.label}" style="font-size:9px;color:${_modalityDisp.color};background:var(--surface2);border:1px solid ${_modalityDisp.color};border-radius:3px;padding:1px 5px;opacity:0.85;white-space:nowrap">${_modalityDisp.short}</span>
+            <div class="qpu-dot ${dotCls}" title="${escHtml(statusTitle)}"></div>
           </div>
         </div>
         ${metricsHtml}
@@ -1963,10 +2015,15 @@ async function showQPUDetail(qpu, el) {
       const modes   = d.max_mode_count   != null ? d.max_mode_count   : '—';
       const photons = d.max_photon_count != null ? d.max_photon_count : '—';
       const updated = d.last_updated ? _fmtDate(d.last_updated) : '—';
+      const _photMeta = qpuMeta(qpu);
+      const _photTitle = _photMeta.family ? `${_photMeta.model} (${_photMeta.family})` : _photMeta.model;
       container.innerHTML = `
         <div class="qpu-detail">
           <div class="qpu-detail-header">
-            <div class="qpu-detail-name">${qpu}</div>
+            <div style="display:flex;align-items:center;gap:8px;min-width:0">
+              <span style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-weight:600;flex-shrink:0">${escHtml(_photMeta.vendor)}</span>
+              <div class="qpu-detail-name" title="${escHtml(qpu)}">${escHtml(_photTitle)}</div>
+            </div>
             <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
           </div>
           <div class="cal-grid">
@@ -2843,10 +2900,15 @@ function renderQPUDetail(container, qpu, d) {
         : `<div style="display:flex;align-items:center;justify-content:center;flex:1;min-height:160px;color:var(--text3);font-size:11px">No per-qubit data</div>`}
     </div>`;
 
+  const _detMeta = qpuMeta(qpu);
+  const _detTitle = _detMeta.family ? `${_detMeta.model} (${_detMeta.family})` : _detMeta.model;
   container.innerHTML = `
     <div class="qpu-detail">
       <div class="qpu-detail-header">
-        <div class="qpu-detail-name">${qpu}</div>
+        <div style="display:flex;align-items:center;gap:8px;min-width:0">
+          <span style="font-size:11px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:2px 7px;font-weight:600;flex-shrink:0">${escHtml(_detMeta.vendor)}</span>
+          <div class="qpu-detail-name" title="${escHtml(qpu)}">${escHtml(_detTitle)}</div>
+        </div>
         <div style="display:flex;gap:8px">
           <button class="btn-refresh-cal" onclick="refreshQPUDetail('${qpu}')">↻ Refresh</button>
           <button class="btn-close-detail" onclick="closeQPUDetail()">✕ Close</button>
@@ -3352,23 +3414,50 @@ function _renderBoxplotChart(qpus, metric) {
 // ─────────────────────────────────────────────────────────
 // QPU Selector population
 // ─────────────────────────────────────────────────────────
+// QPU id 목록을 vendor·runtime 별로 그룹화 → <optgroup> HTML
+// 옵션 라벨은 model 만 (짧고 깔끔). 그룹 라벨에 'Vendor · Runtime' 표기.
+// QPU 옵션 라벨 — 기본 model. family='sim' 일 때 (Quandela qpu/sim 구분) "(sim)" 부착.
+function _qpuOptionLabel(qpu) {
+  const m = qpuMeta(qpu);
+  return m.family === 'sim' ? `${m.model} (sim)` : m.model;
+}
+
+function _qpuOptGroups(qpus) {
+  const groups = new Map();
+  for (const q of qpus) {
+    const m = qpuMeta(q);
+    const k = `${m.vendor}${m.runtime}`;
+    if (!groups.has(k)) groups.set(k, {vendor: m.vendor, runtime: m.runtime, items: []});
+    groups.get(k).items.push({q, label: _qpuOptionLabel(q)});
+  }
+  const sorted = [...groups.values()].sort((a,b) => a.vendor.localeCompare(b.vendor));
+  return sorted.map(g => {
+    const opts = g.items
+      .sort((a,b) => a.label.localeCompare(b.label))
+      .map(({q, label}) => `<option value="${escHtml(q)}">${escHtml(label)}</option>`)
+      .join('');
+    const grpLabel = `${g.vendor} · ${g.runtime}`;
+    return `<optgroup label="${escHtml(grpLabel)}">${opts}</optgroup>`;
+  }).join('');
+}
+
 function _populateQPUSelectors(qpus) {
   if (!qpus || !qpus.length) return;
-  const selectors = ['global-qpu', 'rag-qpu'];
-  selectors.forEach(id => {
+  const groupsHtml = _qpuOptGroups(qpus);
+  ['global-qpu', 'rag-qpu'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const cur = el.value;
     const prefix = id === 'rag-qpu' ? '<option value="">All QPUs</option>' : '';
-    el.innerHTML = prefix + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+    el.innerHTML = prefix + groupsHtml;
     if ([...el.options].some(o=>o.value===cur)) el.value=cur;
     else if (id === 'rag-qpu') el.value = '';
   });
-  // QPU Submit selector
+  // QPU Submit selector — Auto + Vendor·Runtime 그룹화
   const qpuSel = document.getElementById('qpu-qpu');
   if (qpuSel) {
     const cur = qpuSel.value;
-    qpuSel.innerHTML = `<option value="auto">${t('qpu.auto_recommended')}</option>` + qpus.map(q=>`<option value="${q}">${q}</option>`).join('');
+    qpuSel.innerHTML = `<option value="auto">${t('qpu.auto_recommended')}</option>` + groupsHtml;
     if ([...qpuSel.options].some(o=>o.value===cur)) qpuSel.value=cur;
   }
 }
@@ -3523,7 +3612,14 @@ function toggleStep(name) {
     body.classList.add('open');
     chev.classList.add('open');
     // Auto-load job history when opening that panel
-    if (name === 'job-history') { _jobHistoryBusy = false; _jhLoadDistinct().then(() => loadJobHistory()); }
+    if (name === 'job-history') {
+      _jobHistoryBusy = false;
+      // step 펼치기마다 distinct 캐시 무효화 — backend catalog 변경 즉시 반영
+      _jhDistinctCache = null;
+      _jhLoadDistinct().then(() => loadJobHistory());
+      // step 펼치기 시점에만 1회 billing summary 호출 (매 검색/페이지마다 호출 방지)
+      _refreshBillingSummary();
+    }
     // Photonic QPU 비호환 단계 즉시 N/A 표시
     const _photonicSteps = {'optimize':'optimize','noise':'noise','qec-analyze':'qec','qec-apply':'qec'};
     if (_isPhotonic() && name in _photonicSteps) {
@@ -3635,12 +3731,15 @@ function _resetAllStepResults() {
 }
 
 function _filterQPUSelectors(compatQPUs, defaultQPU) {
-  // global-qpu 필터링
+  // global-qpu 필터링 (option 펼친 평면. _allQPUs 는 raw qpu_id 만 보존)
   const globalSel = document.getElementById('global-qpu');
   if (globalSel) {
-    if (!_allQPUs) _allQPUs = [...globalSel.options].map(o => o.value);
+    if (!_allQPUs) {
+      // 평면 옵션 + optgroup 모두 처리: 모든 <option> 의 value 추출
+      _allQPUs = [...globalSel.querySelectorAll('option')].map(o => o.value);
+    }
     const filtered = _allQPUs.filter(q => compatQPUs.includes(q));
-    globalSel.innerHTML = filtered.map(q => `<option value="${q}">${q}</option>`).join('');
+    globalSel.innerHTML = _qpuOptGroups(filtered);
     if (filtered.includes(defaultQPU)) globalSel.value = defaultQPU;
   }
   // qpu-qpu (submit용) 필터링
@@ -3648,8 +3747,8 @@ function _filterQPUSelectors(compatQPUs, defaultQPU) {
   if (qpuSel) {
     const cur = qpuSel.value;
     qpuSel.innerHTML = `<option value="auto">${t('qpu.auto_recommended')}</option>`
-      + compatQPUs.map(q => `<option value="${q}">${q}</option>`).join('');
-    if ([...qpuSel.options].some(o => o.value === cur)) qpuSel.value = cur;
+      + _qpuOptGroups(compatQPUs);
+    if ([...qpuSel.querySelectorAll('option')].some(o => o.value === cur)) qpuSel.value = cur;
     else if (compatQPUs.includes(defaultQPU)) qpuSel.value = defaultQPU;
   }
 }
@@ -4410,7 +4509,7 @@ function _stopAutoPoll(jobId) {
 // ─── QPU Job Manager ───────────────────────────────────
 let _jobHistoryBusy = false;
 function _jhClearSearch() {
-  ['jh-search-vendor','jh-search-qpu','jh-search-circuit'].forEach(id => {
+  ['jh-search-vendor','jh-search-qpu','jh-search-modality','jh-search-circuit'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
   _jhDistinctCache = null;  // 새 job 제출 후 목록 갱신 반영
@@ -4425,19 +4524,38 @@ async function _jhLoadDistinct(restoreValues) {
       if (!data.ok || !data.distinct) return;
       _jhDistinctCache = data.distinct;
     }
-    const { vendors, qpus, circuits } = _jhDistinctCache;
-    const fill = (id, values, allLabel, restoreVal) => {
+    const { vendors, qpus, circuits, modalities } = _jhDistinctCache;
+    const fill = (id, values, allLabel, restoreVal, labelMap) => {
       const el = document.getElementById(id);
       if (!el) return;
       const cur = restoreVal !== undefined ? restoreVal : el.value;
       el.innerHTML = `<option value="">${allLabel}</option>` +
-        values.map(v => `<option value="${escHtml(v)}">${escHtml(v)}</option>`).join('');
+        values.map(v => {
+          const lbl = (labelMap && labelMap[v]) || v;
+          return `<option value="${escHtml(v)}">${escHtml(lbl)}</option>`;
+        }).join('');
       if ([...el.options].some(o => o.value === cur)) el.value = cur;
     };
     const rv = restoreValues || {};
     fill('jh-search-vendor',  vendors,  'All', rv.vendor);
-    fill('jh-search-qpu',     qpus,     'All', rv.qpu);
     fill('jh-search-circuit', circuits, 'All', rv.circuit);
+    // jh-search-qpu 는 Pipeline 셀렉터와 동일하게 vendor·runtime optgroup 그룹화 (라벨 일관성)
+    const qpuSelEl = document.getElementById('jh-search-qpu');
+    if (qpuSelEl) {
+      const cur = (rv.qpu !== undefined) ? rv.qpu : qpuSelEl.value;
+      qpuSelEl.innerHTML = `<option value="">All</option>` + _qpuOptGroups(qpus || []);
+      if ([...qpuSelEl.querySelectorAll('option')].some(o => o.value === cur)) {
+        qpuSelEl.value = cur;
+      }
+    }
+    // modality: backend 가 정적 4종 ['superconducting','ion-trap','neutral-atom','photonic'] 반환
+    //          내부 키는 hyphen, 표시 라벨은 _MODALITY_DISPLAY 의 label 사용
+    if (modalities) {
+      const _modLabels = Object.fromEntries(
+        Object.entries(_MODALITY_DISPLAY).map(([k, v]) => [k, v.label])
+      );
+      fill('jh-search-modality', modalities, 'All', rv.modality, _modLabels);
+    }
   } catch(e) {}
 }
 let _jobHistoryLastHtml = null; // 마지막 정상 렌더링 결과 캐시
@@ -4460,11 +4578,13 @@ async function _refreshBillingSummary() {
     const az   = data.azure || {};
 
     const fmt = (n, d=2) => (typeof n === 'number') ? n.toFixed(d) : '-';
+    // 통화 코드 → 기호 (prefix). 미지원 코드는 코드 자체를 prefix 로 (예: 'XYZ ').
+    const _curSym = (code) => ({USD:'$', KRW:'₩', EUR:'€', JPY:'¥', GBP:'£'}[code] || (code ? code + ' ' : ''));
     const renderAws = aws.ok
       ? `<span style="color:var(--text1)">🟧 AWS: <b>$${fmt(aws.total_usd)}</b></span>`
       : `<span style="color:var(--danger)" title="${escHtml(aws.error||'')}">🟧 AWS: ${_denied}</span>`;
     const renderAz  = az.ok
-      ? `<span style="color:var(--text1)">🟦 Azure: <b>${fmt(az.total)} ${escHtml(az.currency||'')}</b></span>`
+      ? `<span style="color:var(--text1)">🟦 Azure: <b>${_curSym(az.currency)}${fmt(az.total)}</b></span>`
       : `<span style="color:var(--danger)" title="${escHtml(az.error||'')}">🟦 Azure: ${_denied}</span>`;
 
     let fetchedDisp = '';
@@ -4484,9 +4604,14 @@ async function _refreshBillingSummary() {
   }
 }
 
+// 호출별 token — 빠른 검색/페이지 전환 시 race condition 방지.
+// 같은 token 인 응답만 화면에 반영, outdated 응답은 무시.
+let _loadJobToken = 0;
+
 async function loadJobHistory(skipCloudPoll = false, page = null) {
   if (page !== null) _jobHistoryPage = page;
   if (_jobHistoryBusy) return; // 이미 로딩 중이면 중복 실행 무시
+  const myToken = ++_loadJobToken;
   const el  = document.getElementById('result-job-history');
   const btn = document.getElementById('btn-job-refresh');
   if (!el) return;
@@ -4498,19 +4623,23 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
   const daysFilter    = parseInt(document.getElementById('jh-days')?.value  || '0');
   const limitVal      = parseInt(document.getElementById('jh-limit')?.value || '50');
   const offset        = (_jobHistoryPage - 1) * limitVal;
-  const searchVendor  = document.getElementById('jh-search-vendor')?.value  || '';
-  const searchQpu     = document.getElementById('jh-search-qpu')?.value     || '';
-  const searchCircuit = document.getElementById('jh-search-circuit')?.value || '';
+  const searchVendor   = document.getElementById('jh-search-vendor')?.value   || '';
+  const searchQpu      = document.getElementById('jh-search-qpu')?.value      || '';
+  const searchModality = document.getElementById('jh-search-modality')?.value || '';
+  const searchCircuit  = document.getElementById('jh-search-circuit')?.value  || '';
 
   try {
     const _jhTimeout = ms => new Promise((_,rej) => setTimeout(() => rej(new Error('Job list timeout')), ms));
     const res  = await Promise.race([
       callTool('uqi_job_list', {
         limit: limitVal, status: statusFilter, days: daysFilter, offset,
-        search_vendor: searchVendor, search_qpu: searchQpu, search_circuit: searchCircuit,
+        search_vendor: searchVendor, search_qpu: searchQpu,
+        search_modality: searchModality, search_circuit: searchCircuit,
       }),
       _jhTimeout(15000),
     ]);
+    // race condition 검사: 더 새로운 호출이 들어왔으면 옛 응답 무시
+    if (myToken !== _loadJobToken) return;
     const data = JSON.parse(getResultText(res));
     if (!data.ok) { el.innerHTML = `<div class="error-state">⚠ ${escHtml(data.error||'Failed to load')}</div>`; return; }
 
@@ -4529,6 +4658,7 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
         // 필터 때문에 안 보일 수 있는 active job 확인
         try {
           const allRes  = await callTool('uqi_job_list', { limit: 200, status: 'active', days: 0 });
+          if (myToken !== _loadJobToken) return;  // outdated
           const allData = JSON.parse(getResultText(allRes));
           (allData.jobs || []).forEach(j => allActiveIds.add(j.job_id));
         } catch {}
@@ -4536,16 +4666,30 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
 
       if (allActiveIds.size > 0) {
         if (btn) btn.textContent = `↻ ${allActiveIds.size} active…`;
+        // 안전망: 각 status 호출에 10s timeout (vendor cloud hang 방지)
+        const _statusTimeout = (ms) =>
+          new Promise(resolve => setTimeout(() => resolve(null), ms));
         await Promise.all([...allActiveIds].map(id =>
-          callTool('uqi_job_status', { job_id: id }).catch(() => null)
+          Promise.race([
+            callTool('uqi_job_status', { job_id: id }).catch(() => null),
+            _statusTimeout(10000),
+          ])
         ));
+        if (myToken !== _loadJobToken) return;  // outdated
         // 재귀 전 busy 해제 필수
         _jobHistoryBusy = false;
         return await loadJobHistory(true);
       }
     }
 
-    const rendered = renderJobHistory(jobs, data.filter, total);
+    // 사용자 선택값을 render 전에 capture (el.innerHTML 으로 새 select 생성 시 사라짐)
+    const _userSel = {
+      vendor:   searchVendor,
+      qpu:      searchQpu,
+      modality: searchModality,
+      circuit:  searchCircuit,
+    };
+    const rendered = renderJobHistory(jobs, data.filter, total, _userSel);
     _jobHistoryLastHtml = rendered; // 정상 결과 캐시
     el.innerHTML = rendered;
     const active = jobs.filter(j => ['submitted','running','error'].includes(j.status)).length;
@@ -4561,8 +4705,11 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
       }
     }
   } catch(e) {
-    // Not connected / timeout 시 초기 상태 유지 (조용히 무시)
-    if (e.message === 'Not connected' || e.message === 'Job list timeout') {
+    // 옛 호출의 에러는 새 호출의 화면을 덮지 않도록 token 검증
+    if (myToken !== _loadJobToken) {
+      // 옛 호출 — 화면 안 건드림
+    } else if (e.message === 'Not connected' || e.message === 'Job list timeout') {
+      // Not connected / timeout 시 초기 상태 유지 (조용히 무시)
       if (!_jobHistoryLastHtml) el.innerHTML = `<div class="empty-state">${t('pipeline.job_manager.empty')}</div>`;
     } else if (_jobHistoryLastHtml) {
       el.innerHTML = _jobHistoryLastHtml;
@@ -4570,10 +4717,13 @@ async function loadJobHistory(skipCloudPoll = false, page = null) {
       el.innerHTML = `<div class="error-state">⚠ ${escHtml(e.message)}</div>`;
     }
   } finally {
-    _jobHistoryBusy = false;
-    if (btn) { btn.disabled = false; btn.textContent = t('pipeline.job_manager.refresh'); }
-    // job 이력 표시 후 billing summary 비동기 호출 (UI 블록 방지)
-    setTimeout(() => { try { _refreshBillingSummary(); } catch(e) {} }, 0);
+    // 본인이 최신 토큰일 때만 busy 풀기 — 옛 호출이 새 호출의 busy=true 를 풀지 않게
+    if (myToken === _loadJobToken) {
+      _jobHistoryBusy = false;
+      if (btn) { btn.disabled = false; btn.textContent = t('pipeline.job_manager.refresh'); }
+    }
+    // billing summary 호출은 여기서 하지 않음 — 매 검색/페이지마다 cost API 호출되는 것 방지.
+    // step expand 시점 / 수동 refresh 버튼에서만 _refreshBillingSummary() 호출.
   }
 }
 
@@ -4605,20 +4755,21 @@ function _renderPagination(total, limit, offset) {
   const prevDisabled = currentPage === 1;
   const nextDisabled = currentPage === totalPages;
 
+  // 페이지 이동은 skipCloudPoll=true — 활성 job 자동 동기화는 처음 로드 시에만 (cloud hang 위험 회피)
   const pageBtn = (p) => {
     if (p === '…') return `<span style="font-size:10px;color:var(--text3);padding:0 3px">…</span>`;
     const isActive = p === currentPage;
-    return `<button onclick="loadJobHistory(false,${p})" style="${btnBase};${isActive ? btnActive : ''}" ${isActive ? 'disabled' : ''}>${p}</button>`;
+    return `<button onclick="loadJobHistory(true,${p})" style="${btnBase};${isActive ? btnActive : ''}" ${isActive ? 'disabled' : ''}>${p}</button>`;
   };
 
   return `<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:10px;flex-wrap:wrap">
-    <button onclick="loadJobHistory(false,${currentPage - 1})" ${prevDisabled ? 'disabled' : ''} style="${btnBase};${prevDisabled ? btnDisabled : ''}">← Prev</button>
+    <button onclick="loadJobHistory(true,${currentPage - 1})" ${prevDisabled ? 'disabled' : ''} style="${btnBase};${prevDisabled ? btnDisabled : ''}">← Prev</button>
     ${pageNums.map(pageBtn).join('')}
-    <button onclick="loadJobHistory(false,${currentPage + 1})" ${nextDisabled ? 'disabled' : ''} style="${btnBase};${nextDisabled ? btnDisabled : ''}">Next →</button>
+    <button onclick="loadJobHistory(true,${currentPage + 1})" ${nextDisabled ? 'disabled' : ''} style="${btnBase};${nextDisabled ? btnDisabled : ''}">Next →</button>
   </div>`;
 }
 
-function renderJobHistory(jobs, filter = {}, total = null) {
+function renderJobHistory(jobs, filter = {}, total = null, userSel = null) {
   const offset     = filter.offset ?? 0;
   const limit      = filter.limit  ?? jobs.length;
   const realTotal  = total ?? jobs.length;
@@ -4631,7 +4782,6 @@ function renderJobHistory(jobs, filter = {}, total = null) {
   const rangeText  = realTotal > limit
     ? `Showing ${rangeFrom}–${rangeTo} of ${realTotal} jobs`
     : `${realTotal} job${realTotal !== 1 ? 's' : ''}`;
-  if (!jobs.length) return `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${rangeText}</div><div class="empty-state">No jobs found</div>`;
   const summary = `<div style="font-size:9px;color:var(--text3);margin-bottom:6px">${filterDesc} — ${rangeText}</div>`;
 
   const statusBadge = (s) => {
@@ -4663,7 +4813,14 @@ function renderJobHistory(jobs, filter = {}, total = null) {
 
   const rows = jobs.flatMap(j => {
     const safeId = j.job_id.replace(/[^a-z0-9]/gi,'_');
-    const shortId = j.job_id.length > 20 ? j.job_id.slice(0,10)+'…'+j.job_id.slice(-8) : j.job_id;
+    // job_id 표기: AWS Braket 의 ARN 접두어 제거 후 앞 4자…뒤 4자 단축
+    //   "arn:aws:braket:.../quantum-task/abcd1234-...-cafe" → "abcd…cafe"
+    let _coreId = j.job_id;
+    if (_coreId.startsWith('arn:')) {
+      const _ls = _coreId.lastIndexOf('/');
+      if (_ls >= 0) _coreId = _coreId.slice(_ls + 1);
+    }
+    const shortId = _coreId.length > 8 ? _coreId.slice(0,4)+'…'+_coreId.slice(-4) : _coreId;
     const isActive = j.status === 'submitted' || j.status === 'running' || j.status === 'error';
     const checkbox = isActive
       ? `<input type="checkbox" class="jh-row-check" data-jobid="${escHtml(j.job_id)}" onchange="updateSelCount()" style="cursor:pointer;margin-right:2px">` : '<span style="display:inline-block;width:16px"></span>';
@@ -4673,11 +4830,27 @@ function renderJobHistory(jobs, filter = {}, total = null) {
       ? `<button class="job-action-btn" style="color:var(--error)" onclick="cancelJobInline('${escHtml(j.job_id)}','${safeId}',this)">✕</button>` : '';
     const countsBtn = j.status === 'done' && j.counts
       ? `<button class="job-action-btn" onclick="toggleJobCounts('${safeId}',this)">${_expandedRows.has(safeId)?'▲ Hide':'▼ Results'}</button>` : '';
+    // 4축 catalog 메타 (backend enrich 결과 우선, 없으면 webapp 인라인 catalog fallback)
+    // modality_label 누락 시 j.qpu_modality 로 _MODALITY_DISPLAY 에서 보충
+    const _jmlbl = j.qpu_modality_label
+      || (j.qpu_modality && _MODALITY_DISPLAY[j.qpu_modality]?.label)
+      || (function(){ const m = qpuMeta(j.qpu_name||''); return _MODALITY_DISPLAY[m.modality]?.label; })()
+      || 'Unknown';
+    const _jmeta = (j.qpu_vendor && j.qpu_model)
+      ? {vendor: j.qpu_vendor, model: j.qpu_model, family: j.qpu_family || null, runtime: j.qpu_runtime || '—', modality: j.qpu_modality || qpuMeta(j.qpu_name||'').modality, modality_label: _jmlbl}
+      : (function(){ const m = qpuMeta(j.qpu_name||''); return {...m, modality_label: _jmlbl}; })();
+    const _modDisp = _MODALITY_DISPLAY[_jmeta.modality] || {color: 'var(--text3)'};
+    // 모델 표시: family='sim' 일 때만 "(sim)" 부착 (Quandela qpu/sim 구분, 셀렉터와 동일 정책)
+    const _modelDisp = _jmeta.family === 'sim' ? `${_jmeta.model} (sim)` : _jmeta.model;
     const mainRow = `<tr>
       <td style="width:20px">${checkbox}</td>
-      <td><span class="job-id-cell" title="Click to copy Job ID" onclick="copyJobId(this,'${escHtml(j.job_id)}')">📋 ${escHtml(shortId)}</span></td>
-      <td>${escHtml(j.vendor||'—')}</td>
-      <td style="font-size:9px">${escHtml(j.qpu_name||'—')}</td>
+      <td><span class="job-id-cell" title="Click to copy: ${escHtml(j.job_id)}" onclick="copyJobId(this,'${escHtml(j.job_id)}')">📋 ${escHtml(shortId)}</span></td>
+      <td style="font-size:10px">${escHtml(_jmeta.vendor)}</td>
+      <td style="font-size:9px;line-height:1.4">
+        <div style="color:var(--text2);font-weight:500">${escHtml(_modelDisp)}</div>
+        <div style="color:var(--text3);font-size:8px">${escHtml(_jmeta.runtime)}</div>
+      </td>
+      <td style="font-size:9px"><span style="color:${_modDisp.color}">${escHtml(_jmeta.modality_label)}</span></td>
       <td style="font-size:9px;max-width:100px;overflow:hidden;text-overflow:ellipsis">${escHtml(j.circuit_name||'—')}</td>
       <td>${j.shots||'—'}</td>
       <td>${statusBadge(j.status||'unknown')}</td>
@@ -4731,7 +4904,7 @@ function renderJobHistory(jobs, filter = {}, total = null) {
       const _comparisonHtml = (_costPart || _durPart)
         ? `<div style="margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.25);border-radius:4px;display:flex;gap:18px;font-size:11px;flex-wrap:wrap">${_costPart}${_durPart}</div>`
         : '';
-      const detailRow = `<tr id="detail-${safeId}"><td colspan="9"
+      const detailRow = `<tr id="detail-${safeId}"><td colspan="10"
           style="padding:12px 16px;background:rgba(0,0,0,0.25);
                  border-left:3px solid var(--accent);
                  border-top:1px solid var(--border1);
@@ -4753,20 +4926,30 @@ function renderJobHistory(jobs, filter = {}, total = null) {
   const pagination = _renderPagination(realTotal, limit, offset);
   const tbl = `<div style="overflow-x:auto">
     <table class="job-table">
-      <thead><tr>
+      <thead><tr style="vertical-align:top">
         <th></th>
-        <th>Job ID</th>
-        <th style="min-width:80px"><div>Vendor</div>${_mkSel('jh-search-vendor','All','_jobHistoryPage=1;loadJobHistory()')}</th>
-        <th style="min-width:110px"><div>QPU</div>${_mkSel('jh-search-qpu','All','_jobHistoryPage=1;loadJobHistory()')}</th>
-        <th style="min-width:110px"><div>Circuit</div>${_mkSel('jh-search-circuit','All','_jobHistoryPage=1;loadJobHistory()')}</th>
-        <th>Shots</th><th>Status</th><th>Submitted</th><th></th>
+        <th><div>Job ID</div><div class="th-spacer"></div></th>
+        <th style="min-width:80px"><div>Vendor</div>${_mkSel('jh-search-vendor','All','_jobHistoryBusy=false;_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th style="min-width:140px"><div>QPU</div>${_mkSel('jh-search-qpu','All','_jobHistoryBusy=false;_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th style="min-width:110px"><div>Modality</div>${_mkSel('jh-search-modality','All','_jobHistoryBusy=false;_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th style="min-width:110px"><div>Circuit</div>${_mkSel('jh-search-circuit','All','_jobHistoryBusy=false;_jobHistoryPage=1;loadJobHistory()')}</th>
+        <th><div>Shots</div><div class="th-spacer"></div></th>
+        <th><div>Status</div><div class="th-spacer"></div></th>
+        <th><div>Submitted</div><div class="th-spacer"></div></th>
+        <th></th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${jobs.length ? rows : `<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--text3);font-size:11px">No jobs found</td></tr>`}</tbody>
     </table>
   </div>`;
   // 드롭다운 옵션을 렌더 직후 채우기 (distinct 캐시 활용)
+  // userSel (사용자 선택값, render 전 capture) 우선 — 새 select 의 default '' 가 아님
   setTimeout(() => {
-    const cur = { vendor: _hv('jh-search-vendor'), qpu: _hv('jh-search-qpu'), circuit: _hv('jh-search-circuit') };
+    const cur = userSel || {
+      vendor:   _hv('jh-search-vendor'),
+      qpu:      _hv('jh-search-qpu'),
+      modality: _hv('jh-search-modality'),
+      circuit:  _hv('jh-search-circuit'),
+    };
     _jhLoadDistinct(cur);
   }, 0);
   return summary + actionBar + tbl + pagination;
@@ -4862,16 +5045,41 @@ async function _doCancelJobs(jobIds, btn) {
   await loadJobHistory(true);
 }
 
+// 활성 'copied' 표시를 추적 — 다음 클릭 시 모두 즉시 정리해서 동시에 여러 셀이
+// 'Copied!' 로 보이는 문제 방지
+const _copyTimers = new Map();  // el → {timeoutId, origText}
+
 function copyJobId(el, jobId) {
   navigator.clipboard.writeText(jobId).then(() => {
-    const orig = el.textContent;
+    // 1) 다른 셀의 활성 표시 즉시 해제 (한 번에 하나만 'Copied!')
+    for (const [oldEl, info] of _copyTimers) {
+      if (oldEl === el) continue;
+      clearTimeout(info.timeoutId);
+      try {
+        oldEl.textContent = info.origText;
+        oldEl.style.color = '';
+      } catch {}
+      _copyTimers.delete(oldEl);
+    }
+    // 2) 동일 셀 재클릭 시: 첫 클릭의 원본 텍스트 유지 (재클릭 누적 방지)
+    const existing = _copyTimers.get(el);
+    let origText;
+    if (existing) {
+      clearTimeout(existing.timeoutId);
+      origText = existing.origText;
+    } else {
+      origText = el.textContent;
+    }
+    // 3) 현재 셀에 표시 + 1.5초 뒤 자동 복원
     el.textContent = '✓ Copied!';
     el.style.color = 'var(--success)';
-    setTimeout(() => {
-      el.textContent = orig;
+    const tid = setTimeout(() => {
+      el.textContent = origText;
       el.style.color = '';
+      _copyTimers.delete(el);
     }, 1500);
-  });
+    _copyTimers.set(el, {timeoutId: tid, origText});
+  }).catch(() => {});
 }
 
 function toggleJobCounts(safeId, btn) {

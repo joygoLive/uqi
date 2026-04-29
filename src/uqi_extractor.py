@@ -90,14 +90,19 @@ class UQIExtractor:
         # 주석/문자열 제거 후 활성 소스만 검사
         active = self._strip_comments(source)
 
-        # 우선순위 순서대로 (CUDAQ > Perceval > PennyLane > Qrisp > Qiskit)
+        # 우선순위 순서대로
+        # AHS (Analog Hamiltonian Simulation) 는 gate-based 보다 우선 매칭:
+        #   - Braket-AHS: braket.ahs 모듈 → QuEra Aquila 전용
+        #   - Pulser:     pulser 패키지   → Pasqal Fresnel 전용
         framework_patterns = [
-            ('CUDAQ',     [r'\bimport\s+cudaq\b',    r'\bfrom\s+cudaq\b']),
-            ('Perceval',  [r'\bimport\s+perceval\b', r'\bfrom\s+perceval\b']),
-            ('PennyLane', [r'\bimport\s+pennylane\b', r'\bimport\s+qml\b',
-                           r'\bfrom\s+pennylane\b']),
-            ('Qrisp',     [r'\bimport\s+qrisp\b',    r'\bfrom\s+qrisp\b']),
-            ('Qiskit',    [r'\bimport\s+qiskit\b',   r'\bfrom\s+qiskit\b']),
+            ('Braket-AHS', [r'\bfrom\s+braket\.ahs\b', r'\bimport\s+braket\.ahs\b']),
+            ('Pulser',     [r'\bimport\s+pulser\b',   r'\bfrom\s+pulser\b']),
+            ('CUDAQ',      [r'\bimport\s+cudaq\b',    r'\bfrom\s+cudaq\b']),
+            ('Perceval',   [r'\bimport\s+perceval\b', r'\bfrom\s+perceval\b']),
+            ('PennyLane',  [r'\bimport\s+pennylane\b', r'\bimport\s+qml\b',
+                            r'\bfrom\s+pennylane\b']),
+            ('Qrisp',      [r'\bimport\s+qrisp\b',    r'\bfrom\s+qrisp\b']),
+            ('Qiskit',     [r'\bimport\s+qiskit\b',   r'\bfrom\s+qiskit\b']),
         ]
 
         detected = []
@@ -144,6 +149,10 @@ class UQIExtractor:
                 self._extract_qiskit_circuits(prefix=prefix)
             elif fw == 'Perceval':
                 self._extract_perceval_circuits(prefix=prefix)
+            elif fw in ('Braket-AHS', 'Pulser'):
+                # AHS framework — 회로 객체(ahs_program/seq) 는 executor 단계에서
+                # runpy 로 직접 추출. 여기선 framework 분류만.
+                print(f"  [Extractor] AHS framework: {fw} (executor 단계에서 직접 추출)")
             else:
                 print(f"  [Extractor] 현재 검증 범위 외 framework: {fw}")
 

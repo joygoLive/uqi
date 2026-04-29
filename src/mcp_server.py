@@ -172,11 +172,16 @@ _PHOTONIC_QPUS = {"qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos"}
 # Framework → 호환 QPU 매핑
 _GATE_BASED_QPUS = [q for q in SUPPORTED_QPUS if q not in _PHOTONIC_QPUS]
 _FRAMEWORK_QPU_MAP = {
-    "Qiskit":    {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
-    "PennyLane": {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
-    "Qrisp":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
-    "CUDAQ":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
-    "Perceval":  {"qpus": list(_PHOTONIC_QPUS), "default": "sim:ascella"},
+    "Qiskit":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "PennyLane":  {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "Qrisp":      {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "CUDAQ":      {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
+    "Perceval":   {"qpus": list(_PHOTONIC_QPUS), "default": "sim:ascella"},
+    # AHS (Analog Hamiltonian Simulation) — vendor 별로 SDK 가 분리되어
+    # 회로 호환 가능한 QPU 가 *유일*. extractor 가 framework 분류한 시점에
+    # 이미 vendor 가 결정되므로 default = 유일한 QPU.
+    "Braket-AHS": {"qpus": ["quera_aquila"], "default": "quera_aquila"},
+    "Pulser":     {"qpus": ["pasqal_fresnel", "pasqal_fresnel_can1"], "default": "pasqal_fresnel"},
 }
 
 def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
@@ -201,6 +206,241 @@ def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
     if qpu_name == "auto":
         return "ibm_fez"
     return qpu_name
+
+# ─────────────────────────────────────────────────────────
+# AHS (Analog Hamiltonian Simulation) — 공통 헬퍼
+#   Braket-AHS (QuEra Aquila) / Pulser (Pasqal Fresnel) 둘 다 처리.
+#   gate-based 회로와 워크플로우가 다르므로 analyze/optimize/noise/submit 진입점에서
+#   framework 검사 후 별도 path 로 분기.
+# ─────────────────────────────────────────────────────────
+
+_AHS_FRAMEWORKS = ("Braket-AHS", "Pulser")
+
+
+def _analyze_ahs(algorithm_file: str, qpu_name: str, framework: str) -> dict:
+    """AHS 회로 분석 — atom count / total duration / 메트릭.
+
+    gate-based 의 'profile' (gates/depth) 대신 AHS-specific 메트릭 반환.
+    """
+    metrics = {
+        "atom_count":         None,
+        "register_dimension": None,    # 1D / 2D
+        "total_duration_ns":  None,    # pulser ns / braket SI seconds × 1e9
+        "shots_recommended":  100,     # 기본권장
+    }
+    try:
+        if framework == "Braket-AHS":
+            from uqi_executor_braket import UQIExecutorBraket
+            prog = UQIExecutorBraket._extract_ahs_program(algorithm_file)
+            try:
+                items = list(prog.register)  # AtomArrangementItem 리스트
+                metrics["atom_count"] = len(items)
+                if items:
+                    coord = items[0].coordinate
+                    metrics["register_dimension"] = "2D" if len(coord) == 2 else "1D"
+            except Exception:
+                pass
+            try:
+                # Braket Hamiltonian: terms 리스트의 첫 DrivingField → amplitude.time_series.times() 마지막 (s)
+                terms = prog.hamiltonian.terms
+                drive = next((t for t in terms if hasattr(t, 'amplitude')), None)
+                if drive is not None:
+                    times = drive.amplitude.time_series.times()
+                    if times:
+                        metrics["total_duration_ns"] = float(times[-1]) * 1e9
+            except Exception:
+                pass
+
+        elif framework == "Pulser":
+            from uqi_executor_azure import UQIExecutorAzure
+            seq = UQIExecutorAzure._extract_pulser_sequence(algorithm_file)
+            try:
+                metrics["atom_count"] = len(seq.register.qubit_ids)
+            except Exception:
+                pass
+            try:
+                # pulser Register: .qubits dict 의 좌표 차원 검사 (2-tuple → 2D)
+                first = next(iter(seq.register.qubits.values()), None)
+                if first is not None:
+                    metrics["register_dimension"] = "2D" if len(first) == 2 else "1D"
+            except Exception:
+                pass
+            try:
+                metrics["total_duration_ns"] = float(seq.get_duration())
+            except Exception:
+                pass
+    except Exception as e:
+        metrics["error"] = str(e)
+
+    return {
+        "algorithm_file": algorithm_file,
+        "framework":      framework,
+        "qpu_name":       qpu_name,
+        "circuits": {
+            "ahs_main": {
+                "profile": {
+                    "num_qubits":  metrics["atom_count"] or 0,
+                    "total_gates": 0,                        # AHS — gate 개념 없음
+                    "depth":       0,
+                    "ops":         {"AHS": 1},
+                },
+                "t2_ratio":  None,
+                "qpu_name":  qpu_name,
+                "framework": framework,
+                "ahs": metrics,
+            },
+        },
+    }
+
+
+def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
+    """AHS 노이즈 시뮬 — pulser_simulation (Pasqal) / braket LocalSimulator (QuEra).
+
+    counts dict 반환 (gate-based 와 동일 인터페이스). 실제 노이즈 모델은 SDK 자체.
+    """
+    import json as _json
+    from uqi_extractor import UQIExtractor
+    try:
+        ext = UQIExtractor(algorithm_file)
+        framework = ext.detect_framework()
+    except Exception as e:
+        return _json.dumps({"error": f"framework 감지 실패: {e}"})
+
+    try:
+        if framework == "Pulser":
+            from uqi_executor_azure import UQIExecutorAzure
+            from pulser_simulation import QutipEmulator
+            seq = UQIExecutorAzure._extract_pulser_sequence(algorithm_file)
+            sim = QutipEmulator.from_sequence(seq)
+            sim_result = sim.run()
+            counts = dict(sim_result.sample_final_state(N_samples=shots))
+        elif framework == "Braket-AHS":
+            from uqi_executor_braket import UQIExecutorBraket
+            from braket.devices import LocalSimulator
+            ahs = UQIExecutorBraket._extract_ahs_program(algorithm_file)
+            device = LocalSimulator("braket_ahs")
+            task = device.run(ahs, shots=shots)
+            res  = task.result()
+            # AHS result: measurements list — bitstring counts 변환
+            counts = {}
+            for m in res.measurements:
+                key = "".join(str(int(b)) for b in (m.post_sequence or []))
+                counts[key] = counts.get(key, 0) + 1
+        else:
+            return _json.dumps({"error": f"AHS framework 아님: {framework}"})
+
+        total = sum(counts.values()) or 1
+        probs = {k: v/total for k, v in counts.items()}
+        return _json.dumps({
+            "algorithm_file": algorithm_file,
+            "framework":      framework,
+            "qpu_name":       qpu_name,
+            "shots":          shots,
+            "counts":         counts,
+            "probs":          probs,
+            "note":           f"AHS 로컬 노이즈 시뮬 ({framework}) — SDK 내장 모델",
+        }, ensure_ascii=False)
+    except Exception as e:
+        return _json.dumps({"error": f"AHS noise sim 실패: {e}"})
+
+
+def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
+                    confirmed: bool) -> str:
+    """AHS QPU submit — Braket-AHS (QuEra) / Pulser (Pasqal) 분기.
+
+    confirmed=False: 분석/예상 정보 반환 (cost estimate 포함, 실제 제출 X).
+    confirmed=True:  실제 제출 → job_id, save_job 으로 RAG 기록.
+    """
+    import json as _json
+    from uqi_extractor import UQIExtractor
+    from uqi_pricing import (estimate_cost, format_actual_cost, parse_qpu_full,
+                             format_actual_cost_token, get_pricing)
+
+    # framework 감지 (캐시 무관, 단순 소스 정규식)
+    try:
+        ext = UQIExtractor(algorithm_file)
+        framework = ext.detect_framework()
+    except Exception as e:
+        return _json.dumps({"error": f"framework 감지 실패: {e}"})
+
+    # 분석 단계: 비용/메트릭 + 안내 메시지
+    if not confirmed:
+        analysis = _analyze_ahs(algorithm_file, qpu_name, framework)
+        cost = estimate_cost(qpu_name, shots)
+        _pmeta = get_pricing(qpu_name) or {}
+        _pricing_vendor = _pmeta.get("vendor", "")
+        atom_count = analysis["circuits"]["ahs_main"]["ahs"].get("atom_count")
+        duration_ns = analysis["circuits"]["ahs_main"]["ahs"].get("total_duration_ns")
+        _meta = parse_qpu_full(qpu_name)
+        msg_lines = [
+            f"AHS 제출 분석 — {_meta['vendor']} {_meta['model']}",
+            f"  framework:      {framework}",
+            f"  atom_count:     {atom_count}",
+            f"  duration_ns:    {duration_ns}",
+            f"  shots:          {shots}",
+            f"  est. cost:      {format_actual_cost(_pricing_vendor, qpu_name, cost)}",
+            f"  runtime:        {_meta['runtime']}",
+            "",
+            "💡 confirmed=True 로 다시 호출하면 실제 제출됩니다.",
+        ]
+        return _json.dumps({
+            "ok":             True,
+            "confirmed":      False,
+            "selected_qpu":   qpu_name,
+            "framework":      framework,
+            "shots":          shots,
+            "atom_count":     atom_count,
+            "duration_ns":    duration_ns,
+            "cost":           cost,
+            "cost_display":   format_actual_cost(_pricing_vendor, qpu_name, cost),
+            "cost_token":     format_actual_cost_token(_pricing_vendor, qpu_name, cost),
+            "message":        "\n".join(msg_lines),
+        }, ensure_ascii=False)
+
+    # 실제 제출 (confirmed=True)
+    name = Path(algorithm_file).stem
+    try:
+        if framework == "Braket-AHS":
+            from uqi_executor_braket import UQIExecutorBraket
+            ex = UQIExecutorBraket(converter=None, shots=shots)
+            sub = ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
+        elif framework == "Pulser":
+            from uqi_executor_azure import UQIExecutorAzure
+            ex = UQIExecutorAzure(converter=None, shots=shots)
+            sub = ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
+        else:
+            return _json.dumps({"error": f"AHS 가 아닌 framework: {framework}"})
+    except Exception as e:
+        return _json.dumps({"error": f"AHS submit 실패: {e}"})
+
+    if not sub.get("ok"):
+        return _json.dumps({"error": sub.get("error", "submit 실패")})
+
+    # save_job — catalog 자동 매핑 (qpu_vendor / qpu_model / runtime / qpu_modality)
+    try:
+        _job_store.save_job(
+            job_id=sub["job_id"],
+            qpu_name=qpu_name,
+            circuit_name=name,
+            shots=shots,
+            extra={"framework": framework, "via": sub.get("via"),
+                   "backend": qpu_name, "ahs": True},
+        )
+    except Exception as _se:
+        print(f"  [AHS submit] save_job 실패: {_se}", file=sys.stderr)
+
+    return _json.dumps({
+        "ok":           True,
+        "confirmed":    True,
+        "selected_qpu": qpu_name,
+        "framework":    framework,
+        "shots":        shots,
+        "job_id":       sub["job_id"],
+        "via":          sub.get("via"),
+        "results":      {name: {"ok": True, "job_id": sub["job_id"],
+                                "via": sub.get("via")}},
+    }, ensure_ascii=False)
+
 
 # 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)
 _submission_progress: dict = {}   # {sid: {status, total, done, results, selected_qpu, shots}}
@@ -447,6 +687,13 @@ async def uqi_analyze(
                     return _cached
 
             extractor, converter, framework = _extract_and_convert(algorithm_file)
+
+            # ── AHS framework 분기 (Braket-AHS / Pulser) — gate 회로 무관 ──
+            if framework in _AHS_FRAMEWORKS:
+                _ahs_result = _safe_json(_analyze_ahs(algorithm_file, qpu_name, framework))
+                _rag.set_cache(_cache_key, _ahs_result)
+                return _ahs_result
+
             calibration = _get_calibration(qpu_name)
             results = {}
             _should_cache = False
@@ -680,6 +927,17 @@ async def uqi_optimize(
             ),
             "photonic": True,
         })
+    from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
+    if qpu_name in _ANALOG_SET:
+        return json.dumps({
+            "error": (
+                f"Circuit optimization is not applicable for analog (AHS) QPUs ({qpu_name}). "
+                "AHS programs (braket.ahs / pulser) describe time-evolved Hamiltonians, "
+                "not gate sequences — there is no transpilation step. Proceed directly to "
+                "Analyze (for register/duration metrics) and QPU Submit."
+            ),
+            "analog": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit
@@ -803,6 +1061,11 @@ async def uqi_noise_simulate(
             ),
             "photonic": True,
         })
+    # ── AHS 노이즈 시뮬 — Pulser: pulser_simulation, Braket-AHS: braket LocalSimulator ──
+    from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
+    if qpu_name in _ANALOG_SET:
+        return await asyncio.to_thread(_noise_simulate_ahs,
+                                       algorithm_file, qpu_name, shots)
 
     def _run():
         from qiskit import QuantumCircuit
@@ -1914,6 +2177,12 @@ async def uqi_qpu_submit(
         _block = _check_cost_safeguard(qpu_name, shots, admin_override)
         if _block:
             return json.dumps(_block, ensure_ascii=False)
+
+    # ── AHS 분기 (Braket-AHS / Pulser) — 별도 path ──
+    from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
+    if qpu_name in _ANALOG_SET:
+        return await asyncio.to_thread(
+            _qpu_submit_ahs, algorithm_file, qpu_name, shots, confirmed)
 
     def _run():
         import contextlib

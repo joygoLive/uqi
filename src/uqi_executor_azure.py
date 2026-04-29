@@ -226,6 +226,61 @@ class UQIExecutorAzure:
         return result
 
     # ─────────────────────────────────────────
+    # Pasqal AHS — pulser Sequence 제출 (Azure Quantum 경유)
+    # ─────────────────────────────────────────
+
+    @staticmethod
+    def _extract_pulser_sequence(algorithm_file: str):
+        """algorithm_file (.py) 에서 pulser Sequence 객체 추출.
+
+        규약: 파일 최상위에 다음 변수 중 하나가 정의되어 있어야 함:
+          - seq (권장)
+          - sequence
+          - pulse_sequence
+        """
+        import runpy
+        ns = runpy.run_path(algorithm_file)
+        seq = ns.get('seq') or ns.get('sequence') or ns.get('pulse_sequence')
+        if seq is None:
+            raise RuntimeError(
+                "Pasqal algorithm file 에 'seq' 변수가 없음 — "
+                "pulser.Sequence(...) 객체를 최상위에서 'seq = ...' 로 정의해야 합니다."
+            )
+        return seq
+
+    def _submit_single_ahs(self, name: str, algorithm_file: str,
+                           backend_name: str = "pasqal_fresnel") -> dict:
+        """Pasqal Fresnel AHS submit (Azure Quantum 경유).
+
+        algorithm_file → pulser Sequence 추출 → abstract_repr (JSON) →
+        Azure Quantum target 'pasqal.qpu.fresnel' 로 제출. job_id 즉시 반환.
+        """
+        result = {
+            "ok": False, "job_id": None, "backend": backend_name,
+            "via": "Pulser-AHS", "error": None,
+        }
+        try:
+            seq = self._extract_pulser_sequence(algorithm_file)
+            target_name = self._resolve_target(backend_name)
+            workspace = self._get_workspace()
+            target = workspace.get_targets(target_name)
+            job = target.submit(
+                input_data=seq.to_abstract_repr(),
+                name=f"uqi-pulser-{name}",
+                input_params={"runs": self.shots},
+            )
+            # azure-quantum Job 의 id 는 .id (속성) 또는 .id() (메서드) — 둘 다 시도
+            job_id = job.id if not callable(getattr(job, "id", None)) else job.id()
+            result["job_id"] = job_id
+            result["backend"] = target_name
+            result["ok"] = True
+            print(f"    ✓ Pasqal AHS job 제출: job_id={job_id}")
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ Pasqal AHS job 제출 실패: {e}")
+        return result
+
+    # ─────────────────────────────────────────
     # job 상태 조회 (static)
     # ─────────────────────────────────────────
 

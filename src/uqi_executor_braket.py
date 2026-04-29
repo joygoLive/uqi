@@ -69,7 +69,66 @@ class UQIExecutorBraket:
             return arn, region
         if qpu_name in _BRAKET_SIM_MAP:
             return _BRAKET_SIM_MAP[qpu_name]
+        if qpu_name in _BRAKET_OTHER_MAP:
+            # AHS QPU (예: quera_aquila) — submit 가능 (gate 와 다른 경로)
+            env, region = _BRAKET_OTHER_MAP[qpu_name]
+            arn = os.getenv(env)
+            if not arn:
+                raise RuntimeError(f"{qpu_name}: {env} 환경변수 없음")
+            return arn, region
         raise RuntimeError(f"Unknown Braket QPU: {qpu_name}")
+
+    @staticmethod
+    def _extract_ahs_program(algorithm_file: str):
+        """algorithm_file (.py) 에서 ahs_program 변수 추출.
+
+        규약: 파일 최상위 스코프에 다음 변수 중 하나가 정의되어 있어야 함:
+          - ahs_program (권장)
+          - program
+          - ahs
+
+        runpy.run_path 사용 — 격리된 namespace 에서 실행 (sys.modules 영향 없음).
+        """
+        import runpy
+        ns = runpy.run_path(algorithm_file)
+        prog = ns.get('ahs_program') or ns.get('program') or ns.get('ahs')
+        if prog is None:
+            raise RuntimeError(
+                "AHS algorithm file 에 'ahs_program' 변수가 없음 — "
+                "braket.ahs.AnalogHamiltonianSimulation(...) 객체를 "
+                "최상위에서 'ahs_program = ...' 으로 정의해야 합니다."
+            )
+        return prog
+
+    def _submit_single_ahs(self, name: str, algorithm_file: str,
+                           backend_name: str = "quera_aquila") -> dict:
+        """QuEra Aquila AHS task 제출 (gate 회로 미사용).
+
+        algorithm_file → ahs_program 추출 → AwsDevice.run(ahs_program, shots).
+        ARN 즉시 반환 (비동기 polling 은 fetch_job_status 사용).
+        """
+        result = {
+            "ok": False, "job_id": None, "backend": backend_name,
+            "via": "Braket-AHS", "error": None,
+        }
+        try:
+            ahs_program = self._extract_ahs_program(algorithm_file)
+            arn, region = self._resolve_device(backend_name)
+            from braket.aws import AwsDevice
+            aws_session = self._get_aws_session(region)
+            device = AwsDevice(arn, aws_session=aws_session)
+            s3_dest = (DEFAULT_S3_BUCKET, f"tasks/{backend_name}")
+            task = device.run(
+                ahs_program, shots=self.shots,
+                s3_destination_folder=s3_dest,
+            )
+            result["job_id"] = task.id
+            result["ok"] = True
+            print(f"    ✓ Braket AHS task 제출: job_id={task.id}")
+        except Exception as e:
+            result["error"] = str(e)
+            print(f"    ✗ Braket AHS task 제출 실패: {e}")
+        return result
 
     def _prepare_circuit(self, name: str, qasm: Optional[str]):
         """Qiskit 회로 → Braket 회로 변환. (braket_circuit, via, error_msg) 리턴."""

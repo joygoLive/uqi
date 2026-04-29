@@ -3859,7 +3859,21 @@ function renderAnalyze(data, el) {
     const qasmId = `qasm-${name.replace(/\W/g,'_')}`;
     html += `<div class="section-divider">${name}</div>`;
 
-    if (ph) {
+    const ahs = c.ahs;
+    if (ahs) {
+      // ── AHS (Analog Hamiltonian Simulation) 전용 분석 뷰 ──
+      const dur_us = ahs.total_duration_ns != null ? (ahs.total_duration_ns / 1000).toFixed(2) : null;
+      html += `
+      <div class="metric-grid">
+        <div class="metric-item"><div class="metric-label">Atoms</div><div class="metric-value neutral">${ahs.atom_count ?? '—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Register</div><div class="metric-value neutral">${ahs.register_dimension ?? '—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Total Duration</div><div class="metric-value neutral">${dur_us != null ? dur_us + ' µs' : '—'}</div></div>
+        <div class="metric-item"><div class="metric-label">Recommended Shots</div><div class="metric-value neutral">${ahs.shots_recommended ?? '—'}</div></div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;padding:6px 10px;border-radius:4px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);color:var(--text2)">
+        ℹ AHS (analog Hamiltonian) circuit — gate decomposition / transpilation 미적용. Optimization step 은 skip 됩니다.
+      </div>`;
+    } else if (ph) {
       // ── 광자 회로 전용 분석 뷰 ──
       const modeOkCls = ph.mode_ok === false ? 'bad' : ph.mode_ok === true ? 'good' : 'neutral';
       const homPct = ph.avg_hom != null ? (ph.avg_hom * 100).toFixed(1) : null;

@@ -5,6 +5,9 @@ amazon-braket-sdk==1.117.0
 annotated-doc==0.0.4
 azure-identity>=1.15
 azure-quantum[qiskit]>=2.0
+# AHS (Analog Hamiltonian Simulation) — Pasqal Fresnel / QuEra Aquila
+pulser>=1.7
+pulser-simulation>=1.7
 annotated-types==0.7.0
 antlr4-python3-runtime==4.13.2
 anyio==4.12.1

@@ -1586,6 +1586,32 @@ async def uqi_gpu_benchmark(
     if _check_err:
         return json.dumps({"error": _check_err})
 
+    # framework 검사 — Perceval(photonic) / AHS(analog) 는 GPU benchmark 무관
+    try:
+        from uqi_extractor import UQIExtractor
+        _fw = UQIExtractor(algorithm_file).detect_framework()
+        if _fw == "Perceval":
+            return json.dumps({
+                "error": (
+                    "GPU benchmark is not applicable for photonic circuits "
+                    "(Perceval). CUDA-based statevector / density matrix simulators "
+                    "do not apply to boson-sampling / Fock-space dynamics."
+                ),
+                "photonic": True,
+            })
+        if _fw in ("Braket-AHS", "Pulser"):
+            return json.dumps({
+                "error": (
+                    "GPU benchmark is not applicable for analog (AHS) circuits. "
+                    "AHS local simulators (pulser_simulation QutipEmulator / "
+                    "Braket LocalSimulator) are CPU-based; GPU acceleration is "
+                    "not in the standard pipeline."
+                ),
+                "analog": True,
+            })
+    except Exception:
+        pass
+
     def _run():
         from uqi_extractor      import UQIExtractor
         from uqi_gpu_benchmark  import run_benchmark

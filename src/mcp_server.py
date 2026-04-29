@@ -303,9 +303,22 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
       - Sequence/Program build 가능성
 
     pass/fail + 메트릭 반환 (gate-based 의 gate_reduction/depth_reduction 대신).
+    캐시 적용 — gate-based optimize 와 동일하게 webapp 의 캐시 배지 노출.
     """
     import json as _json
     from uqi_extractor import UQIExtractor
+
+    # 캐시 우선 — gate-based optimize 와 동일 패턴
+    _cache_key = f"optimize:{_file_hash(algorithm_file)}:{qpu_name}:device-validation"
+    _cached = _rag.get_cache(_cache_key)
+    if _cached:
+        print(f"  [Cache] AHS validation 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
+        try:
+            _cached_obj = _json.loads(_cached)
+            _cached_obj["_cached"] = True
+            return _json.dumps(_cached_obj, ensure_ascii=False)
+        except Exception:
+            return _cached
 
     # device constraint (대략값 — 실 SDK 의 device.properties 와 다를 수 있음)
     LIMITS = {
@@ -410,7 +423,7 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
         return _json.dumps({"ok": False, "error": f"AHS validation 실패: {e}"})
 
     overall_ok = all(c["passed"] for c in checks) if checks else False
-    return _json.dumps({
+    _result = _json.dumps({
         "ok":         overall_ok,
         "analog":     True,
         "framework":  framework,
@@ -425,6 +438,13 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
             },
         },
     }, ensure_ascii=False)
+    # 결과 정상이면 캐시 저장 (gate-based optimize 와 동일 패턴)
+    if overall_ok:
+        try:
+            _rag.set_cache(_cache_key, _result)
+        except Exception:
+            pass
+    return _result
 
 
 def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:

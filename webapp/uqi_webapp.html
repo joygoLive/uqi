@@ -3988,6 +3988,36 @@ async function runOptimize() {
 function renderOptimize(data, el) {
   const results = data.results||{};
   let html = `<div class="result-meta">${el} · QPU: <span title="${escHtml(data.qpu_name||'—')}">${escHtml(qpuLabel(data.qpu_name))}</span></div>`;
+
+  // ── AHS Validation 결과 (analog QPU 의 경우 transpilation 대신) ──
+  if (data.analog && results.ahs_validation) {
+    const v = results.ahs_validation;
+    const overallCls = v.ok ? 'good' : 'warn';
+    html += `<div class="section-divider">AHS Device Constraint Validation</div>`;
+    html += `<div style="margin-bottom:8px;font-size:11px;padding:6px 10px;border-radius:4px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.3);color:var(--text2)">
+      ℹ AHS — gate transpilation 미적용. 대신 device constraint 검증으로 대체됩니다.
+    </div>`;
+    html += `<div class="metric-grid">`;
+    html += `<div class="metric-item"><div class="metric-label">Overall</div><div class="metric-value ${overallCls}">${v.ok ? '✓ pass' : '⚠ warn'}</div></div>`;
+    if (v.metrics?.atom_count != null)
+      html += `<div class="metric-item"><div class="metric-label">Atoms</div><div class="metric-value neutral">${v.metrics.atom_count}</div></div>`;
+    if (v.metrics?.min_spacing_um != null)
+      html += `<div class="metric-item"><div class="metric-label">Min Spacing</div><div class="metric-value neutral">${v.metrics.min_spacing_um} µm</div></div>`;
+    if (v.metrics?.duration_ns != null)
+      html += `<div class="metric-item"><div class="metric-label">Duration</div><div class="metric-value neutral">${(v.metrics.duration_ns/1000).toFixed(2)} µs</div></div>`;
+    html += `</div>`;
+    if (v.checks && v.checks.length) {
+      html += `<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">`;
+      for (const c of v.checks) {
+        const sym = c.passed ? '✓' : '⚠';
+        const cls = c.passed ? 'good' : 'warn';
+        html += `<div style="font-size:11px;padding:4px 8px;border-radius:4px;background:var(--surface2);color:var(--text2)"><span style="color:var(--${cls});font-weight:600">${sym}</span> <code style="color:var(--accent)">${escHtml(c.name)}</code> — ${escHtml(c.detail)}</div>`;
+      }
+      html += `</div>`;
+    }
+    return html;
+  }
+
   for (const [name,r] of Object.entries(results)) {
     if (r.error) { html+=`<div class="error-state">⚠ ${name}: ${escHtml(r.error)}</div>`; continue; }
     const gRed = r.gate_reduction!=null?(r.gate_reduction*100).toFixed(1)+'%':'—';

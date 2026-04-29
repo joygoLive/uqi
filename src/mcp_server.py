@@ -293,6 +293,140 @@ def _analyze_ahs(algorithm_file: str, qpu_name: str, framework: str) -> dict:
     }
 
 
+def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
+    """AHS Validation — Optimization step 대용 (transpilation 미적용 대신).
+
+    Device constraint 검증:
+      - atom count (Aquila/Fresnel 최대치 이내)
+      - 최소 atom 간격 (Rydberg blockade radius 와 호환)
+      - 총 duration (device max duration 이내)
+      - Sequence/Program build 가능성
+
+    pass/fail + 메트릭 반환 (gate-based 의 gate_reduction/depth_reduction 대신).
+    """
+    import json as _json
+    from uqi_extractor import UQIExtractor
+
+    # device constraint (대략값 — 실 SDK 의 device.properties 와 다를 수 있음)
+    LIMITS = {
+        "quera_aquila":        {"max_atoms": 256, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
+        "pasqal_fresnel":      {"max_atoms": 100, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
+        "pasqal_fresnel_can1": {"max_atoms": 100, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
+    }
+    limits = LIMITS.get(qpu_name, {})
+
+    try:
+        framework = UQIExtractor(algorithm_file).detect_framework()
+    except Exception as e:
+        return _json.dumps({"ok": False, "error": f"framework 감지 실패: {e}"})
+
+    checks = []
+    metrics = {}
+
+    def _add_check(name, passed, detail):
+        checks.append({"name": name, "passed": bool(passed), "detail": detail})
+
+    try:
+        if framework == "Braket-AHS":
+            from uqi_executor_braket import UQIExecutorBraket
+            prog = UQIExecutorBraket._extract_ahs_program(algorithm_file)
+            # atom count
+            items = list(prog.register)
+            atom_count = len(items)
+            metrics["atom_count"] = atom_count
+            mx = limits.get("max_atoms")
+            _add_check("atom_count",
+                       0 < atom_count <= (mx or 1e9),
+                       f"{atom_count} atoms (max: {mx if mx else '—'})")
+            # 최소 atom 간격
+            coords = [tuple(it.coordinate) for it in items]
+            if len(coords) >= 2:
+                from math import sqrt
+                pairs = [
+                    sqrt(sum((a-b)**2 for a, b in zip(p1, p2)))
+                    for i, p1 in enumerate(coords) for p2 in coords[i+1:]
+                ]
+                min_d_m = min(pairs)
+                min_d_um = min_d_m * 1e6
+                metrics["min_spacing_um"] = round(min_d_um, 3)
+                mn = limits.get("min_spacing_um")
+                _add_check("min_spacing",
+                           min_d_um >= (mn or 0),
+                           f"{min_d_um:.2f} µm (min: {mn if mn else '—'} µm)")
+            # 총 duration
+            try:
+                terms = prog.hamiltonian.terms
+                drive = next((t for t in terms if hasattr(t, 'amplitude')), None)
+                if drive is not None:
+                    times = drive.amplitude.time_series.times()
+                    if times:
+                        dur_ns = float(times[-1]) * 1e9
+                        metrics["duration_ns"] = round(dur_ns, 1)
+                        mx_d = limits.get("max_duration_ns")
+                        _add_check("duration",
+                                   dur_ns <= (mx_d or 1e12),
+                                   f"{dur_ns:.0f} ns (max: {mx_d if mx_d else '—'} ns)")
+            except Exception:
+                pass
+
+        elif framework == "Pulser":
+            from uqi_executor_azure import UQIExecutorAzure
+            seq = UQIExecutorAzure._extract_pulser_sequence(algorithm_file)
+            # atom count
+            try:
+                atom_count = len(seq.register.qubit_ids)
+                metrics["atom_count"] = atom_count
+                mx = limits.get("max_atoms")
+                _add_check("atom_count",
+                           0 < atom_count <= (mx or 1e9),
+                           f"{atom_count} atoms (max: {mx if mx else '—'})")
+            except Exception:
+                pass
+            # 총 duration
+            try:
+                duration_ns = float(seq.get_duration())
+                metrics["duration_ns"] = round(duration_ns, 1)
+                mx_d = limits.get("max_duration_ns")
+                _add_check("duration",
+                           duration_ns <= (mx_d or 1e12),
+                           f"{duration_ns:.0f} ns (max: {mx_d if mx_d else '—'} ns)")
+            except Exception:
+                pass
+            # build 가능성 (변수 없는 sequence 검증)
+            try:
+                seq.build()
+                _add_check("build", True, "Sequence built OK")
+            except Exception as e:
+                # 변수 미지정으로 인한 fail 은 'parameterized' — 정상으로 분류
+                msg = str(e)
+                is_parameterized = "variable" in msg.lower() or "parameter" in msg.lower()
+                _add_check("build",
+                           is_parameterized,
+                           "Parameterized (variables present)" if is_parameterized else f"build failed: {msg[:80]}")
+        else:
+            return _json.dumps({"ok": False,
+                                "error": f"AHS framework 아님: {framework}"})
+    except Exception as e:
+        return _json.dumps({"ok": False, "error": f"AHS validation 실패: {e}"})
+
+    overall_ok = all(c["passed"] for c in checks) if checks else False
+    return _json.dumps({
+        "ok":         overall_ok,
+        "analog":     True,
+        "framework":  framework,
+        "qpu_name":   qpu_name,
+        "checks":     checks,
+        "metrics":    metrics,
+        "results": {
+            "ahs_validation": {
+                "ok":      overall_ok,
+                "checks":  checks,
+                "metrics": metrics,
+            },
+        },
+    }, ensure_ascii=False)
+
+
 def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
     """AHS 노이즈 시뮬 — pulser_simulation (Pasqal) / braket LocalSimulator (QuEra).
 
@@ -931,15 +1065,9 @@ async def uqi_optimize(
         })
     from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
     if qpu_name in _ANALOG_SET:
-        return json.dumps({
-            "error": (
-                f"Circuit optimization is not applicable for analog (AHS) QPUs ({qpu_name}). "
-                "AHS programs (braket.ahs / pulser) describe time-evolved Hamiltonians, "
-                "not gate sequences — there is no transpilation step. Proceed directly to "
-                "Analyze (for register/duration metrics) and QPU Submit."
-            ),
-            "analog": True,
-        })
+        # AHS 는 transpilation 의미 없음 — 대신 device constraint 검증으로 대체.
+        # (atom count / spacing / duration / build 가능성 등 — pass/fail + 메트릭)
+        return await asyncio.to_thread(_validate_ahs, algorithm_file, qpu_name)
 
     def _run():
         from qiskit import QuantumCircuit

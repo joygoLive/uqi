@@ -227,3 +227,76 @@ def test_TC532_braket_executor_missing_program_raises():
             UQIExecutorBraket._extract_ahs_program(path)
     finally:
         _clean(path)
+
+
+# ─────────────────────────────────────────────────────────
+# _validate_ahs — Optimization step 의 AHS 대체 (device constraint)
+# ─────────────────────────────────────────────────────────
+
+def test_TC540_validate_ahs_braket_pass():
+    """3-atom 1D Braket AHS — 모든 device constraint 통과"""
+    import json as _json
+    from mcp_server import _validate_ahs
+    path = _write(_BRAKET_AHS_SAMPLE)
+    try:
+        result = _json.loads(_validate_ahs(path, "quera_aquila"))
+        assert result["ok"] is True
+        assert result["analog"] is True
+        assert result["framework"] == "Braket-AHS"
+        # 메트릭 확인
+        m = result["metrics"]
+        assert m["atom_count"] == 3
+        assert m["min_spacing_um"] == 5.0   # 5e-6 m → 5.0 µm
+        # checks
+        names = [c["name"] for c in result["checks"]]
+        assert "atom_count" in names
+        assert "min_spacing" in names
+    finally:
+        _clean(path)
+
+
+def test_TC541_validate_ahs_pulser_pass():
+    """3-atom 1D Pulser — duration/build 통과"""
+    import json as _json
+    from mcp_server import _validate_ahs
+    path = _write(_PULSER_SAMPLE)
+    try:
+        result = _json.loads(_validate_ahs(path, "pasqal_fresnel"))
+        assert result["framework"] == "Pulser"
+        assert result["analog"] is True
+        m = result["metrics"]
+        assert m["atom_count"] == 3
+        assert m["duration_ns"] is not None and m["duration_ns"] > 0
+    finally:
+        _clean(path)
+
+
+def test_TC542_validate_ahs_too_many_atoms_fails():
+    """device max_atoms 초과 — atom_count check fail"""
+    import json as _json
+    from mcp_server import _validate_ahs
+    # 1000-atom 체인 (max 100/256 초과)
+    src = '''
+from braket.ahs import (AnalogHamiltonianSimulation, AtomArrangement,
+                        Hamiltonian, DrivingField)
+from braket.timings.time_series import TimeSeries
+register = AtomArrangement()
+for i in range(1000):
+    register.add([i * 5e-6, 0.0])
+amp = TimeSeries(); det = TimeSeries(); ph = TimeSeries()
+for t, a, d in [(0,0,-1e7),(1e-6,1e7,-1e7),(3e-6,1e7,1e7),(4e-6,0,1e7)]:
+    amp.put(t,a); det.put(t,d); ph.put(t,0)
+ahs_program = AnalogHamiltonianSimulation(
+    register=register,
+    hamiltonian=Hamiltonian([DrivingField(amplitude=amp, detuning=det, phase=ph)]),
+)
+'''
+    path = _write(src)
+    try:
+        result = _json.loads(_validate_ahs(path, "quera_aquila"))
+        # 1000 > 256 → atom_count check fail
+        atom_check = next(c for c in result["checks"] if c["name"] == "atom_count")
+        assert atom_check["passed"] is False
+        assert result["ok"] is False
+    finally:
+        _clean(path)

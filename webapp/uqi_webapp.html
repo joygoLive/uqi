@@ -3735,7 +3735,21 @@ async function _onFileSelected() {
     _compatibleQPUs = d.compatible_qpus;
     _filterQPUSelectors(d.compatible_qpus, d.default_qpu);
     _updatePhotonicStepStates();
+    _updateNoiseSdkSelector(d.framework);
   } catch(e) {}
+}
+
+// AHS framework 면 noise simulation 엔진 셀렉터를 framework-specific 으로 교체
+function _updateNoiseSdkSelector(framework) {
+  const sel = document.getElementById('noise-sdk');
+  if (!sel) return;
+  if (framework === 'Braket-AHS') {
+    sel.innerHTML = `<option value="braket-ahs">Braket LocalSimulator (AHS)</option>`;
+  } else if (framework === 'Pulser') {
+    sel.innerHTML = `<option value="pulser-sim">pulser_simulation (QutipEmulator)</option>`;
+  } else {
+    sel.innerHTML = `<option value="qiskit">Qiskit</option><option value="pennylane">PennyLane</option>`;
+  }
 }
 
 function _resetAllStepResults() {

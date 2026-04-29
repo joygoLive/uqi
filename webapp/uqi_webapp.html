@@ -3474,6 +3474,13 @@ function _qpuOptGroups(qpus) {
 
 function _populateQPUSelectors(qpus) {
   if (!qpus || !qpus.length) return;
+  // 알고리즘 선택 후 _onFileSelected 가 _compatibleQPUs 채웠으면 그 부분집합만 사용.
+  // (loadQPUDashboard / _fetchQPUData 의 _populateQPUSelectors 가 비동기 race 로
+  //  _filterQPUSelectors 결과를 덮어쓰는 문제 해결)
+  if (_compatibleQPUs && _compatibleQPUs.length) {
+    qpus = qpus.filter(q => _compatibleQPUs.includes(q));
+    if (!qpus.length) return;
+  }
   const groupsHtml = _qpuOptGroups(qpus);
   ['global-qpu', 'rag-qpu'].forEach(id => {
     const el = document.getElementById(id);

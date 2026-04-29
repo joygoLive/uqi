@@ -549,6 +549,13 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
     except Exception as e:
         return _json.dumps({"error": f"framework 감지 실패: {e}"})
 
+    # qpu_name 으로 framework 강제 routing — 알고리즘이 braket.ahs + pulser
+    # 둘 다 정의해도 사용자가 선택한 QPU 에 맞는 executor 사용
+    if qpu_name == "quera_aquila":
+        framework = "Braket-AHS"
+    elif qpu_name in ("pasqal_fresnel", "pasqal_fresnel_can1"):
+        framework = "Pulser"
+
     # 분석 단계: 비용/메트릭 + 안내 메시지
     if not confirmed:
         analysis = _analyze_ahs(algorithm_file, qpu_name, framework)

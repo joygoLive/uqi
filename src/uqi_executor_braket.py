@@ -104,8 +104,8 @@ class UQIExecutorBraket:
                            backend_name: str = "quera_aquila") -> dict:
         """QuEra Aquila AHS task 제출 (gate 회로 미사용).
 
-        algorithm_file → ahs_program 추출 → AwsDevice.run(ahs_program, shots).
-        ARN 즉시 반환 (비동기 polling 은 fetch_job_status 사용).
+        algorithm_file → ahs_program 추출 → discretize(device) 로 device grid
+        (400 rad/s 배수, 시간 stepping 등) fit → AwsDevice.run.
         """
         result = {
             "ok": False, "job_id": None, "backend": backend_name,
@@ -117,6 +117,12 @@ class UQIExecutorBraket:
             from braket.aws import AwsDevice
             aws_session = self._get_aws_session(region)
             device = AwsDevice(arn, aws_session=aws_session)
+            # device grid 에 맞춰 discretize — Aquila 는 amplitude 400 rad/s 배수,
+            # detuning grid, 시간 stepping 등 strict 제약. 미적용 시 ValidationException.
+            try:
+                ahs_program = ahs_program.discretize(device)
+            except Exception as _de:
+                print(f"    ⚠ AHS discretize 실패 (raw 그대로 시도): {_de}")
             s3_dest = (DEFAULT_S3_BUCKET, f"tasks/{backend_name}")
             task = device.run(
                 ahs_program, shots=self.shots,

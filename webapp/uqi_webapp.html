@@ -3737,6 +3737,7 @@ async function _onFileSelected() {
     _updatePhotonicStepStates();
     _updateAnalogStepStates();
     _updateNoiseSdkSelector(d.framework);
+    _updateOptimizeOptions(d.framework);
   } catch(e) {}
 }
 
@@ -3750,6 +3751,30 @@ function _updateNoiseSdkSelector(framework) {
     sel.innerHTML = `<option value="pulser-sim">pulser_simulation (QutipEmulator)</option>`;
   } else {
     sel.innerHTML = `<option value="qiskit">Qiskit</option><option value="pennylane">PennyLane</option>`;
+  }
+}
+
+// AHS framework 면 Optimization 의 Combination/Verify 옵션은 gate transpilation
+// 무관 — device validation 단일 옵션으로 교체 + Verify 체크박스 비활성화.
+function _updateOptimizeOptions(framework) {
+  const combo = document.getElementById('opt-combo');
+  const verify = document.getElementById('opt-verify');
+  if (!combo || !verify) return;
+  if (framework === 'Braket-AHS' || framework === 'Pulser') {
+    combo.innerHTML = `<option value="device-validation">device-validation</option>`;
+    combo.disabled = true;
+    verify.checked = false;
+    verify.disabled = true;
+    verify.parentElement.style.opacity = '0.5';
+  } else {
+    combo.innerHTML = `<option value="auto">auto</option>
+      <option value="qiskit+sabre">qiskit+sabre</option>
+      <option value="tket+sabre">tket+sabre</option>
+      <option value="quizx+sabre">quizx+sabre</option>
+      <option value="appx+sabre">appx+sabre</option>`;
+    combo.disabled = false;
+    verify.disabled = false;
+    verify.parentElement.style.opacity = '';
   }
 }
 

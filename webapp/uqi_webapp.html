@@ -3798,8 +3798,19 @@ function _updateOptimizeOptions(framework) {
 function _resetAllStepResults() {
   _lastAnalyzeData = null;
   _lastOptimizeData = null;
-  // QASM 캐시 + 펼친 step 도 초기화 (이전 알고리즘 데이터 잔상 방지)
+  // QASM 캐시 클리어 (이전 알고리즘 데이터 잔상 방지)
   for (const k in _qasmStore) delete _qasmStore[k];
+  // 펼친 step 카드 모두 collapse (단 'analyze' 는 default open 으로 유지)
+  const _stepsToCollapse = ['optimize','noise','qec-analyze','qec-apply','qpu','job-history'];
+  for (const sname of _stepsToCollapse) {
+    if (_openSteps.has(sname)) {
+      _openSteps.delete(sname);
+      const body = document.getElementById('body-'+sname);
+      const chev = document.getElementById('chevron-'+sname);
+      if (body) body.classList.remove('open');
+      if (chev) chev.classList.remove('open');
+    }
+  }
   const steps = ['analyze','optimize','noise','qec-analyze','qec-apply','qpu'];
   const emptyMsgs = {
     'analyze':     'pipeline.analyze.empty',

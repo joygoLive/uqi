@@ -3741,31 +3741,49 @@ async function _onFileSelected() {
   } catch(e) {}
 }
 
-// AHS framework 면 noise simulation 엔진 셀렉터를 framework-specific 으로 교체
+// Noise simulation 엔진 셀렉터 — framework-specific 옵션으로 교체
 function _updateNoiseSdkSelector(framework) {
   const sel = document.getElementById('noise-sdk');
   if (!sel) return;
   if (framework === 'Braket-AHS') {
     sel.innerHTML = `<option value="braket-ahs">Braket LocalSimulator (AHS)</option>`;
+    sel.disabled = true;
   } else if (framework === 'Pulser') {
     sel.innerHTML = `<option value="pulser-sim">pulser_simulation (QutipEmulator)</option>`;
+    sel.disabled = true;
+  } else if (framework === 'Perceval') {
+    // Photonic — qubit noise sim 무관 (step 자체가 N/A 처리)
+    sel.innerHTML = `<option value="n/a">N/A (photonic)</option>`;
+    sel.disabled = true;
   } else {
     sel.innerHTML = `<option value="qiskit">Qiskit</option><option value="pennylane">PennyLane</option>`;
+    sel.disabled = false;
   }
 }
 
-// AHS framework 면 Optimization 의 Combination/Verify 옵션은 gate transpilation
-// 무관 — device validation 단일 옵션으로 교체 + Verify 체크박스 비활성화.
+// Optimization 의 Combination/Verify 옵션 — modality-specific 정합
 function _updateOptimizeOptions(framework) {
   const combo = document.getElementById('opt-combo');
   const verify = document.getElementById('opt-verify');
   if (!combo || !verify) return;
-  if (framework === 'Braket-AHS' || framework === 'Pulser') {
-    combo.innerHTML = `<option value="device-validation">device-validation</option>`;
-    combo.disabled = true;
+  const _disableVerify = () => {
     verify.checked = false;
     verify.disabled = true;
     verify.parentElement.style.opacity = '0.5';
+  };
+  const _enableVerify = () => {
+    verify.disabled = false;
+    verify.parentElement.style.opacity = '';
+  };
+  if (framework === 'Braket-AHS' || framework === 'Pulser') {
+    combo.innerHTML = `<option value="device-validation">device-validation</option>`;
+    combo.disabled = true;
+    _disableVerify();
+  } else if (framework === 'Perceval') {
+    // Photonic — gate transpilation 무관 (step 자체가 N/A 처리)
+    combo.innerHTML = `<option value="n/a">N/A (photonic)</option>`;
+    combo.disabled = true;
+    _disableVerify();
   } else {
     combo.innerHTML = `<option value="auto">auto</option>
       <option value="qiskit+sabre">qiskit+sabre</option>
@@ -3773,14 +3791,15 @@ function _updateOptimizeOptions(framework) {
       <option value="quizx+sabre">quizx+sabre</option>
       <option value="appx+sabre">appx+sabre</option>`;
     combo.disabled = false;
-    verify.disabled = false;
-    verify.parentElement.style.opacity = '';
+    _enableVerify();
   }
 }
 
 function _resetAllStepResults() {
   _lastAnalyzeData = null;
   _lastOptimizeData = null;
+  // QASM 캐시 + 펼친 step 도 초기화 (이전 알고리즘 데이터 잔상 방지)
+  for (const k in _qasmStore) delete _qasmStore[k];
   const steps = ['analyze','optimize','noise','qec-analyze','qec-apply','qpu'];
   const emptyMsgs = {
     'analyze':     'pipeline.analyze.empty',

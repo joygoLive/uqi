@@ -433,6 +433,16 @@ def test_TC162_parse_qpu_full_unknown_fallback():
     assert f["modality"] == "unknown"
     assert f["modality_label"] == "Unknown"
 
+def test_TC162a_parse_qpu_full_auto_pseudo():
+    """'auto' 의사값 — Pipeline 'Auto (Recommended)' 셀렉터의 default value"""
+    f = parse_qpu_full("auto")
+    assert f["vendor"] == "Auto"
+    assert f["model"]  == "(recommended)"
+    assert f["family"] is None
+    assert f["modality"] == "unknown"
+    assert f["modality_label"] == "Unknown"
+    # raw 'auto' 가 webapp 에서 'Unknown auto' 로 보이는 일 없도록 보장
+
 def test_TC163_legacy_parse_qpu_identity_compatible():
     """parse_qpu_identity() (legacy wrapper) 가 (vendor, model) tuple 그대로 반환.
 

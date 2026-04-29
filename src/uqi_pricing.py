@@ -629,6 +629,20 @@ def parse_qpu_full(qpu_name: str) -> dict:
             "modality_label": _MODALITY_LABELS.get(modality, modality),
             "is_analog":      qpu_name in _ANALOG_QPUS,
         }
+    # 'auto' = Pipeline > Target QPU 셀렉터의 'Auto (Recommended)' 의사값
+    # (정상 흐름에선 _resolve_qpu 단계에서 실 QPU 로 변환되지만 historic 데이터 또는
+    #  resolve 실패 케이스 안전망)
+    if qpu_name == "auto":
+        return {
+            "qpu_id":         "auto",
+            "vendor":         "Auto",
+            "model":          "(recommended)",
+            "family":         None,
+            "runtime":        "—",
+            "modality":       "unknown",
+            "modality_label": "Unknown",
+            "is_analog":      False,
+        }
     # 휴리스틱 fallback — 모델/벤더만 추정, runtime/modality 미상
     if qpu_name.startswith(("qpu:", "sim:")):
         suffix = qpu_name.split(":", 1)[1]

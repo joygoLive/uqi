@@ -633,6 +633,15 @@ class TestResolveQPU:
         result = _resolve_qpu("/tmp/nonexistent_abc123.py", "ibm_fez")
         assert result == "ibm_fez"
 
+    def test_TC078_nonexistent_file_with_auto_falls_back_to_default(self):
+        """파일 없거나 framework 감지 실패 시에도 'auto' 는 글로벌 default 로 안전 변환.
+
+        이전 동작: extractor 예외 → 'auto' 그대로 반환 → RAG/save_job 에 'auto' 누출.
+        새 동작: 모든 fail 경로에서 'auto' → 'ibm_fez' (gate-based default) 보장.
+        """
+        result = _resolve_qpu("/tmp/nonexistent_abc123.py", "auto")
+        assert result == "ibm_fez", "framework 감지 실패해도 'auto' 가 통과되면 안 됨"
+
 
 # ─────────────────────────────────────────────────────────────
 # _build_qpu_submit_message 통합 테스트 (비용/가용성/출처/SUBMIT_BLOCK)

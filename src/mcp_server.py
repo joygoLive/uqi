@@ -181,18 +181,25 @@ _FRAMEWORK_QPU_MAP = {
 
 def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
     """QPU 이름이 'auto'이거나 framework와 불일치할 때 자동 보정.
-    예: Perceval 파일 + ibm_fez → sim:ascella, Qiskit 파일 + sim:ascella → ibm_fez"""
+    예: Perceval 파일 + ibm_fez → sim:ascella, Qiskit 파일 + sim:ascella → ibm_fez
+
+    안전망: 모든 경로에서 'auto' 가 그대로 통과되지 않도록 보장.
+            framework 감지 실패 또는 mapping 없을 때도 글로벌 default('ibm_fez') 사용.
+    """
     try:
         from uqi_extractor import UQIExtractor
         ext = UQIExtractor(algorithm_file)
         fw = ext.detect_framework()
         mapping = _FRAMEWORK_QPU_MAP.get(fw)
-        if not mapping:
+        if mapping:
+            if qpu_name == "auto" or qpu_name not in mapping["qpus"]:
+                return mapping["default"]
             return qpu_name
-        if qpu_name == "auto" or qpu_name not in mapping["qpus"]:
-            return mapping["default"]
     except Exception:
         pass
+    # framework 감지 실패 / mapping 없음 — 'auto' 는 글로벌 default 로 고정
+    if qpu_name == "auto":
+        return "ibm_fez"
     return qpu_name
 
 # 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)

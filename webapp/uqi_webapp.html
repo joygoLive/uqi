@@ -5020,7 +5020,10 @@ function renderJobHistory(jobs, filter = {}, total = null, userSel = null) {
 
   const statusBadge = (s) => {
     const cls = `job-status-${s}`;
-    const icon = s === 'done' ? '✓ ' : s === 'error' ? '✗ ' : s === 'cancelled' ? '✕ ' : '<span class="spinner"></span>';
+    const icon = s === 'done' ? '✓ '
+      : (s === 'error' || s === 'failed') ? '✗ '
+      : s === 'cancelled' ? '✕ '
+      : '<span class="spinner"></span>';
     return `<span class="job-status-badge ${cls}">${icon}${s.toUpperCase()}</span>`;
   };
 

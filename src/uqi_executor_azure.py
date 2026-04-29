@@ -252,22 +252,32 @@ class UQIExecutorAzure:
                            backend_name: str = "pasqal_fresnel") -> dict:
         """Pasqal Fresnel AHS submit (Azure Quantum 경유).
 
-        algorithm_file → pulser Sequence 추출 → abstract_repr (JSON) →
-        Azure Quantum target 'pasqal.qpu.fresnel' 로 제출. job_id 즉시 반환.
+        algorithm_file → pulser Sequence 추출 → azure-quantum 의 Pasqal
+        target 클래스 + InputParams(runs=shots) 로 제출.
+
+        주의: 이전 'workspace.get_targets(name).submit(seq.to_abstract_repr(), ...)'
+        패턴은 'value_error.missing field required' 로 실패. azure-quantum 의
+        Pasqal 전용 클래스 (azure.quantum.target.pasqal.Pasqal) 사용 필수.
         """
         result = {
             "ok": False, "job_id": None, "backend": backend_name,
             "via": "Pulser-AHS", "error": None,
         }
         try:
+            import json as _json
+            from azure.quantum.target.pasqal import Pasqal, InputParams
             seq = self._extract_pulser_sequence(algorithm_file)
             target_name = self._resolve_target(backend_name)
             workspace = self._get_workspace()
-            target = workspace.get_targets(target_name)
+            target = Pasqal(workspace=workspace, name=target_name)
+            # Azure Pasqal 의 'pasqal.pulser.v1' schema 는 sequence_builder
+            # 키로 wrapping 된 JSON 을 기대 (직접 abstract_repr 만 보내면
+            # 'field required' 에러).
+            input_payload = _json.dumps({"sequence_builder": seq.to_abstract_repr()})
             job = target.submit(
-                input_data=seq.to_abstract_repr(),
+                input_data=input_payload,
                 name=f"uqi-pulser-{name}",
-                input_params={"runs": self.shots},
+                input_params=InputParams(runs=self.shots),
             )
             # azure-quantum Job 의 id 는 .id (속성) 또는 .id() (메서드) — 둘 다 시도
             job_id = job.id if not callable(getattr(job, "id", None)) else job.id()

@@ -1570,6 +1570,10 @@ async function testConnection() {
     await connectSSE(url);
     await initializeMCP();
     _statusKey='status.connected'; setStatus(t('status.connected'),true,false);
+    // 페이지/연결 첫 진입 시 모든 pipeline step body 강제 닫기 (일관 초기 화면)
+    document.querySelectorAll('.step-body.open').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.step-chevron.open').forEach(el => el.classList.remove('open'));
+    _openSteps.clear();
     loadQPUDashboard(false);
     loadQPUSelectors();
     loadDGXFiles();

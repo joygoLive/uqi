@@ -486,6 +486,8 @@ def _get_qpu_status_cached() -> dict:
 
 _ALLOWED_IMPORTS = {
     "qiskit", "qiskit_aer", "qiskit_algorithms","qiskit_finance", "pennylane", "qml", "qrisp", "cudaq", "perceval",
+    # AHS (Analog Hamiltonian Simulation)
+    "braket", "pulser", "pulser_simulation",
     "numpy", "scipy", "matplotlib", "sympy", "networkx",
     "json", "math", "cmath", "itertools", "functools", "collections",
     "typing", "dataclasses", "enum", "abc", "copy", "time",

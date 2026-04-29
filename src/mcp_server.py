@@ -170,7 +170,12 @@ _pending_submissions = {}
 _PHOTONIC_QPUS = {"qpu:ascella", "qpu:belenos", "sim:ascella", "sim:belenos"}
 
 # Framework → 호환 QPU 매핑
-_GATE_BASED_QPUS = [q for q in SUPPORTED_QPUS if q not in _PHOTONIC_QPUS]
+# gate-based 회로는 photonic / analog QPU 모두 비호환 — 둘 다 제외
+from uqi_pricing import _ANALOG_QPUS as _ANALOG_QPUS_SET
+_GATE_BASED_QPUS = [
+    q for q in SUPPORTED_QPUS
+    if q not in _PHOTONIC_QPUS and q not in _ANALOG_QPUS_SET
+]
 _FRAMEWORK_QPU_MAP = {
     "Qiskit":     {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
     "PennyLane":  {"qpus": _GATE_BASED_QPUS, "default": "ibm_fez"},
@@ -451,9 +456,23 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
     """AHS 노이즈 시뮬 — pulser_simulation (Pasqal) / braket LocalSimulator (QuEra).
 
     counts dict 반환 (gate-based 와 동일 인터페이스). 실제 노이즈 모델은 SDK 자체.
+    캐시 적용 — gate-based noise_simulate 와 동일 패턴.
     """
     import json as _json
     from uqi_extractor import UQIExtractor
+
+    # 캐시 우선 — gate-based noise_simulate (key: noise_v2:...) 와 동일 prefix
+    _cache_key = f"noise_v2:{_file_hash(algorithm_file)}:{qpu_name}:{shots}"
+    _cached = _rag.get_cache(_cache_key)
+    if _cached:
+        print(f"  [Cache] AHS noise_simulate 캐시 히트: {Path(algorithm_file).name}", file=sys.stderr)
+        try:
+            _cached_obj = _json.loads(_cached)
+            _cached_obj["_cached"] = True
+            return _json.dumps(_cached_obj, ensure_ascii=False)
+        except Exception:
+            return _cached
+
     try:
         ext = UQIExtractor(algorithm_file)
         framework = ext.detect_framework()
@@ -491,7 +510,7 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
 
         total = sum(counts.values()) or 1
         probs = {k: v/total for k, v in counts.items()}
-        return _json.dumps({
+        _result = _json.dumps({
             "algorithm_file": algorithm_file,
             "framework":      framework,
             "qpu_name":       qpu_name,
@@ -500,6 +519,13 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
             "probs":          probs,
             "note":           f"AHS 로컬 노이즈 시뮬 ({framework}) — SDK 내장 모델",
         }, ensure_ascii=False)
+        # 결과 정상이면 캐시 저장 (gate-based noise_simulate 와 동일 패턴)
+        if counts:
+            try:
+                _rag.set_cache(_cache_key, _result)
+            except Exception:
+                pass
+        return _result
     except Exception as e:
         return _json.dumps({"error": f"AHS noise sim 실패: {e}"})
 

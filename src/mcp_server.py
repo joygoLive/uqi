@@ -476,9 +476,15 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
             task = device.run(ahs, shots=shots)
             res  = task.result()
             # AHS result: measurements list — bitstring counts 변환
+            # post_sequence 는 numpy array 일 수 있어 'or []' 같은 truthiness
+            # 체크 사용 금지 (ValueError: ambiguous truth value).
             counts = {}
             for m in res.measurements:
-                key = "".join(str(int(b)) for b in (m.post_sequence or []))
+                post = getattr(m, "post_sequence", None)
+                if post is None:
+                    continue
+                # numpy array / list 둘 다 안전하게 iterate
+                key = "".join(str(int(b)) for b in post)
                 counts[key] = counts.get(key, 0) + 1
         else:
             return _json.dumps({"error": f"AHS framework 아님: {framework}"})

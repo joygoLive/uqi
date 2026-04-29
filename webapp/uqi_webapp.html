@@ -3750,11 +3750,19 @@ async function _onFileSelected() {
   _algorithmDetectInProgress = true;
   // framework 감지 중 사용자가 잘못된 QPU 선택 방지 — 셀렉터 즉시 잠금
   const _qpuSelectorIds = ['global-qpu', 'qpu-qpu', 'rag-qpu'];
+  const _PLACEHOLDER = `<option value="">Detecting framework…</option>`;
   for (const id of _qpuSelectorIds) {
     const el = document.getElementById(id);
     if (el) {
-      el.dataset.prevHtml = el.innerHTML;   // 복구용 백업
-      el.innerHTML = `<option value="">Detecting framework…</option>`;
+      // prevHtml 백업 — 이미 있으면 (직전 _onFileSelected 진행 중) 덮어쓰지 않기
+      // (그러지 않으면 prevHtml 자체가 placeholder html 이 되어 복원 시에도 placeholder)
+      if (!el.dataset.prevHtml || el.dataset.prevHtml.includes('Detecting framework')) {
+        // innerHTML 이 이미 placeholder 면 백업 안 함 (이전 백업 유지)
+        if (!el.innerHTML.includes('Detecting framework')) {
+          el.dataset.prevHtml = el.innerHTML;
+        }
+      }
+      el.innerHTML = _PLACEHOLDER;
       el.disabled = true;
     }
   }
@@ -3777,10 +3785,15 @@ async function _onFileSelected() {
     }
   } finally {
     _algorithmDetectInProgress = false;
-    // 셀렉터 다시 활성화 (성공 시 _filterQPUSelectors 가 이미 옵션 교체했음)
+    // 셀렉터 활성화 + placeholder 잔존 시 prevHtml 으로 복원
+    // (early return 또는 d.ok=false 케이스에서 _filterQPUSelectors 안 호출되어
+    //  placeholder 그대로 남는 상황 안전망)
     for (const id of _qpuSelectorIds) {
       const el = document.getElementById(id);
       if (el) {
+        if (el.innerHTML.includes('Detecting framework') && el.dataset.prevHtml) {
+          el.innerHTML = el.dataset.prevHtml;
+        }
         el.disabled = false;
         delete el.dataset.prevHtml;
       }

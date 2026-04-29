@@ -3735,6 +3735,7 @@ async function _onFileSelected() {
     _compatibleQPUs = d.compatible_qpus;
     _filterQPUSelectors(d.compatible_qpus, d.default_qpu);
     _updatePhotonicStepStates();
+    _updateAnalogStepStates();
     _updateNoiseSdkSelector(d.framework);
   } catch(e) {}
 }
@@ -3817,6 +3818,21 @@ function _updatePhotonicStepStates() {
   }
 }
 
+// AHS (Braket-AHS / Pulser) framework 일 때 QEC 두 step 만 N/A.
+// (Optimization 은 validation 으로 대체, Noise sim 은 SDK device-realistic
+//  noise model 로 의미 있게 동작하므로 N/A 아님)
+function _updateAnalogStepStates() {
+  if (_detectedFramework !== 'Braket-AHS' && _detectedFramework !== 'Pulser') return;
+  const steps = {
+    'qec-analyze': 'qec',
+    'qec-apply':   'qec',
+  };
+  for (const [stepId, msgKey] of Object.entries(steps)) {
+    setStepResult(stepId, `<div class="info-state">${_analogSkipMsg(msgKey)}</div>`);
+    setBadge(stepId, 'skip');
+  }
+}
+
 function _photonicSkipMsg(step) {
   const qpu = getQPU();
   const msgs = {
@@ -3838,6 +3854,22 @@ function _photonicSkipMsg(step) {
     + `<div style="font-size:13px;font-weight:600">🔬 ${m.title}</div>`
     + `<div style="color:var(--text2)">${m.desc}</div>`
     + `<div style="color:var(--text3);font-size:10px;margin-top:4px">Selected: ${escHtml(qpu)} · Photonic QPU pipeline: <strong>Circuit Analysis → QPU Submit</strong></div>`
+    + `</div>`;
+}
+
+function _analogSkipMsg(step) {
+  const qpu = getQPU();
+  const msgs = {
+    qec: {
+      title: 'QEC — Not applicable',
+      desc:  'Quantum error correction codes (Surface, Steane, etc.) require logical qubits + stabilizer measurement + syndrome decoding — concepts that do not exist in analog Hamiltonian simulation. AHS evolves time-dependent Hamiltonians directly without gate decomposition or logical encoding.',
+    },
+  };
+  const m = msgs[step] || { title: 'Not applicable', desc: '' };
+  return `<div style="display:flex;flex-direction:column;gap:8px">`
+    + `<div style="font-size:13px;font-weight:600">🌊 ${m.title}</div>`
+    + `<div style="color:var(--text2)">${m.desc}</div>`
+    + `<div style="color:var(--text3);font-size:10px;margin-top:4px">Selected: ${escHtml(qpu)} · AHS pipeline: <strong>Analyze → Optimization (validation) → Noise Simulation → QPU Submit</strong></div>`
     + `</div>`;
 }
 

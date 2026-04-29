@@ -1322,6 +1322,18 @@ async def uqi_qec_analyze(
             ),
             "photonic": True,
         })
+    from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
+    if qpu_name in _ANALOG_SET:
+        return json.dumps({
+            "error": (
+                f"QEC analysis is not applicable for analog (AHS) QPUs ({qpu_name}). "
+                "Standard QEC codes require logical qubits + stabilizer measurement + "
+                "syndrome decoding — concepts that do not exist in Hamiltonian simulation. "
+                "AHS evolves time-dependent Hamiltonians directly without gate decomposition "
+                "or logical encoding."
+            ),
+            "analog": True,
+        })
 
     def _run():
         from qiskit import QuantumCircuit
@@ -1418,6 +1430,17 @@ async def uqi_qec_apply(
                 "such as photon-number-resolving detection and boson sampling fidelity checks."
             ),
             "photonic": True,
+        })
+    from uqi_pricing import _ANALOG_QPUS as _ANALOG_SET
+    if qpu_name in _ANALOG_SET:
+        return json.dumps({
+            "error": (
+                f"QEC apply is not applicable for analog (AHS) QPUs ({qpu_name}). "
+                "Standard QEC encodings (bit-flip, phase-flip, Surface, Steane) require "
+                "logical qubits + gate decomposition — concepts that do not exist in "
+                "Hamiltonian simulation."
+            ),
+            "analog": True,
         })
 
     def _run():

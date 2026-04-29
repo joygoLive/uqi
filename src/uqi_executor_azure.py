@@ -248,6 +248,81 @@ class UQIExecutorAzure:
             )
         return seq
 
+    @staticmethod
+    def _adapt_sequence_to_device(seq, device):
+        """사용자 Sequence (좌표 dict register) → 실 device 의 calibrated layout
+        기반 register 로 자동 매핑된 새 Sequence 반환.
+
+        매핑 규칙:
+          - device.pre_calibrated_layouts[0] (예: Fresnel 의 61-trap layout) 사용
+          - 사용자 atom 좌표를 가장 가까운 trap idx 로 매핑
+          - 새 Sequence 만들고 declared_channels + abstract_repr 의 operations 복사
+
+        algorithm 파일 미수정으로 실 Fresnel-CAN1 호환 register 자동 생성.
+        """
+        import json as _json
+        from pulser import Sequence
+        layout = device.pre_calibrated_layouts[0]
+        trap_coords = layout.coords  # numpy array shape (N, 2)
+
+        # 사용자 register 의 atom 좌표 (µm)
+        user_qubits = seq.register.qubits  # OrderedDict {qid: Coords}
+        chosen_traps = []
+        qubit_ids = []
+        used = set()
+        for qid, uc in user_qubits.items():
+            ux, uy = float(uc[0]), float(uc[1])
+            best, bestd = -1, float('inf')
+            for i, tc in enumerate(trap_coords):
+                if i in used:
+                    continue
+                tx, ty = float(tc[0]), float(tc[1])
+                d = (ux-tx)**2 + (uy-ty)**2
+                if d < bestd:
+                    bestd, best = d, i
+            chosen_traps.append(best)
+            qubit_ids.append(str(qid))
+            used.add(best)
+
+        new_reg = layout.define_register(*chosen_traps, qubit_ids=qubit_ids)
+        # 새 sequence — 실 device + layout-based register
+        # operations 복사: abstract_repr 통해 reconstruction
+        old_abr = _json.loads(seq.to_abstract_repr())
+        new_seq = Sequence(new_reg, device)
+        # 채널 복사 — abstract_repr 의 'channels' 맵 ({name: channel_id})
+        # 사용. seq.declared_channels 는 Channel 객체를 반환하므로 부적합.
+        for ch_name, ch_id in old_abr.get('channels', {}).items():
+            new_seq.declare_channel(ch_name, ch_id)
+        # operations 직접 복사 — pulse 단위로 reconstruction
+        from pulser import Pulse
+        from pulser.waveforms import (ConstantWaveform, RampWaveform, BlackmanWaveform,
+                                      InterpolatedWaveform, CustomWaveform)
+        _wf_map = {
+            'constant': ConstantWaveform,
+            'ramp': RampWaveform,
+            'blackman': BlackmanWaveform,
+            'interpolated': InterpolatedWaveform,
+            'custom': CustomWaveform,
+        }
+        def _build_wf(w):
+            kind = w.get('kind')
+            if kind == 'ramp':
+                return RampWaveform(w['duration'], w['start'], w['stop'])
+            if kind == 'constant':
+                return ConstantWaveform(w['duration'], w.get('value', 0.0))
+            if kind == 'blackman':
+                return BlackmanWaveform(w['duration'], w.get('area', 0.0))
+            raise ValueError(f"unsupported waveform kind: {kind}")
+        for op in old_abr.get('operations', []):
+            if op.get('op') == 'pulse':
+                amp = _build_wf(op['amplitude'])
+                det = _build_wf(op['detuning'])
+                pulse = Pulse(amplitude=amp, detuning=det,
+                              phase=op.get('phase', 0.0))
+                new_seq.add(pulse, op['channel'],
+                            protocol=op.get('protocol', 'min-delay'))
+        return new_seq
+
     def _submit_single_ahs(self, name: str, algorithm_file: str,
                            backend_name: str = "pasqal_fresnel") -> dict:
         """Pasqal Fresnel AHS submit (Azure Quantum 경유).
@@ -267,12 +342,37 @@ class UQIExecutorAzure:
             import json as _json
             from azure.quantum.target.pasqal import Pasqal, InputParams
             seq = self._extract_pulser_sequence(algorithm_file)
+
+            # 실 Fresnel device spec 으로 Sequence 변환 (PasqalCloud 인증 시)
+            # 알고리즘 파일은 보통 AnalogDevice prototype + 좌표 dict register 로 작성됨.
+            # 실 Fresnel(-CAN1) 은 register 가 RegisterLayout 의 trap 선택이어야 함.
+            # → backend 자동 변환: 사용자 atom 좌표 → 가장 가까운 calibrated trap 매핑
+            #    + 실 device 로 swap (사용자 algorithm 파일 미수정).
+            try:
+                if (os.getenv("PASQAL_USERNAME") and os.getenv("PASQAL_PASSWORD")
+                        and os.getenv("PASQAL_PROJECT_ID")):
+                    from pulser_pasqal import PasqalCloud
+                    cloud = PasqalCloud(
+                        username=os.getenv("PASQAL_USERNAME"),
+                        password=os.getenv("PASQAL_PASSWORD"),
+                        project_id=os.getenv("PASQAL_PROJECT_ID"),
+                    )
+                    devs = cloud.fetch_available_devices()
+                    real_key = ("FRESNEL_CAN1"
+                                if backend_name == "pasqal_fresnel_can1"
+                                else "FRESNEL")
+                    real_device = devs.get(real_key)
+                    if real_device is not None and real_device.pre_calibrated_layouts:
+                        seq = self._adapt_sequence_to_device(seq, real_device)
+                        print(f"    ✓ Sequence → {real_key} (calibrated layout 매핑)")
+            except Exception as _de:
+                print(f"    ⚠ Pasqal device swap 실패 (prototype 그대로 시도): {_de}")
+
             target_name = self._resolve_target(backend_name)
             workspace = self._get_workspace()
             target = Pasqal(workspace=workspace, name=target_name)
             # Azure Pasqal 의 'pasqal.pulser.v1' schema 는 sequence_builder
-            # 키로 wrapping 된 JSON 을 기대 (직접 abstract_repr 만 보내면
-            # 'field required' 에러).
+            # 키로 wrapping 된 JSON 을 기대.
             input_payload = _json.dumps({"sequence_builder": seq.to_abstract_repr()})
             job = target.submit(
                 input_data=input_payload,

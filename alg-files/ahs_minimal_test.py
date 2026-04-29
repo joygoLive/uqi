@@ -40,6 +40,8 @@ except Exception:
 
 
 # ── (2) Pulser — Pasqal Fresnel(-CAN1) ──
+# 일반적인 atom 좌표 dict 로 register 정의 (사용자 친화). backend executor 가
+# 실 Fresnel-CAN1 device 로 제출 시 자동으로 layout-based register 변환 처리.
 try:
     from pulser import Register, Sequence, Pulse
     from pulser.devices import AnalogDevice

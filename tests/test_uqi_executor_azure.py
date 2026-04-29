@@ -178,3 +178,133 @@ def test_TC041_executor_default_shots():
     from uqi_executor_azure import UQIExecutorAzure
     ex = UQIExecutorAzure(_MockConverter())
     assert ex.shots == 1024
+
+
+# ─────────────────────────────────────────────────────────────
+# _adapt_sequence_to_device — backend 자동 layout 매핑
+# (사용자 algorithm 파일 미수정 — Fresnel(-CAN1) 호환 register 자동 생성)
+# ─────────────────────────────────────────────────────────────
+
+def _build_pulser_seq():
+    """3-atom 1D Sequence (좌표 dict register, AnalogDevice prototype)."""
+    from pulser import Register, Sequence, Pulse
+    from pulser.devices import AnalogDevice
+    from pulser.waveforms import RampWaveform
+    coords = {f"q{i}": (i * 7.0, 0.0) for i in range(3)}
+    seq = Sequence(Register(coords), AnalogDevice)
+    seq.declare_channel("ising", "rydberg_global")
+    seq.add(Pulse(
+        amplitude=RampWaveform(500, 0.0, 5.0),
+        detuning =RampWaveform(500, -5.0, -5.0),
+        phase=0.0,
+    ), "ising")
+    seq.add(Pulse(
+        amplitude=RampWaveform(2500, 5.0, 5.0),
+        detuning =RampWaveform(2500, -5.0, 5.0),
+        phase=0.0,
+    ), "ising")
+    return seq
+
+
+def test_TC050_adapt_sequence_preserves_operations():
+    """_adapt_sequence_to_device — operations 개수와 종류 보존"""
+    import json as _json
+    from pulser.devices import AnalogDevice
+    from uqi_executor_azure import UQIExecutorAzure
+    seq     = _build_pulser_seq()
+    new_seq = UQIExecutorAzure._adapt_sequence_to_device(seq, AnalogDevice)
+    a = _json.loads(seq.to_abstract_repr())
+    b = _json.loads(new_seq.to_abstract_repr())
+    # operations 개수 동일
+    assert len(a.get("operations", [])) == len(b.get("operations", []))
+    # 모두 pulse op
+    assert all(op.get("op") == "pulse" for op in b.get("operations", []))
+    # 채널 매핑 동일
+    assert a.get("channels") == b.get("channels")
+
+
+def test_TC051_adapt_sequence_uses_layout_register():
+    """_adapt_sequence_to_device — 새 register 가 layout-based (trap idx)"""
+    import json as _json
+    from pulser.devices import AnalogDevice
+    from uqi_executor_azure import UQIExecutorAzure
+    seq     = _build_pulser_seq()
+    new_seq = UQIExecutorAzure._adapt_sequence_to_device(seq, AnalogDevice)
+    abr = _json.loads(new_seq.to_abstract_repr())
+    # abstract_repr 최상위에 layout 항목 존재 (좌표 dict register 와 다름)
+    assert abr.get("layout") is not None
+    # 새 register 의 qubit 개수 동일
+    assert len(new_seq.register.qubits) == len(seq.register.qubits)
+
+
+def test_TC052_adapt_sequence_nearest_trap_unique():
+    """_adapt_sequence_to_device — 각 atom 이 서로 다른 trap 으로 매핑됨"""
+    from pulser.devices import AnalogDevice
+    from uqi_executor_azure import UQIExecutorAzure
+    seq      = _build_pulser_seq()
+    new_seq  = UQIExecutorAzure._adapt_sequence_to_device(seq, AnalogDevice)
+    # 새 register 좌표들이 모두 distinct (AbstractArray → float tuple)
+    new_coords = [(float(c[0]), float(c[1]))
+                  for c in new_seq.register.qubits.values()]
+    assert len(set(new_coords)) == len(new_coords), \
+        "각 사용자 atom 은 고유 trap 으로 매핑되어야 함"
+
+
+def test_TC053_submit_ahs_no_pasqal_creds_skips_swap(monkeypatch):
+    """_submit_single_ahs — PASQAL_* 환경변수 없으면 PasqalCloud import 시도 X"""
+    from uqi_executor_azure import UQIExecutorAzure
+    # PASQAL_* env 클리어
+    for k in ("PASQAL_USERNAME", "PASQAL_PASSWORD", "PASQAL_PROJECT_ID"):
+        monkeypatch.delenv(k, raising=False)
+    ex = UQIExecutorAzure(_MockConverter(), shots=10)
+
+    # _extract_pulser_sequence + Pasqal target 모킹
+    with patch.object(UQIExecutorAzure, "_extract_pulser_sequence",
+                      return_value=MagicMock(to_abstract_repr=lambda: '{"x":1}')), \
+         patch("uqi_executor_azure.UQIExecutorAzure._get_workspace",
+               return_value=MagicMock()), \
+         patch("azure.quantum.target.pasqal.Pasqal") as mock_pasqal_cls, \
+         patch("azure.quantum.target.pasqal.InputParams"):
+        mock_target = MagicMock()
+        mock_job = MagicMock(); mock_job.id = "fake-job-id"
+        mock_target.submit.return_value = mock_job
+        mock_pasqal_cls.return_value = mock_target
+
+        r = ex._submit_single_ahs("test", "/tmp/dummy.py", "pasqal_fresnel")
+
+    # PasqalCloud 분기 skip → ok=True 도달 (실 API 미호출)
+    assert r["ok"] is True
+    assert r["job_id"] == "fake-job-id"
+
+
+def test_TC054_submit_ahs_swap_failure_falls_back(monkeypatch):
+    """_submit_single_ahs — Pasqal device swap 실패 시 prototype Sequence 그대로 진행"""
+    from uqi_executor_azure import UQIExecutorAzure
+    monkeypatch.setenv("PASQAL_USERNAME",   "u")
+    monkeypatch.setenv("PASQAL_PASSWORD",   "p")
+    monkeypatch.setenv("PASQAL_PROJECT_ID", "pid")
+    ex = UQIExecutorAzure(_MockConverter(), shots=10)
+
+    fake_seq = MagicMock(to_abstract_repr=lambda: '{"x":1}')
+
+    # PasqalCloud import 자체는 성공하지만 fetch 가 raise → except 분기
+    fake_cloud_mod = MagicMock()
+    fake_cloud_mod.PasqalCloud.side_effect = RuntimeError("auth fail")
+
+    with patch.dict("sys.modules", {"pulser_pasqal": fake_cloud_mod}), \
+         patch.object(UQIExecutorAzure, "_extract_pulser_sequence",
+                      return_value=fake_seq), \
+         patch("uqi_executor_azure.UQIExecutorAzure._get_workspace",
+               return_value=MagicMock()), \
+         patch("azure.quantum.target.pasqal.Pasqal") as mock_pasqal_cls, \
+         patch("azure.quantum.target.pasqal.InputParams"):
+        mock_target = MagicMock()
+        mock_job = MagicMock(); mock_job.id = "fb-job-id"
+        mock_target.submit.return_value = mock_job
+        mock_pasqal_cls.return_value = mock_target
+
+        r = ex._submit_single_ahs("test", "/tmp/dummy.py", "pasqal_fresnel_can1")
+
+    # swap 실패해도 submit 자체는 prototype seq 로 진행
+    assert r["ok"] is True
+    assert r["job_id"] == "fb-job-id"

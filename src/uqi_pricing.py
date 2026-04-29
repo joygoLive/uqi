@@ -464,6 +464,182 @@ def format_cost_summary(estimate: dict) -> str:
     return "\n".join(lines)
 
 
+def format_actual_cost(vendor: str, qpu_name: str,
+                       cost: Optional[dict] = None) -> str:
+    """vendor별 통화 단위 다르게 표시 (소수점 2자리).
+
+    - braket (IonQ/Rigetti/QuEra) → USD ($X.XX)
+    - azure (Pasqal)               → KRW (₩X,XXX)
+    - iqm                          → credits (X.XX credits)
+    - quandela                     → credits (X.XXXX credits, 작은 단위)
+    - ibm                          → 무료 (Open Plan)
+    - quantinuum                   → HQC (별도)
+    """
+    if cost is None:
+        cost = estimate_cost(qpu_name, 1)
+
+    currency = cost.get("currency")
+
+    # 가격 모델의 currency 기반 우선 분기 (jobs.db vendor와 무관하게 정확)
+    if currency == "hqc":
+        # Quantinuum HQC — Azure 경유든 자사든 동일 표시
+        return "HQC (별도)"
+    if currency == "free":
+        # 무료 — IBM Open Plan / Pasqal sim / 공개 API 등
+        if vendor == "ibm":
+            return "무료 (Open Plan)"
+        return "무료"
+
+    # vendor별 단위 분기 (currency가 명확하지 않은 경우)
+    if vendor == "ibm":
+        return "무료 (Open Plan)"
+    if vendor == "braket":
+        usd = cost.get("estimated_usd")
+        return f"${usd:.2f}" if usd is not None else "—"
+    if vendor == "azure":
+        krw = cost.get("estimated_krw")
+        return f"₩{int(krw):,}" if krw is not None else "—"
+    if vendor == "iqm":
+        cr = cost.get("estimated_credits")
+        return f"{cr:.2f} credits" if cr is not None else "—"
+    if vendor == "quandela":
+        cr = cost.get("estimated_credits")
+        return f"{cr:.4f} credits" if cr is not None else "—"
+    if vendor == "quantinuum":
+        return "HQC (별도)"
+    # fallback
+    if cost.get("estimated_usd") is not None:
+        return f"${cost['estimated_usd']:.2f}"
+    if cost.get("estimated_credits") is not None:
+        return f"{cost['estimated_credits']:.2f} credits"
+    return "—"
+
+
+def format_actual_cost_token(vendor: str, qpu_name: str,
+                              cost: Optional[dict] = None) -> Optional[str]:
+    """i18n 처리용 토큰 반환.
+
+    숫자 포함 가격(USD/EUR/credits 등)은 None — 그대로 표시.
+    무료/HQC 등 Korean 고정문구만 토큰화 ⇒ webapp에서 locale 변환.
+
+    Returns:
+        "free"            → "무료" / "Free" / "Gratuit"
+        "free_open_plan"  → "무료 (Open Plan)" / "Free (Open Plan)" / "Gratuit (Open Plan)"
+        "hqc_separate"    → "HQC (별도)" / "HQC (separate)" / "HQC (séparé)"
+        None              → 토큰 없음 (cost.display 그대로 사용)
+    """
+    if cost is None:
+        cost = estimate_cost(qpu_name, 1)
+    currency = cost.get("currency")
+    if currency == "hqc":
+        return "hqc_separate"
+    if currency == "free":
+        return "free_open_plan" if vendor == "ibm" else "free"
+    if vendor == "ibm":
+        return "free_open_plan"
+    if vendor == "quantinuum":
+        return "hqc_separate"
+    return None
+
+
+# QPU 이름 → (제조사, 모델명) 매핑
+# 청구처(billing source)와 다름. 청구처는 게이트웨이/자사 클라우드 (get_cost_source).
+_QPU_IDENTITY_MAP: dict[str, tuple[str, str]] = {
+    # 제조사       모델명
+    "ionq_forte1":         ("IonQ",       "Forte-1"),
+    "rigetti_cepheus":     ("Rigetti",    "Cepheus-1-108Q"),
+    "rigetti_ankaa3":      ("Rigetti",    "Ankaa-3 (retired)"),
+    "quera_aquila":        ("QuEra",      "Aquila"),
+    "pasqal_fresnel":      ("Pasqal",     "Fresnel"),
+    "pasqal_fresnel_can1": ("Pasqal",     "Fresnel-CAN1"),
+    "ibm_fez":             ("IBM",        "Fez (Heron R2)"),
+    "ibm_marrakesh":       ("IBM",        "Marrakesh (Heron R2)"),
+    "ibm_kingston":        ("IBM",        "Kingston (Heron R2)"),
+    "iqm_garnet":          ("IQM",        "Garnet"),
+    "iqm_emerald":         ("IQM",        "Emerald"),
+    "iqm_sirius":          ("IQM",        "Sirius"),
+    "qpu:ascella":         ("Quandela",   "Ascella"),
+    "qpu:belenos":         ("Quandela",   "Belenos"),
+    "sim:ascella":         ("Quandela",   "Ascella (sim)"),
+    "sim:belenos":         ("Quandela",   "Belenos (sim)"),
+    "quantinuum_h2_1":     ("Quantinuum", "H2-1"),
+    "quantinuum_h2_2":     ("Quantinuum", "H2-2"),
+    "quantinuum_h1_1":     ("Quantinuum", "H1-1"),
+    "quantinuum_h2_1sc":   ("Quantinuum", "H2-1SC"),    # Syntax Checker (Azure)
+    "quantinuum_h2_1e":    ("Quantinuum", "H2-1E"),     # Emulator (Azure)
+    "braket_sv1":          ("Amazon",     "SV1 (sim)"),
+    "braket_dm1":          ("Amazon",     "DM1 (sim)"),
+    "braket_tn1":          ("Amazon",     "TN1 (sim)"),
+}
+
+
+def parse_qpu_identity(qpu_name: str) -> tuple[str, str]:
+    """QPU 이름 → (제조사, 모델명) 분리.
+
+    예:
+      "rigetti_cepheus" → ("Rigetti", "Cepheus-1-108Q")
+      "pasqal_fresnel"  → ("Pasqal", "Fresnel")
+      "ibm_fez"         → ("IBM", "Fez (Heron R2)")
+      "qpu:ascella"     → ("Quandela", "Ascella")
+
+    매핑 미등록 시: 휴리스틱(prefix split)로 fallback.
+    """
+    if qpu_name in _QPU_IDENTITY_MAP:
+        return _QPU_IDENTITY_MAP[qpu_name]
+    # 휴리스틱
+    if qpu_name.startswith(("qpu:", "sim:")):
+        suffix = qpu_name.split(":", 1)[1]
+        return ("Quandela", suffix.title())
+    if "_" in qpu_name:
+        prefix, model = qpu_name.split("_", 1)
+        return (prefix.title(), model.replace("_", "-").title())
+    return ("Unknown", qpu_name)
+
+
+def get_cost_source(vendor: str, qpu_name: str = "") -> str:
+    """비용 추정의 출처(게이트웨이 또는 자사 클라우드) 라벨 반환.
+
+    벤더 → 게이트웨이/자사 클라우드 매핑:
+      - braket    → AWS Braket
+      - azure     → Azure Quantum
+      - ibm       → IBM Open Plan
+      - iqm       → IQM Resonance
+      - quandela  → Quandela Cloud
+      - quantinuum → Quantinuum Nexus / Azure
+      - pasqal    → Pasqal Cloud  (자사 — Azure 게이트웨이 거치지 않은 경우)
+    """
+    if vendor == "braket":      return "AWS Braket"
+    if vendor == "azure":       return "Azure Quantum"
+    if vendor == "ibm":         return "IBM Open Plan"
+    if vendor == "iqm":         return "IQM Resonance"
+    if vendor == "quandela":    return "Quandela Cloud"
+    if vendor == "quantinuum":  return "Quantinuum Nexus / Azure"
+    if vendor == "pasqal":      return "Pasqal Cloud"
+    return "—"
+
+
+def format_duration(seconds: Optional[float]) -> str:
+    """초 단위를 사람이 읽기 좋은 형태로 (소수점 2자리).
+
+    < 60초:    "X.XXs"
+    < 1시간:   "Xm Ys"
+    >= 1시간:  "Xh Ym"
+    """
+    if seconds is None:
+        return "—"
+    s = float(seconds)
+    if s < 0:
+        return "—"
+    if s < 60:
+        return f"{s:.2f}s"
+    if s < 3600:
+        m, sec = divmod(s, 60)
+        return f"{int(m)}m {sec:.0f}s"
+    h, rem = divmod(s, 3600)
+    m, _ = divmod(rem, 60)
+    return f"{int(h)}h {int(m)}m"
+
+
 def list_stale_entries(days: int = 90) -> list[str]:
     """updated_at이 days일 이전인 entry 목록. 정기 점검용.
 

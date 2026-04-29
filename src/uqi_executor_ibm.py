@@ -337,6 +337,67 @@ class UQIExecutorIBM:
         return result
 
     @staticmethod
+    def fetch_job_timing(job_id: str, token: str = None) -> dict:
+        """
+        IBM Runtime job의 정확한 실행 시간 조회.
+        usage.quantum_seconds = 실 양자 시간 (큐 제외, 가장 정확).
+
+        Returns:
+            {
+              "execution_sec":    float | None,    # 실 양자 시간 (정확)
+              "wall_clock_sec":   float | None,    # 전체 (큐 + 실행)
+              "source":           "ibm_runtime_quantum_seconds",
+              "accuracy":         "quantum_only",  # quantum_only / execution_only / queue_included
+              "error":            str | None,
+            }
+        """
+        result = {
+            "execution_sec":  None,
+            "wall_clock_sec": None,
+            "source":         "ibm_runtime_quantum_seconds",
+            "accuracy":       "quantum_only",
+            "error":          None,
+        }
+        try:
+            from qiskit_ibm_runtime import QiskitRuntimeService
+
+            if token:
+                service = QiskitRuntimeService(
+                    channel="ibm_quantum_platform", token=token)
+            else:
+                service = QiskitRuntimeService()
+            job = service.job(job_id)
+
+            # metrics — usage.quantum_seconds 가 실 양자 시간
+            try:
+                metrics = job.metrics()
+                if isinstance(metrics, dict):
+                    usage = metrics.get("usage", {}) if isinstance(metrics.get("usage"), dict) else {}
+                    qs = usage.get("quantum_seconds")
+                    if qs is not None:
+                        result["execution_sec"] = float(qs)
+                    secs = usage.get("seconds")
+                    if secs is not None:
+                        result["wall_clock_sec"] = float(secs)
+            except Exception as _me:
+                # metrics 없으면 creation_date/end_date로 fallback
+                try:
+                    cd = getattr(job, "creation_date", None)
+                    if callable(cd): cd = cd()
+                    ed = None
+                    # qiskit-ibm-runtime은 보통 result_time / end_time을 직접 제공 안 함
+                    # → metrics 기반이 정석
+                    if cd:
+                        result["wall_clock_sec"] = None  # 정확 시간 모름
+                except Exception:
+                    pass
+                result["error"] = f"metrics 조회 실패: {_me}"
+
+        except Exception as e:
+            result["error"] = str(e)
+        return result
+
+    @staticmethod
     def cancel_job(job_id: str, token: str = None) -> dict:
         """IBM Runtime job 취소 요청"""
         try:

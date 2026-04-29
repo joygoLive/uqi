@@ -298,3 +298,147 @@ def test_TC120_usd_to_krw_set():
 def test_TC121_last_review_set():
     assert LAST_FULL_REVIEW   # 비어있지 않음
     assert "-" in LAST_FULL_REVIEW   # ISO 형식
+
+
+# ─────────────────────────────────────────────────────────────
+# format_actual_cost — vendor별 단위 표시
+# ─────────────────────────────────────────────────────────────
+
+from uqi_pricing import format_actual_cost, format_duration
+
+
+def test_TC130_format_braket_usd():
+    cost = estimate_cost("ionq_forte1", 100)
+    assert format_actual_cost("braket", "ionq_forte1", cost) == "$8.30"
+
+def test_TC131_format_azure_krw():
+    cost = estimate_cost("pasqal_fresnel", 100)
+    s = format_actual_cost("azure", "pasqal_fresnel", cost)
+    assert s.startswith("₩")
+    assert "," in s            # 천단위 콤마
+
+def test_TC132_format_iqm_credits():
+    cost = estimate_cost("iqm_emerald", 1024)
+    s = format_actual_cost("iqm", "iqm_emerald", cost)
+    assert "credits" in s
+    assert "22.50" in s
+
+def test_TC133_format_quandela_credits_4digits():
+    """Quandela는 매우 작은 단위라 소수점 4자리"""
+    cost = estimate_cost("qpu:ascella", 1024)
+    s = format_actual_cost("quandela", "qpu:ascella", cost)
+    assert "credits" in s
+    # 0.0010 형식 (1024 × 0.000001 = 0.001024 → 0.0010)
+    assert "0.0010" in s or "0.001" in s
+
+def test_TC134_format_ibm_free():
+    cost = estimate_cost("ibm_fez", 1024)
+    s = format_actual_cost("ibm", "ibm_fez", cost)
+    assert "무료" in s
+
+def test_TC135_format_quantinuum_hqc():
+    cost = estimate_cost("quantinuum_h2_1", 1024)
+    s = format_actual_cost("quantinuum", "quantinuum_h2_1", cost)
+    assert "HQC" in s
+
+def test_TC136_format_unknown_vendor_fallback():
+    cost = estimate_cost("ionq_forte1", 100)
+    # 모르는 vendor도 fallback (estimated_usd 있으면 USD)
+    s = format_actual_cost("unknown_vendor", "ionq_forte1", cost)
+    assert s == "$8.30"
+
+
+# ─────────────────────────────────────────────────────────────
+# format_actual_cost_token — i18n 토큰 (무료/HQC 등)
+# ─────────────────────────────────────────────────────────────
+
+from uqi_pricing import format_actual_cost_token
+
+
+def test_TC137_token_ibm_free_open_plan():
+    cost = estimate_cost("ibm_fez", 1024)
+    assert format_actual_cost_token("ibm", "ibm_fez", cost) == "free_open_plan"
+
+def test_TC138_token_quantinuum_hqc():
+    cost = estimate_cost("quantinuum_h2_1", 1024)
+    assert format_actual_cost_token("quantinuum", "quantinuum_h2_1", cost) == "hqc_separate"
+
+def test_TC139_token_quantinuum_via_azure_hqc():
+    """Azure 경유 Quantinuum도 HQC 토큰 (currency 우선)"""
+    cost = estimate_cost("quantinuum_h2_1sc", 1024)
+    assert format_actual_cost_token("azure", "quantinuum_h2_1sc", cost) == "hqc_separate"
+
+def test_TC139b_token_paid_returns_none():
+    """USD/EUR/credits 등 숫자 가격은 토큰 없음 (display 그대로 사용)"""
+    cost = estimate_cost("ionq_forte1", 100)
+    assert format_actual_cost_token("braket", "ionq_forte1", cost) is None
+    cost2 = estimate_cost("pasqal_fresnel", 100)
+    assert format_actual_cost_token("azure", "pasqal_fresnel", cost2) is None
+
+
+# ─────────────────────────────────────────────────────────────
+# format_duration — 사람 읽기 좋게
+# ─────────────────────────────────────────────────────────────
+
+def test_TC140_format_duration_subsecond():
+    assert format_duration(0.5) == "0.50s"
+
+def test_TC141_format_duration_seconds():
+    assert format_duration(4.32) == "4.32s"
+    assert format_duration(57) == "57.00s"
+
+def test_TC142_format_duration_minute_boundary():
+    assert format_duration(60) == "1m 0s"
+
+def test_TC143_format_duration_minutes_seconds():
+    # 357 = 5*60 + 57
+    assert format_duration(357) == "5m 57s"
+
+def test_TC144_format_duration_hours():
+    # 7890 = 2h 11m 30s → "2h 11m"
+    assert format_duration(7890) == "2h 11m"
+
+def test_TC145_format_duration_none():
+    assert format_duration(None) == "—"
+
+def test_TC146_format_duration_negative():
+    assert format_duration(-5) == "—"
+
+
+# ─────────────────────────────────────────────────────────────
+# get_cost_source — 비용 추정 출처 라벨
+# ─────────────────────────────────────────────────────────────
+
+from uqi_pricing import get_cost_source
+
+
+def test_TC150_source_braket():
+    assert get_cost_source("braket") == "AWS Braket"
+
+def test_TC151_source_azure():
+    assert get_cost_source("azure") == "Azure Quantum"
+
+def test_TC152_source_ibm():
+    s = get_cost_source("ibm")
+    assert "IBM" in s and "Open" in s
+
+def test_TC153_source_iqm():
+    s = get_cost_source("iqm")
+    assert "IQM" in s
+
+def test_TC154_source_quandela():
+    s = get_cost_source("quandela")
+    assert "Quandela" in s
+
+def test_TC155_source_quantinuum():
+    s = get_cost_source("quantinuum")
+    assert "Quantinuum" in s
+    # Nexus 또는 Azure 둘 중 하나 안내
+    assert ("Nexus" in s) or ("Azure" in s)
+
+def test_TC156_source_pasqal():
+    s = get_cost_source("pasqal")
+    assert "Pasqal" in s
+
+def test_TC157_source_unknown():
+    assert get_cost_source("unknown_vendor") == "—"

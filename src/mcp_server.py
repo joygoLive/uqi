@@ -3143,6 +3143,177 @@ async def uqi_billing_summary() -> str:
     return await asyncio.to_thread(_run)
 
 
+# ─────────────────────────────────────────────────────────────
+# Job enrichment — list 응답에 cost + timing 자동 추가
+# ─────────────────────────────────────────────────────────────
+
+def _calc_db_duration_sec(submitted_at: str, updated_at: str) -> float | None:
+    """DB의 ISO 8601 timestamp 차이 → 초 (wall-clock fallback용)."""
+    try:
+        from datetime import datetime as _dt
+        sub = _dt.fromisoformat(submitted_at.replace("Z", "+00:00")) if submitted_at else None
+        upd = _dt.fromisoformat(updated_at.replace("Z", "+00:00"))   if updated_at   else None
+        if sub and upd:
+            return (upd - sub).total_seconds()
+    except Exception:
+        pass
+    return None
+
+
+def _fetch_vendor_timing(vendor: str, job_id: str, extra: dict) -> dict:
+    """vendor별 정확한 timing 조회 (큐 제외 가능 시), 실패/미지원 시 fallback dict."""
+    try:
+        if vendor == "ibm":
+            from uqi_executor_ibm import UQIExecutorIBM
+            return UQIExecutorIBM.fetch_job_timing(job_id, token=IBM_TOKEN)
+        if vendor == "azure":
+            from uqi_executor_azure import UQIExecutorAzure
+            return UQIExecutorAzure.fetch_job_timing(job_id)
+        if vendor == "braket":
+            from uqi_executor_braket import UQIExecutorBraket
+            return UQIExecutorBraket.fetch_job_timing(job_id)
+        # iqm, quandela: vendor API에 timing 정보 미제공 → DB fallback
+    except Exception as e:
+        return {
+            "execution_sec": None, "wall_clock_sec": None,
+            "source": "vendor_api_error", "accuracy": "unknown",
+            "error": str(e),
+        }
+    # iqm/quandela 등 fallback
+    return {
+        "execution_sec":  None,
+        "wall_clock_sec": None,        # 호출자가 DB에서 채움
+        "source":         "db_wall_clock_fallback",
+        "accuracy":       "queue_included",
+        "error":          None,
+    }
+
+
+def _enrich_job_with_cost_timing(job: dict) -> dict:
+    """job dict에 cost + timing 추가. 취소/에러는 비교 의미 없어 제외.
+
+    캐싱: status=done인 job의 timing은 extra에 저장 → 다음 호출 시 재사용.
+    """
+    status = job.get("status", "")
+    vendor = job.get("vendor", "")
+    qpu_name = job.get("qpu_name", "")
+    shots = int(job.get("shots") or 0)
+    extra = job.get("extra") or {}
+
+    # 1. 비용 추정 + QPU 정체성(제조사/모델/청구처) — cancelled/error 제외
+    if status not in ("cancelled", "canceled", "error", "failed"):
+        try:
+            from uqi_pricing import (estimate_cost, format_actual_cost,
+                                     format_actual_cost_token,
+                                     get_cost_source, parse_qpu_identity)
+            cost = estimate_cost(qpu_name, shots)
+
+            # 청구처(billing source) — jobs.db의 vendor 필드(=실 등록 시점 게이트웨이) 우선
+            #   예: vendor=azure 로 등록된 quantinuum_h2_1sc → 청구처 = Azure Quantum
+            #       vendor=braket 로 등록된 ionq_forte1     → 청구처 = AWS Braket
+            # 매핑이 없을 때만 pricing 모델의 vendor로 fallback
+            _src_vendor = vendor
+            if not _src_vendor:
+                from uqi_pricing import get_pricing
+                _pmeta = get_pricing(qpu_name) or {}
+                _src_vendor = _pmeta.get("vendor")
+
+            # QPU 제조사 + 모델명 (청구처와 별개)
+            _qpu_vendor, _qpu_model = parse_qpu_identity(qpu_name)
+
+            job["cost"] = {
+                "estimated":     cost,
+                "display":       format_actual_cost(vendor, qpu_name, cost),
+                "display_token": format_actual_cost_token(vendor, qpu_name, cost),
+                "vendor":        vendor,                 # legacy 호환
+                "source":        get_cost_source(_src_vendor, qpu_name),
+                "source_vendor": _src_vendor,
+            }
+            job["qpu_vendor"] = _qpu_vendor              # 제조사 (Rigetti/IonQ/IBM/...)
+            job["qpu_model"]  = _qpu_model               # 모델명 (Cepheus-1-108Q/Forte-1/Fez/...)
+        except Exception as _ce:
+            job["cost"] = {"error": str(_ce)}
+
+    # 2. 시간 — done은 정확한 vendor timing + 캐시, running/submitted은 진행 중
+    if status == "done":
+        # 캐시 우선 — 단 손상 의심(>24h DB fallback)은 폐기 후 재계산
+        cached = extra.get("timing")
+        if cached and isinstance(cached, dict):
+            _wc = cached.get("wall_clock_sec")
+            _src = cached.get("source")
+            if _wc and _wc > 86400 and _src == "db_wall_clock_fallback":
+                cached = None    # 손상 의심 → 재계산
+        if cached and isinstance(cached, dict):
+            job["timing"] = cached
+        else:
+            timing = _fetch_vendor_timing(vendor, job["job_id"], extra)
+            # vendor API 정확한 wall_clock 받았으면 사용. 못 받았으면 DB fallback.
+            # ⚠️ DB fallback 신뢰 주의: enrichment가 캐시 저장하면서 updated_at 덮어쓰면
+            #    wall_clock 망가짐 → 별도 update_job_extra() 사용해 updated_at 보존.
+            if timing.get("wall_clock_sec") is None:
+                db_dur = _calc_db_duration_sec(
+                    job.get("submitted_at"), job.get("updated_at")
+                )
+                timing["wall_clock_sec"] = db_dur
+                # source 표시 — db fallback인 경우 사용자가 정확도 인지 가능
+                if not timing.get("source"):
+                    timing["source"] = "db_wall_clock_fallback"
+                    timing["accuracy"] = "queue_included"
+            # extra에 캐시 — updated_at 보존 위해 update_job_extra 사용
+            try:
+                extra["timing"] = timing
+                _job_store.update_job_extra(job["job_id"], extra)
+            except Exception:
+                pass
+            job["timing"] = timing
+    elif status in ("submitted", "running"):
+        # 진행 중 — DB submitted_at 부터 현재까지
+        from datetime import datetime as _dt, timezone as _tz
+        try:
+            sub = _dt.fromisoformat(job.get("submitted_at","").replace("Z","+00:00"))
+            now = _dt.now(_tz.utc)
+            elapsed = (now - sub).total_seconds()
+            job["timing"] = {
+                "execution_sec":  None,
+                "wall_clock_sec": elapsed,
+                "source":         "in_progress_elapsed",
+                "accuracy":       "queue_included",
+                "in_progress":    True,
+                "error":          None,
+            }
+        except Exception:
+            job["timing"] = None
+    # cancelled/error는 timing 표시 안 함
+
+    # 3. 표시용 duration (사람 읽기 좋게)
+    timing = job.get("timing") or {}
+    try:
+        from uqi_pricing import format_duration
+        # 비정상적으로 큰 wall_clock (24시간 이상)은 손상된 데이터 가능성 → 표시 X
+        # (DB fallback에서만 — vendor API 정확값은 그대로 신뢰)
+        SUSPICIOUS_HOURS = 24 * 3600    # 24시간
+        is_db_fallback = (timing.get("source") == "db_wall_clock_fallback")
+        wc = timing.get("wall_clock_sec")
+        if wc is not None and is_db_fallback and wc > SUSPICIOUS_HOURS:
+            # 손상 가능성 — 표시 안 함 + 메타 표시 (webapp이 인지 가능)
+            job["duration_display"] = None
+            job["duration_kind"] = "suspicious"
+            timing["suspicious"] = True
+            timing["accuracy"] = "unreliable"
+        elif timing.get("execution_sec") is not None:
+            job["duration_display"] = format_duration(timing["execution_sec"])
+            job["duration_kind"] = "execution"   # 큐 제외 정확
+        elif wc is not None:
+            job["duration_display"] = format_duration(wc)
+            job["duration_kind"] = "wall_clock"  # 큐 포함
+        else:
+            job["duration_display"] = None
+    except Exception:
+        job["duration_display"] = None
+
+    return job
+
+
 @mcp.tool()
 async def uqi_job_list(
     limit:          int  = 50,
@@ -3229,6 +3400,11 @@ async def uqi_job_list(
                 d = dict(row)
                 d["counts"] = _json.loads(d["counts"]) if d.get("counts") else None
                 d["extra"]  = _json.loads(d["extra"])  if d.get("extra")  else {}
+                # cost + timing enrichment (cancelled/error는 자동 skip)
+                try:
+                    d = _enrich_job_with_cost_timing(d)
+                except Exception as _ee:
+                    d["enrichment_error"] = str(_ee)
                 result.append(d)
 
             return _json.dumps({

@@ -99,6 +99,20 @@ def update_job(
         conn.commit()
 
 
+def update_job_extra(job_id: str, extra: dict) -> None:
+    """extra 필드만 update. status/counts/updated_at 변경하지 않음.
+
+    캐시(예: vendor API timing 결과) 저장용 — updated_at 갱신 시 wall-clock
+    duration 계산이 망가지므로 별도 메서드로 분리.
+    """
+    with _connect() as conn:
+        conn.execute(
+            "UPDATE jobs SET extra=? WHERE job_id=?",
+            (json.dumps(extra or {}, ensure_ascii=False), job_id),
+        )
+        conn.commit()
+
+
 def get_job(job_id: str) -> dict | None:
     """job_id로 단일 job 조회. 없으면 None"""
     with _connect() as conn:

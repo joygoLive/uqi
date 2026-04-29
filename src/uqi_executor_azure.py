@@ -294,6 +294,77 @@ class UQIExecutorAzure:
     # ─────────────────────────────────────────
 
     @staticmethod
+    def fetch_job_timing(job_id: str, token: str = None) -> dict:
+        """
+        Azure Quantum job의 정확한 실행 시간 조회.
+        beginExecutionTime ~ endExecutionTime = 실 실행 시간 (큐 제외).
+        creationTime ~ endExecutionTime = wall-clock (큐 + 실행).
+
+        Returns:
+            {
+              "execution_sec":    float | None,    # 실 실행 시간 (정확)
+              "wall_clock_sec":   float | None,    # 전체 (큐 + 실행)
+              "source":           "azure_begin_end_execution",
+              "accuracy":         "execution_only",
+              "error":            str | None,
+            }
+        """
+        result = {
+            "execution_sec":  None,
+            "wall_clock_sec": None,
+            "source":         "azure_begin_end_execution",
+            "accuracy":       "execution_only",
+            "error":          None,
+        }
+        try:
+            from azure.quantum import Workspace
+            from azure.identity import ClientSecretCredential, DefaultAzureCredential
+
+            tenant = os.getenv("AZURE_TENANT_ID")
+            client = os.getenv("AZURE_CLIENT_ID")
+            secret = os.getenv("AZURE_CLIENT_SECRET")
+            if tenant and client and secret:
+                credential = ClientSecretCredential(
+                    tenant_id=tenant, client_id=client, client_secret=secret
+                )
+            else:
+                credential = DefaultAzureCredential()
+
+            workspace = Workspace(
+                subscription_id=os.getenv("AZURE_QUANTUM_SUBSCRIPTION_ID"),
+                resource_group=os.getenv("AZURE_QUANTUM_RESOURCE_GROUP"),
+                name=os.getenv("AZURE_QUANTUM_WORKSPACE"),
+                location=os.getenv("AZURE_QUANTUM_LOCATION", "westus"),
+                credential=credential,
+            )
+            job = workspace.get_job(job_id)
+            details = job.details
+
+            # 다양한 attribute 이름 시도 (SDK 버전 차이 대응)
+            def _get_dt(*keys):
+                for k in keys:
+                    v = getattr(details, k, None)
+                    if v is not None:
+                        return v
+                return None
+
+            begin = _get_dt("begin_execution_time", "beginExecutionTime")
+            end_t = _get_dt("end_execution_time",   "endExecutionTime")
+            create = _get_dt("creation_time",       "creationTime")
+
+            if begin and end_t:
+                result["execution_sec"] = (end_t - begin).total_seconds()
+            if create and end_t:
+                result["wall_clock_sec"] = (end_t - create).total_seconds()
+            elif create and begin:
+                # 완료 전이면 begin까지의 큐 시간만이라도
+                pass
+
+        except Exception as e:
+            result["error"] = str(e)
+        return result
+
+    @staticmethod
     def cancel_job(job_id: str, token: str = None) -> dict:
         """Azure Quantum job 취소."""
         try:

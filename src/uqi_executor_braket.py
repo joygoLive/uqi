@@ -292,6 +292,54 @@ class UQIExecutorBraket:
     # ─────────────────────────────────────────
 
     @staticmethod
+    def fetch_job_timing(job_id: str, token: str = None) -> dict:
+        """
+        Braket task의 timing 조회.
+        Braket metadata는 createdAt/endedAt만 제공 → wall-clock (큐 + 실행).
+        실 실행 시간만 분리하려면 별도 CloudWatch metric 필요 (현재는 wall-clock만).
+
+        Returns:
+            {
+              "execution_sec":    None,                    # Braket는 분리 불가
+              "wall_clock_sec":   float | None,           # createdAt~endedAt
+              "source":           "braket_metadata_wall_clock",
+              "accuracy":         "queue_included",        # ⚠️ 큐 포함
+              "error":            str | None,
+            }
+        """
+        result = {
+            "execution_sec":  None,           # Braket 한계 — 분리 불가
+            "wall_clock_sec": None,
+            "source":         "braket_metadata_wall_clock",
+            "accuracy":       "queue_included",
+            "error":          None,
+        }
+        try:
+            import boto3
+            from braket.aws import AwsSession, AwsQuantumTask
+
+            parts = job_id.split(":")
+            region = parts[3] if len(parts) >= 4 and parts[3] else "us-east-1"
+            boto_session = boto3.Session(
+                aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                region_name=region,
+            )
+            aws_session = AwsSession(boto_session=boto_session)
+            task = AwsQuantumTask(arn=job_id, aws_session=aws_session)
+
+            md = task.metadata()
+            created = md.get("createdAt")
+            ended   = md.get("endedAt")
+            if created and ended:
+                # datetime 타입 — boto3는 datetime 반환
+                if hasattr(created, "timestamp") and hasattr(ended, "timestamp"):
+                    result["wall_clock_sec"] = ended.timestamp() - created.timestamp()
+        except Exception as e:
+            result["error"] = str(e)
+        return result
+
+    @staticmethod
     def cancel_job(job_id: str, token: str = None) -> dict:
         """Braket task 취소 요청. QUEUED 상태에서만 성공 가능."""
         try:

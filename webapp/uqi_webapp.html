@@ -3727,6 +3727,17 @@ async function _onFileSelected() {
   if (!f) return;
   // 이전 분석 결과 초기화
   _resetAllStepResults();
+  // framework 감지 중 사용자가 잘못된 QPU 선택 방지 — 셀렉터 즉시 잠금
+  // (backend 응답 도착 전 짧은 시간 동안 모든 QPU 노출되는 문제 해결)
+  const _qpuSelectorIds = ['global-qpu', 'qpu-qpu', 'rag-qpu'];
+  for (const id of _qpuSelectorIds) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.dataset.prevHtml = el.innerHTML;   // 복구용 백업
+      el.innerHTML = `<option value="">Detecting framework…</option>`;
+      el.disabled = true;
+    }
+  }
   try {
     const res = await callTool('uqi_detect_framework', { algorithm_file: f });
     const d = JSON.parse(getResultText(res));
@@ -3738,7 +3749,22 @@ async function _onFileSelected() {
     _updateAnalogStepStates();
     _updateNoiseSdkSelector(d.framework);
     _updateOptimizeOptions(d.framework);
-  } catch(e) {}
+  } catch(e) {
+    // 실패 시 셀렉터 원복
+    for (const id of _qpuSelectorIds) {
+      const el = document.getElementById(id);
+      if (el && el.dataset.prevHtml) el.innerHTML = el.dataset.prevHtml;
+    }
+  } finally {
+    // 셀렉터 다시 활성화 (성공 시 _filterQPUSelectors 가 이미 옵션 교체했음)
+    for (const id of _qpuSelectorIds) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.disabled = false;
+        delete el.dataset.prevHtml;
+      }
+    }
+  }
 }
 
 // Noise simulation 엔진 셀렉터 — framework-specific 옵션으로 교체

@@ -3729,6 +3729,8 @@ async function _onFileSelected() {
   _resetAllStepResults();
   // framework 감지 중 사용자가 잘못된 QPU 선택 방지 — 셀렉터 즉시 잠금
   // (backend 응답 도착 전 짧은 시간 동안 모든 QPU 노출되는 문제 해결)
+  // _filterQPUSelectors 가 _allQPUs 캐시를 안 쓰고 compatQPUs 직접 사용하므로
+  // placeholder 적용해도 옵션 복원에 문제 없음.
   const _qpuSelectorIds = ['global-qpu', 'qpu-qpu', 'rag-qpu'];
   for (const id of _qpuSelectorIds) {
     const el = document.getElementById(id);
@@ -3858,18 +3860,14 @@ function _resetAllStepResults() {
 }
 
 function _filterQPUSelectors(compatQPUs, defaultQPU) {
-  // global-qpu 필터링 (option 펼친 평면. _allQPUs 는 raw qpu_id 만 보존)
+  // backend 가 framework 호환 qpu list 를 정확히 반환하므로 compatQPUs 그대로 사용
+  // (이전: _allQPUs 캐시 의존 — placeholder 잠금 시점 race condition 발생).
   const globalSel = document.getElementById('global-qpu');
   if (globalSel) {
-    if (!_allQPUs) {
-      // 평면 옵션 + optgroup 모두 처리: 모든 <option> 의 value 추출
-      _allQPUs = [...globalSel.querySelectorAll('option')].map(o => o.value);
-    }
-    const filtered = _allQPUs.filter(q => compatQPUs.includes(q));
-    globalSel.innerHTML = _qpuOptGroups(filtered);
-    if (filtered.includes(defaultQPU)) globalSel.value = defaultQPU;
+    globalSel.innerHTML = _qpuOptGroups(compatQPUs);
+    if (compatQPUs.includes(defaultQPU)) globalSel.value = defaultQPU;
   }
-  // qpu-qpu (submit용) 필터링
+  // qpu-qpu (submit용) 필터링 — Auto + 호환 qpu
   const qpuSel = document.getElementById('qpu-qpu');
   if (qpuSel) {
     const cur = qpuSel.value;

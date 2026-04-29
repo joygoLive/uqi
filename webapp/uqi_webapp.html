@@ -3539,6 +3539,11 @@ function setFileSource(mode, btn) {
   btn.classList.add('active');
   document.getElementById('upload-area').style.display = mode==='upload' ? '' : 'none';
   document.getElementById('dgx-area').style.display   = mode==='dgx'    ? '' : 'none';
+  // DGX 활성화 시 현재 선택된 파일에 대해 즉시 framework detect (셀렉터 자동 필터)
+  if (mode === 'dgx') {
+    const sel = document.getElementById('dgx-select');
+    if (sel && sel.value) _onFileSelected();
+  }
 }
 
 function onDragEnter(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('global-drop').classList.add('drag-over'); }

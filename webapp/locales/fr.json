@@ -294,5 +294,7 @@
   "pipeline.job_manager.billing.title": "💰 Facturation (MEC)",
   "pipeline.job_manager.billing.permission_denied": "⚠ autorisation requise",
   "pipeline.job_manager.billing.loading": "Chargement...",
-  "pipeline.job_manager.billing.click_to_load": "Cliquez sur Actualiser"
+  "pipeline.job_manager.billing.click_to_load": "Cliquez sur Actualiser",
+  "pipeline.job_manager.ahs.atom_density_title": "⚛ Densité Rydberg des atomes",
+  "pipeline.job_manager.ahs.atom_density_legend": "{n} atomes · gris=fondamental, rouge=Rydberg"
 }

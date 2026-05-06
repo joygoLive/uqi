@@ -115,3 +115,11 @@ def mcp_file_not_found(path: str) -> str:
 
 def mcp_dir_not_found(path: str) -> str:
     return f"디렉토리 없음: {path}"
+
+
+# ─── MCP Server: save_job DB write 실패 경고 ─────────────────
+# 클라우드 제출 성공 후 로컬 DB write 실패 시 사용자에게 표시.
+# 해당 job 은 클라우드에 떠 있으므로 사용자가 직접 추적 필요.
+def mcp_save_job_failed(job_id: str, err: str) -> str:
+    return (f"⚠️ 클라우드 제출 성공, 로컬 DB 기록 실패: {err}. "
+            f"job_id={job_id} 직접 보관 필요.")

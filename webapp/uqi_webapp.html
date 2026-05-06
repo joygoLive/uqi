@@ -5185,9 +5185,14 @@ function renderJobHistory(jobs, filter = {}, total = null, userSel = null) {
                       fill="var(--text3)">${(p*100).toFixed(0)}%</text>
               </g>`;
             }).join('');
+            const _ahsTitle = t('pipeline.job_manager.ahs.atom_density_title')
+                              || '⚛ Atom Rydberg Density';
+            const _legendTpl = t('pipeline.job_manager.ahs.atom_density_legend')
+                               || '{n} atoms · gray=ground, red=Rydberg';
+            const _ahsLegend = _legendTpl.replace('{n}', _natoms);
             _ahsViz = `<div style="margin-bottom:10px;padding:10px 8px;background:rgba(0,0,0,0.18);border-radius:4px;border-left:2px solid #c0392b">
               <div style="font-size:10px;color:var(--text2);margin-bottom:6px;font-weight:600;letter-spacing:0.5px">
-                ⚛ Atom Rydberg Density <span style="color:var(--text3);font-weight:400;font-size:9px;margin-left:8px">${_natoms} atoms · 회색=ground, 빨강=Rydberg</span>
+                ${escHtml(_ahsTitle)} <span style="color:var(--text3);font-weight:400;font-size:9px;margin-left:8px">${escHtml(_ahsLegend)}</span>
               </div>
               <svg width="${_w}" height="${_h}" style="display:block">${_atomSvg}</svg>
             </div>`;

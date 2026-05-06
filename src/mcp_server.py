@@ -40,6 +40,7 @@ from uqi_messages import (
     mcp_no_calibration,
     mcp_file_not_found,
     mcp_dir_not_found,
+    mcp_save_job_failed,
     perceval_run_fail,
     STATUS_AWAITING_CONFIRMATION,
     STATUS_COMPLETED,
@@ -624,8 +625,7 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
                    "backend": qpu_name, "ahs": True},
         )
     except Exception as _se:
-        save_warning = (f"⚠️ 클라우드 제출은 성공했으나 로컬 DB 기록 실패: {_se}. "
-                        f"job_id={sub['job_id']} 를 직접 기록해 두세요.")
+        save_warning = mcp_save_job_failed(sub["job_id"], str(_se))
         print(f"  [AHS submit] save_job 실패: {_se}", file=sys.stderr)
 
     response = {
@@ -2635,7 +2635,8 @@ async def uqi_qpu_submit(
                     _pexec._platform_qpu = qpu_name if not _use_sim else "qpu:belenos"
 
                     for name in _pcircuit_names:
-                        _saved_jid = {"id": None}  # on_submit 콜백과 공유
+                        # _saved_jid["warning"] : save_job 실패 메시지 — 사용자 응답에 노출
+                        _saved_jid = {"id": None, "warning": None}
 
                         def _on_submit(jid, platform, _name=name):
                             # Quandela 에 job 생성된 직후 호출 — 즉시 로컬 DB에 기록
@@ -2646,6 +2647,8 @@ async def uqi_qpu_submit(
                                     extra={"backend": qpu_name, "platform": platform},
                                 )
                             except Exception as _se:
+                                # 다른 분기 (IBM/IQM/Braket/Azure) 와 일관된 노출
+                                _saved_jid["warning"] = mcp_save_job_failed(jid, str(_se))
                                 print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
                                       file=sys.stderr)
 
@@ -2666,10 +2669,15 @@ async def uqi_qpu_submit(
                                     or _juuid.uuid4().hex)
                             if not _saved_jid["id"]:
                                 # 콜백 미실행 (제출 자체 실패 등) — 지금이라도 등록
-                                _job_store.save_job(
-                                    job_id=_jid, qpu_name=qpu_name, circuit_name=name, shots=shots,
-                                    extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
-                                )
+                                try:
+                                    _job_store.save_job(
+                                        job_id=_jid, qpu_name=qpu_name, circuit_name=name, shots=shots,
+                                        extra={"backend": qpu_name, "exec_time": round(exec_time, 2)},
+                                    )
+                                except Exception as _se:
+                                    _saved_jid["warning"] = mcp_save_job_failed(_jid, str(_se))
+                                    print(f"  [BgSubmit] fallback save_job 실패({_jid}): {_se}",
+                                          file=sys.stderr)
 
                             if not result_dict["ok"]:
                                 # 결과 실패 — error 상태로 마킹 후 예외 전파
@@ -2693,6 +2701,8 @@ async def uqi_qpu_submit(
                                 "backend": qpu_name, "exec_time": round(exec_time, 2),
                                 "job_id": _jid,
                             }
+                            if _saved_jid["warning"]:
+                                prog["results"][name]["warning"] = _saved_jid["warning"]
                         except Exception as e:
                             # 콜백으로 이미 저장된 경우 error 상태 마킹 시도
                             if _saved_jid["id"]:
@@ -3185,14 +3195,14 @@ async def uqi_qpu_submit(
                         )
                         return None
                     except Exception as _se:
-                        msg = (f"⚠️ 클라우드 제출 성공, 로컬 DB 기록 실패: {_se}. "
-                               f"job_id={jid} 직접 보관 필요.")
+                        msg = mcp_save_job_failed(jid, str(_se))
                         print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
                               file=sys.stderr)
                         return msg
 
                 for name in circuit_names_to_submit:
-                    _saved_jid = {"id": None}  # Perceval 분기 콜백과 outer except 공유
+                    # Perceval 분기 콜백과 outer except 공유 + save_job 경고 보관
+                    _saved_jid = {"id": None, "warning": None}
                     try:
                         if "ibm" in selected_qpu:
                             sub = _ibm_exec._submit_single(
@@ -3293,6 +3303,7 @@ async def uqi_qpu_submit(
                                         extra={"backend": selected_qpu, "platform": platform},
                                     )
                                 except Exception as _se:
+                                    _saved_jid["warning"] = mcp_save_job_failed(jid, str(_se))
                                     print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
                                           file=sys.stderr)
 
@@ -3309,10 +3320,15 @@ async def uqi_qpu_submit(
                                     or result_dict.get("cloud_job_id")
                                     or _juuid.uuid4().hex)
                             if not _saved_jid["id"]:
-                                _job_store.save_job(
-                                    job_id=_jid, qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                                    extra={"backend": selected_qpu, "exec_time": round(exec_time, 2)},
-                                )
+                                try:
+                                    _job_store.save_job(
+                                        job_id=_jid, qpu_name=selected_qpu, circuit_name=name, shots=shots,
+                                        extra={"backend": selected_qpu, "exec_time": round(exec_time, 2)},
+                                    )
+                                except Exception as _se:
+                                    _saved_jid["warning"] = mcp_save_job_failed(_jid, str(_se))
+                                    print(f"  [BgSubmit] fallback save_job 실패({_jid}): {_se}",
+                                          file=sys.stderr)
 
                             if not result_dict["ok"]:
                                 _job_store.update_job(
@@ -3333,6 +3349,8 @@ async def uqi_qpu_submit(
                                 "backend": selected_qpu, "exec_time": round(exec_time, 2),
                                 "job_id": _jid,
                             }
+                            if _saved_jid.get("warning"):
+                                prog["results"][name]["warning"] = _saved_jid["warning"]
                         else:
                             raise ValueError(
                                 f"{selected_qpu} 은(는) 현재 직접 submit 미지원 (IBM/IQM/Braket/Azure만 지원)."

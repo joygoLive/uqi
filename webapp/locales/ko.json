@@ -294,5 +294,7 @@
   "pipeline.job_manager.billing.title": "💰 청구 (당월)",
   "pipeline.job_manager.billing.permission_denied": "⚠ 권한 부족",
   "pipeline.job_manager.billing.loading": "로딩 중...",
-  "pipeline.job_manager.billing.click_to_load": "새로고침 클릭"
+  "pipeline.job_manager.billing.click_to_load": "새로고침 클릭",
+  "pipeline.job_manager.ahs.atom_density_title": "⚛ Atom Rydberg 밀도",
+  "pipeline.job_manager.ahs.atom_density_legend": "{n}개 atom · 회색=ground, 빨강=Rydberg"
 }

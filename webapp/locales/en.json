@@ -294,5 +294,7 @@
   "pipeline.job_manager.billing.title": "💰 Billing (MTD)",
   "pipeline.job_manager.billing.permission_denied": "⚠ permission required",
   "pipeline.job_manager.billing.loading": "Loading...",
-  "pipeline.job_manager.billing.click_to_load": "Click Refresh to load"
+  "pipeline.job_manager.billing.click_to_load": "Click Refresh to load",
+  "pipeline.job_manager.ahs.atom_density_title": "⚛ Atom Rydberg Density",
+  "pipeline.job_manager.ahs.atom_density_legend": "{n} atoms · gray=ground, red=Rydberg"
 }

@@ -611,6 +611,9 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         return _json.dumps({"error": sub.get("error", "submit 실패")})
 
     # save_job — catalog 자동 매핑 (qpu_vendor / qpu_model / runtime / qpu_modality)
+    # 실패 시 사용자 응답에 경고 포함 — 클라우드에는 이미 job 이 떠있는데
+    # 로컬 DB 에 없으면 추적 불가 → 사용자에게 명시적 알림 필수.
+    save_warning = None
     try:
         _job_store.save_job(
             job_id=sub["job_id"],
@@ -621,9 +624,11 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
                    "backend": qpu_name, "ahs": True},
         )
     except Exception as _se:
+        save_warning = (f"⚠️ 클라우드 제출은 성공했으나 로컬 DB 기록 실패: {_se}. "
+                        f"job_id={sub['job_id']} 를 직접 기록해 두세요.")
         print(f"  [AHS submit] save_job 실패: {_se}", file=sys.stderr)
 
-    return _json.dumps({
+    response = {
         "ok":           True,
         "confirmed":    True,
         "selected_qpu": qpu_name,
@@ -633,7 +638,10 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         "via":          sub.get("via"),
         "results":      {name: {"ok": True, "job_id": sub["job_id"],
                                 "via": sub.get("via")}},
-    }, ensure_ascii=False)
+    }
+    if save_warning:
+        response["warnings"] = [save_warning]
+    return _json.dumps(response, ensure_ascii=False)
 
 
 # 회로별 순차 제출 진행상황 추적 (submission_id → progress dict)
@@ -3166,6 +3174,23 @@ async def uqi_qpu_submit(
                     from uqi_executor_azure import UQIExecutorAzure
                     _azure_exec = UQIExecutorAzure(converter=converter, shots=shots)
 
+                # save_job 헬퍼 — DB write 실패 시 cloud job 은 떠있는데
+                # 로컬에 없으니 사용자 응답에 경고 표시 (raise 안 함).
+                # 루프 외부 정의 — 회로 N개당 N번 재정의 비용 회피.
+                def _save_with_warning(jid, _name, _selected_qpu, _shots, _extra):
+                    try:
+                        _job_store.save_job(
+                            job_id=jid, qpu_name=_selected_qpu,
+                            circuit_name=_name, shots=_shots, extra=_extra,
+                        )
+                        return None
+                    except Exception as _se:
+                        msg = (f"⚠️ 클라우드 제출 성공, 로컬 DB 기록 실패: {_se}. "
+                               f"job_id={jid} 직접 보관 필요.")
+                        print(f"  [BgSubmit] save_job 실패({jid}): {_se}",
+                              file=sys.stderr)
+                        return msg
+
                 for name in circuit_names_to_submit:
                     _saved_jid = {"id": None}  # Perceval 분기 콜백과 outer except 공유
                     try:
@@ -3177,19 +3202,20 @@ async def uqi_qpu_submit(
                             )
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
-                            _job_store.save_job(
-                                job_id=sub["job_id"],
-                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            _w = _save_with_warning(
+                                sub["job_id"], name, selected_qpu, shots,
+                                {"via": sub.get("via"), "backend": selected_qpu},
                             )
                             prog["results"][name] = {
                                 "ok": True, "job_id": sub["job_id"],
                                 "backend": selected_qpu, "via": sub.get("via"),
                             }
+                            if _w:
+                                prog["results"][name]["warning"] = _w
 
                         elif "iqm" in selected_qpu:
                             device_name = selected_qpu.split('_')[-1]
-                            backend_url = f"https://resonance.meetiqm.com/computers/{device_name}"
+                            backend_url = f"https://resonance.iqm.tech/computers/{device_name}"
                             sub = _iqm_exec._submit_single(
                                 name=name,
                                 qasm=converter.qasm_results.get(name),
@@ -3197,15 +3223,16 @@ async def uqi_qpu_submit(
                             )
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
-                            _job_store.save_job(
-                                job_id=sub["job_id"],
-                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                                extra={"backend_url": backend_url},
+                            _w = _save_with_warning(
+                                sub["job_id"], name, selected_qpu, shots,
+                                {"backend_url": backend_url},
                             )
                             prog["results"][name] = {
                                 "ok": True, "job_id": sub["job_id"],
                                 "backend": backend_url,
                             }
+                            if _w:
+                                prog["results"][name]["warning"] = _w
 
                         elif _braket_exec is not None:
                             sub = _braket_exec._submit_single(
@@ -3215,15 +3242,16 @@ async def uqi_qpu_submit(
                             )
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
-                            _job_store.save_job(
-                                job_id=sub["job_id"],
-                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            _w = _save_with_warning(
+                                sub["job_id"], name, selected_qpu, shots,
+                                {"via": sub.get("via"), "backend": selected_qpu},
                             )
                             prog["results"][name] = {
                                 "ok": True, "job_id": sub["job_id"],
                                 "backend": selected_qpu, "via": sub.get("via"),
                             }
+                            if _w:
+                                prog["results"][name]["warning"] = _w
 
                         elif _azure_exec is not None:
                             sub = _azure_exec._submit_single(
@@ -3233,15 +3261,16 @@ async def uqi_qpu_submit(
                             )
                             if not sub["ok"]:
                                 raise Exception(sub["error"])
-                            _job_store.save_job(
-                                job_id=sub["job_id"],
-                                qpu_name=selected_qpu, circuit_name=name, shots=shots,
-                                extra={"via": sub.get("via"), "backend": selected_qpu},
+                            _w = _save_with_warning(
+                                sub["job_id"], name, selected_qpu, shots,
+                                {"via": sub.get("via"), "backend": selected_qpu},
                             )
                             prog["results"][name] = {
                                 "ok": True, "job_id": sub["job_id"],
                                 "backend": selected_qpu, "via": sub.get("via"),
                             }
+                            if _w:
+                                prog["results"][name]["warning"] = _w
 
                         elif selected_qpu.startswith("sim:") or selected_qpu.startswith("qpu:"):
                             from uqi_executor_perceval import UQIExecutorPerceval

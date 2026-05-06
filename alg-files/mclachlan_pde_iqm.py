@@ -31,7 +31,7 @@ sys.stdout = tee
 # ============================ 1. 환경 설정 ============================
 load_dotenv()
 IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
-IQM_URL = "https://resonance.meetiqm.com/"
+IQM_URL = "https://resonance.iqm.tech/"
 
 if not IQM_TOKEN:
     raise ValueError("IQM_QUANTUM_TOKEN not found in .env file")

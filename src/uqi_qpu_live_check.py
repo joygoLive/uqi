@@ -98,7 +98,7 @@ def _check_iqm(qpu_name: str) -> dict:
         raise RuntimeError("IQM_QUANTUM_TOKEN 없음")
     # iqm_garnet → garnet
     device = qpu_name.split("_", 1)[1] if "_" in qpu_name else qpu_name
-    client = IQMClient("https://resonance.meetiqm.com",
+    client = IQMClient("https://resonance.iqm.tech",
                        quantum_computer=device, token=token)
     health = client.get_health()
     healthy = bool(health.get("healthy", False))

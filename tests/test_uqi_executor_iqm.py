@@ -190,7 +190,7 @@ class TestRunSingle:
 
     def test_TC034_qpu_backend_url(self):
         executor = _make_executor()
-        url = "https://resonance.meetiqm.com/computers/garnet"
+        url = "https://resonance.iqm.tech/computers/garnet"
         mock_iqm_circuit = MagicMock()
         mock_iqm_circuit.instructions = [MagicMock(name="measure")]
 
@@ -292,7 +292,7 @@ class TestGetCzLoci:
         mock_client.get_dynamic_quantum_architecture.return_value = mock_arch
 
         with patch("iqm.iqm_client.IQMClient", return_value=mock_client):
-            result = executor._get_cz_loci("https://resonance.meetiqm.com/computers/garnet")
+            result = executor._get_cz_loci("https://resonance.iqm.tech/computers/garnet")
             assert ("QB1", "QB2") in result
             assert hasattr(executor, "_cz_loci_cache")
 
@@ -310,7 +310,7 @@ class TestGetCzLoci:
         mock_client.get_dynamic_quantum_architecture.return_value = mock_arch
 
         with patch("iqm.iqm_client.IQMClient", return_value=mock_client):
-            executor._get_cz_loci("https://resonance.meetiqm.com/computers/garnet")
+            executor._get_cz_loci("https://resonance.iqm.tech/computers/garnet")
             assert executor._qubit_index_map["QB1"] == 0
             assert executor._qubit_index_map["QB2"] == 1
             assert executor._qubit_index_map["QB3"] == 2
@@ -346,7 +346,7 @@ class TestRunReal:
             raise Exception("stop here")
 
         with patch("iqm.iqm_client.IQMClient", side_effect=mock_client_init):
-            executor._run_real(MagicMock(), "https://resonance.meetiqm.com/computers/garnet")
+            executor._run_real(MagicMock(), "https://resonance.iqm.tech/computers/garnet")
             assert captured.get("quantum_computer") == "garnet"
 
     def test_TC054_job_result_none_returns_none(self):

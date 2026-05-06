@@ -478,7 +478,7 @@ class UQICalibration:
 
         try:
             device_name = qpu_name.split('_')[-1]
-            base_url    = "https://resonance.meetiqm.com"
+            base_url    = "https://resonance.iqm.tech"
             client      = IQMClient(base_url,
                                     quantum_computer=device_name,
                                     token=token)
@@ -1088,7 +1088,7 @@ class UQICalibration:
                     from iqm.iqm_client import IQMClient
                     from datetime import datetime, timezone, timedelta
                     client = IQMClient(
-                        "https://resonance.meetiqm.com",
+                        "https://resonance.iqm.tech",
                         quantum_computer=device_name,
                         token=token
                     )

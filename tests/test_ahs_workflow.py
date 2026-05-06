@@ -271,6 +271,49 @@ def test_TC541_validate_ahs_pulser_pass():
         _clean(path)
 
 
+# ─────────────────────────────────────────────────────────
+# _qpu_submit_ahs (confirmed=True) save_job 실패 → 응답에 warnings
+# ─────────────────────────────────────────────────────────
+
+def test_TC550_qpu_submit_ahs_save_job_failure_warns(monkeypatch):
+    """클라우드 제출 성공했는데 save_job 이 실패하면 warnings 키에 안내 표시.
+
+    중요: _qpu_submit_ahs() 내부에서 `from uqi_executor_braket import
+    UQIExecutorBraket` 하므로, 실 클라우드 호출이 발생하지 않도록
+    원본 모듈의 클래스 자체를 fake 로 교체해야 함.
+    """
+    import json as _json
+    import mcp_server as _ms
+    import uqi_executor_braket as _bm
+
+    path = _write(_BRAKET_AHS_SAMPLE)
+    try:
+        # 실 Braket 호출 차단 — 모듈에 fake 클래스 주입
+        class _FakeExec:
+            def __init__(self, *a, **k): pass
+            def _submit_single_ahs(self, name, algorithm_file,
+                                   backend_name="quera_aquila"):
+                return {"ok": True, "job_id": "fake-cloud-jid",
+                        "via": "Braket-AHS"}
+        monkeypatch.setattr(_bm, "UQIExecutorBraket", _FakeExec)
+
+        # save_job 강제 실패
+        def _boom(*a, **k):
+            raise RuntimeError("disk full")
+        monkeypatch.setattr(_ms._job_store, "save_job", _boom)
+
+        out = _json.loads(
+            _ms._qpu_submit_ahs(path, "quera_aquila", shots=10, confirmed=True)
+        )
+        assert out.get("ok") is True
+        assert out.get("job_id") == "fake-cloud-jid"
+        # 새로 추가된 경고 — 사용자에게 명시적 알림
+        assert "warnings" in out, "save_job 실패는 사용자에게 노출돼야 함"
+        assert any("로컬 DB 기록 실패" in w for w in out["warnings"])
+    finally:
+        _clean(path)
+
+
 def test_TC542_validate_ahs_too_many_atoms_fails():
     """device max_atoms 초과 — atom_count check fail"""
     import json as _json

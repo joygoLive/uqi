@@ -57,7 +57,7 @@ class UQIExecutorIQM:
     def run_all(
         self,
         use_simulator: bool = True,
-        backend_url: str = "https://resonance.meetiqm.com/computers/garnet",
+        backend_url: str = "https://resonance.iqm.tech/computers/garnet",
         token: str = None,
     ) -> dict:
         self._token = token
@@ -346,11 +346,11 @@ class UQIExecutorIQM:
 
             device_name = backend_url.rstrip("/").split("/")[-1]
             client = IQMClient(
-                "https://resonance.meetiqm.com",
+                "https://resonance.iqm.tech",
                 quantum_computer=device_name,
                 token=token,
             )
-            print(f"    ✓ IQM QPU 연결: resonance.meetiqm.com/{device_name}")
+            print(f"    ✓ IQM QPU 연결: resonance.iqm.tech/{device_name}")
 
             job = client.submit_circuits(
                 circuits=[iqm_circuit],
@@ -388,7 +388,7 @@ class UQIExecutorIQM:
             device_name = backend_url.rstrip("/").split("/")[-1]
 
             client = IQMClient(
-                "https://resonance.meetiqm.com",
+                "https://resonance.iqm.tech",
                 quantum_computer=device_name,
                 token=token,
             )
@@ -459,7 +459,7 @@ class UQIExecutorIQM:
 
             device_name = backend_url.rstrip("/").split("/")[-1]
             provider = IQMProvider(
-                "https://resonance.meetiqm.com",
+                "https://resonance.iqm.tech",
                 quantum_computer=device_name,
                 token=token,
             )
@@ -511,7 +511,7 @@ class UQIExecutorIQM:
 
             device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
             client = IQMClient(
-                "https://resonance.meetiqm.com",
+                "https://resonance.iqm.tech",
                 quantum_computer=device_name,
                 token=token,
             )
@@ -574,7 +574,7 @@ class UQIExecutorIQM:
 
             device_name = (backend_url or "").rstrip("/").split("/")[-1] or "garnet"
             client = IQMClient(
-                "https://resonance.meetiqm.com",
+                "https://resonance.iqm.tech",
                 quantum_computer=device_name,
                 token=token,
             )

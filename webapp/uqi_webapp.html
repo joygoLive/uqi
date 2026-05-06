@@ -5141,12 +5141,66 @@ function renderJobHistory(jobs, filter = {}, total = null, userSel = null) {
       const _comparisonHtml = (_costPart || _durPart)
         ? `<div style="margin-bottom:8px;padding:8px 10px;background:rgba(0,0,0,0.25);border-radius:4px;display:flex;gap:18px;font-size:11px;flex-wrap:wrap">${_costPart}${_durPart}</div>`
         : '';
+      // ── AHS (analog / neutral-atom) 전용: atom array Rydberg density 시각화 ──
+      // bit string key 의 각 문자 = atom index 의 측정 결과 (g=0, r=1).
+      // <n_i> = 그 atom 이 r 로 측정된 shot 의 비율
+      const _isAhs = (j.qpu_modality === 'neutral-atom');
+      let _ahsViz = '';
+      if (_isAhs && Object.keys(counts).length > 0) {
+        // bit string 길이 (atom 수) — 첫 key 기준
+        const _firstKey = Object.keys(counts)[0] || '';
+        // perceval 같은 |1,0,...> 형식 제외 — gate 측정 비트열만 처리
+        const _isBitstr = /^[01]+$/.test(_firstKey);
+        if (_isBitstr) {
+          const _natoms = _firstKey.length;
+          const _rydProb = new Array(_natoms).fill(0);
+          let _totalShots = 0;
+          for (const [k, v] of Object.entries(counts)) {
+            if (k.length !== _natoms) continue;
+            _totalShots += v;
+            for (let i = 0; i < _natoms; i++) {
+              if (k[i] === '1') _rydProb[i] += v;
+            }
+          }
+          if (_totalShots > 0) {
+            for (let i = 0; i < _natoms; i++) _rydProb[i] /= _totalShots;
+            // SVG 가로 배열 — atom = 원, Rydberg 확률에 따라 빨강↔회색 그라데이션
+            const _r = 14, _gap = 30, _pad = 16;
+            const _w = _pad*2 + _natoms*_r*2 + (_natoms-1)*_gap;
+            const _h = _r*2 + 38;
+            const _atomSvg = _rydProb.map((p, i) => {
+              const _cx = _pad + _r + i*(_r*2 + _gap);
+              const _cy = _r + 6;
+              // 색: p=0 회색(ground), p=1 빨강(Rydberg)
+              const _hue = 0;  // 빨강 hue
+              const _light = 30 + (1-p)*55;  // 0.0 → 빛 85 (밝은 회색), 1.0 → 30 (진한 빨강)
+              const _sat  = Math.round(p * 90);
+              const _color = `hsl(${_hue} ${_sat}% ${_light}%)`;
+              return `<g>
+                <circle cx="${_cx}" cy="${_cy}" r="${_r}" fill="${_color}"
+                        stroke="var(--text3)" stroke-width="1"/>
+                <text x="${_cx}" y="${_cy+4}" font-size="10" text-anchor="middle"
+                      fill="${p > 0.5 ? '#fff' : 'var(--text2)'}">${i}</text>
+                <text x="${_cx}" y="${_cy+_r+14}" font-size="9" text-anchor="middle"
+                      fill="var(--text3)">${(p*100).toFixed(0)}%</text>
+              </g>`;
+            }).join('');
+            _ahsViz = `<div style="margin-bottom:10px;padding:10px 8px;background:rgba(0,0,0,0.18);border-radius:4px;border-left:2px solid #c0392b">
+              <div style="font-size:10px;color:var(--text2);margin-bottom:6px;font-weight:600;letter-spacing:0.5px">
+                ⚛ Atom Rydberg Density <span style="color:var(--text3);font-weight:400;font-size:9px;margin-left:8px">${_natoms} atoms · 회색=ground, 빨강=Rydberg</span>
+              </div>
+              <svg width="${_w}" height="${_h}" style="display:block">${_atomSvg}</svg>
+            </div>`;
+          }
+        }
+      }
       const detailRow = `<tr id="detail-${safeId}"><td colspan="10"
           style="padding:12px 16px;background:rgba(0,0,0,0.25);
                  border-left:3px solid var(--accent);
                  border-top:1px solid var(--border1);
                  border-bottom:1px solid var(--border1)">
         ${_comparisonHtml}
+        ${_ahsViz}
         <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Total shots: ${total} · Unique states: ${Object.keys(counts).length}</div>
         ${bars}
       </td></tr>`;

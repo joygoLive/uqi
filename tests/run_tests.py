@@ -23,14 +23,21 @@ TEST_MODULES = [
     ("test_uqi_executor_iqm.py",     "uqi_executor_iqm"),
     ("test_uqi_executor_cudaq.py",   "uqi_executor_cudaq"),
     ("test_uqi_executor_perceval.py","uqi_executor_perceval"),
+    ("test_uqi_executor_braket.py",  "uqi_executor_braket"),
+    ("test_uqi_executor_azure.py",   "uqi_executor_azure"),
     ("test_uqi_optimizer.py",        "uqi_optimizer"),
     ("test_uqi_noise.py",            "uqi_noise"),
     ("test_uqi_calibration.py",      "uqi_calibration"),
     ("test_uqi_rag.py",              "uqi_rag"),
     ("test_uqi_qec.py",              "uqi_qec"),
     ("test_uqi_qir_converter.py",    "uqi_qir_converter"),
+    ("test_uqi_job_store.py",        "uqi_job_store"),
+    ("test_uqi_pricing.py",          "uqi_pricing"),
+    ("test_uqi_messages.py",         "uqi_messages"),
+    ("test_i18n.py",                 None),   # locales JSON — cov 대상 없음
     ("test_mcp_server.py",           "mcp_server"),
-    ("test_uqi_webapp.py",           None),  # JS — cov 제외
+    ("test_ahs_workflow.py",         None),   # mcp_server + executor 통합 — cov 별도
+    ("test_uqi_webapp.py",           None),   # JS — cov 제외
 ]
 
 

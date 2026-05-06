@@ -17,7 +17,7 @@ class UQIExecutorCUDAQ:
     def run_all(
         self,
         target: str = "iqm",
-        backend_url: str = "https://cocos.resonance.meetiqm.com/garnet",
+        backend_url: str = "https://cocos.resonance.iqm.tech/garnet",
         use_emulator: bool = False,
         token: str = None,
         run_ibm: bool = False,

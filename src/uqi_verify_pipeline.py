@@ -18,7 +18,7 @@ def run_verification(
     use_perceval_simulator: bool = True,
     shots: int = 1024,
     ibm_backend: str = "ibm_fez",
-    iqm_backend_url: str = "https://resonance.meetiqm.com/computers/garnet",
+    iqm_backend_url: str = "https://resonance.iqm.tech/computers/garnet",
 ):
     from dotenv import load_dotenv
     import os
@@ -125,7 +125,7 @@ def run_verification(
         executor_cudaq = UQIExecutorCUDAQ(extractor, shots=shots)
         executor_cudaq.run_all(
             target="iqm",
-            backend_url="https://cocos.resonance.meetiqm.com/garnet",
+            backend_url="https://cocos.resonance.iqm.tech/garnet",
             use_emulator=use_iqm_simulator,
             token=iqm_token,
             run_ibm=True,
@@ -234,7 +234,7 @@ if __name__ == "__main__":
     parser.add_argument("--ibm-backend", type=str, default="ibm_fez",
                         help="IBM 백엔드 이름 (기본: ibm_fez)")
     parser.add_argument("--iqm-backend-url", type=str,
-                        default="https://resonance.meetiqm.com/computers/garnet",
+                        default="https://resonance.iqm.tech/computers/garnet",
                         help="IQM 백엔드 URL")
     args = parser.parse_args()
 

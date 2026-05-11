@@ -9,6 +9,15 @@ import uuid
 import sqlite3
 import threading
 from pathlib import Path
+
+# sqlite-vec extension (벡터/하이브리드 검색). 로드 실패해도 SQLite 본체는 동작.
+try:
+    import sqlite_vec  # type: ignore
+    _SQLITE_VEC_OK = True
+except Exception as _e:  # pragma: no cover
+    sqlite_vec = None
+    _SQLITE_VEC_OK = False
+    print(f"  [RAG] sqlite-vec import 실패 (벡터 백엔드 비활성): {_e}", flush=True)
 from typing import Optional
 from datetime import datetime
 
@@ -19,6 +28,11 @@ RAG_FILE    = os.environ.get("UQI_RAG_FILE",    str(_DATA_DIR / "uqi_rag.db"))
 CACHE_FILE  = os.environ.get("UQI_CACHE_FILE",  str(_DATA_DIR / "uqi_cache.db"))
 CHROMA_DIR  = os.environ.get("UQI_CHROMA_DIR",  str(_DATA_DIR / "uqi_chroma"))
 CHROMA_NAME = os.environ.get("UQI_CHROMA_COLLECTION", "uqi_knowledge")
+
+# 새 RAG 백엔드 (sqlite-vec). chroma 와 병행 운영 후 Phase 8 에서 chroma 제거.
+EMBED_URL   = os.environ.get("UQI_EMBED_URL",   "http://127.0.0.1:7997")
+EMBED_MODEL = os.environ.get("UQI_EMBED_MODEL", "BAAI/bge-m3")
+EMBED_DIM   = int(os.environ.get("UQI_EMBED_DIM", "1024"))
 
 # 캐시 타입은 임베딩 제외 (값이 크고 검색 의미 없음)
 _SKIP_EMBED_TYPES = {"cache", "qpu_availability"}
@@ -49,6 +63,20 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.row_factory = sqlite3.Row
+    # sqlite-vec 확장 자동 로드 — vec0/FTS5 가상 테이블 쿼리에 필수.
+    # Ubuntu/conda 파이썬 sqlite3 모듈은 기본적으로 load_extension 허용.
+    if _SQLITE_VEC_OK:
+        try:
+            conn.enable_load_extension(True)
+            sqlite_vec.load(conn)
+        except Exception as e:  # pragma: no cover
+            # 로드 실패해도 일반 SQL 은 동작 — 벡터 검색만 비활성화됨
+            print(f"  [RAG] sqlite-vec load skipped: {e}", flush=True)
+        finally:
+            try:
+                conn.enable_load_extension(False)
+            except Exception:
+                pass
     return conn
 
 
@@ -67,6 +95,37 @@ def _init_rag_db(db_path: str):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON records(timestamp)")
     conn.commit()
     conn.close()
+
+
+def _init_sqlite_vec_schema(db_path: str) -> bool:
+    """records DB 에 record_vec (sqlite-vec) + record_fts (BM25) 가상 테이블 추가.
+
+    원자적·멱등적. 확장 로드 실패 시 False 반환하고 호출부에서 chroma fallback.
+    """
+    if not _SQLITE_VEC_OK:
+        return False
+    conn = _connect(db_path)
+    try:
+        conn.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS record_vec USING vec0("
+            f"  record_id TEXT PRIMARY KEY,"
+            f"  embedding FLOAT[{EMBED_DIM}]"
+            f")"
+        )
+        # contentless FTS5 — record_id 는 검색 대상 아님(필터용), content 만 BM25 인덱싱
+        conn.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS record_fts USING fts5("
+            "  record_id UNINDEXED, content,"
+            "  tokenize='unicode61 remove_diacritics 2'"
+            ")"
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"  [RAG] sqlite-vec 스키마 생성 실패: {e}", flush=True)
+        return False
+    finally:
+        conn.close()
 
 
 def _init_cache_db(db_path: str):
@@ -186,6 +245,255 @@ def _make_embedding_text(record_type: str, data: dict) -> str:
 
 
 # ─────────────────────────────────────────────────────────
+# 자연어 임베딩 텍스트 (bge-m3 / sqlite-vec backend 용)
+# ─────────────────────────────────────────────────────────
+
+def _fmt_pct(v) -> str:
+    """0.42 → '42% 감소', None/0 → 빈 문자열."""
+    try:
+        if v is None: return ""
+        f = float(v)
+        if f == 0: return ""
+        return f"{f*100:.1f}%"
+    except (TypeError, ValueError):
+        return ""
+
+
+def _make_embedding_text_v2(record_type: str, data: dict) -> str:
+    """bge-m3 가 잘 잡는 한·영 자연문 1~2 문장.
+
+    설계 원칙:
+      - schema 키(`qpu:`, `circuit:` 등) 토큰은 노이즈라 제거. 문장으로 풀어씀
+      - 빈 값/None 은 절대 임베딩에 포함하지 않음 (의미 없는 토큰화 방지)
+      - 한·영 혼재 — 사용자 쿼리 패턴과 일치
+      - 핵심 속성 (qpu/sdk/result) 을 문장 앞쪽에 배치
+      - 숫자는 percentage / fidelity 등 사람이 읽는 형식으로 변환
+    """
+    d = data or {}
+
+    def _v(*keys):
+        """비어있지 않은 첫 값."""
+        for k in keys:
+            v = d.get(k)
+            if v not in (None, "", []):
+                return v
+        return None
+
+    def _join(parts):
+        return ". ".join(p for p in parts if p).strip()
+
+    if record_type == "optimization":
+        qpu     = _v("qpu_name")
+        circuit = _v("circuit_name")
+        combo   = _v("combination")
+        qubits  = _v("num_qubits")
+        red     = _fmt_pct(_v("gate_reduction"))
+        depth   = _fmt_pct(_v("depth_reduction"))
+        sent = []
+        if circuit and qpu:
+            sent.append(f"회로 {circuit} 를 {qpu} 에 맞춰 트랜스파일·최적화한 결과")
+        elif qpu:
+            sent.append(f"{qpu} 대상 회로 최적화 결과")
+        if combo:
+            sent.append(f"조합 {combo} 사용")
+        if red:
+            sent.append(f"게이트 수 {red} 감소")
+        if depth:
+            sent.append(f"depth {depth} 감소")
+        if qubits:
+            sent.append(f"{qubits} 큐빗 회로")
+        return _join(sent) or f"optimization {circuit or '익명 회로'}"
+
+    if record_type == "execution":
+        qpu      = _v("qpu_name")
+        circuit  = _v("circuit_name")
+        sdk      = _v("sdk")
+        backend  = _v("backend")
+        ok       = d.get("ok")
+        err_rate = d.get("error_rate")
+        shots    = _v("shots")
+        is_noise = isinstance(backend, str) and backend.startswith("noise_sim")
+        sent = []
+        if is_noise:
+            sdk_n = backend.replace("noise_sim_", "") if isinstance(backend, str) else ""
+            sent.append(f"회로 {circuit or ''} 를 {qpu or 'QPU'} 캘리브레이션 기반 노이즈 시뮬레이션 실행 ({sdk_n})")
+            comp = (d.get("comparison") or {})
+            fid = comp.get("fidelity")
+            tvd = comp.get("tvd")
+            if fid is not None:
+                sent.append(f"fidelity {float(fid):.3f}")
+            if tvd is not None:
+                sent.append(f"TVD {float(tvd):.3f}")
+        else:
+            if circuit and qpu:
+                sent.append(f"회로 {circuit} 를 실 QPU {qpu} 에서 실행")
+            elif qpu:
+                sent.append(f"실 QPU {qpu} 에서 작업 실행")
+            if sdk:
+                sent.append(f"SDK {sdk}")
+            if shots is not None:
+                sent.append(f"{shots} shots")
+            if ok is False:
+                sent.append("실패 / device error")
+            elif ok is True:
+                sent.append("정상 완료")
+            if err_rate is not None:
+                try:
+                    f = float(err_rate)
+                    if f > 0:
+                        sent.append(f"error rate {f:.3f}")
+                except (TypeError, ValueError):
+                    pass
+        return _join(sent) or "execution"
+
+    if record_type == "qec_experiment":
+        qpu     = _v("qpu_name")
+        circuit = _v("circuit_name")
+        code    = _v("code")
+        f_b     = d.get("fidelity_before")
+        f_a     = d.get("fidelity_after")
+        eff     = d.get("effective")
+        improv  = d.get("improvement")
+        sent = []
+        if circuit and qpu and code:
+            sent.append(f"{qpu} 에서 회로 {circuit} 에 QEC code {code} 적용")
+        elif code:
+            sent.append(f"QEC code {code} 실험")
+        if f_b is not None and f_a is not None:
+            try:
+                sent.append(f"fidelity {float(f_b):.3f} → {float(f_a):.3f}")
+            except (TypeError, ValueError):
+                pass
+        if improv is not None:
+            try:
+                sent.append(f"{float(improv)*100:+.1f}% 개선")
+            except (TypeError, ValueError):
+                pass
+        if eff is True:
+            sent.append("QEC 효과 있음")
+        elif eff is False:
+            sent.append("QEC 효과 없음")
+        return _join(sent) or "qec experiment"
+
+    if record_type == "gpu_benchmark":
+        circuit  = _v("circuit_name")
+        fw       = _v("framework")
+        speedup  = d.get("speedup")
+        cpu_t    = d.get("cpu_time_sec")
+        gpu_t    = d.get("gpu_time_sec")
+        verdict  = _v("verdict")
+        sent = []
+        if circuit and fw:
+            sent.append(f"{fw} 회로 {circuit} 의 CPU vs GPU 시뮬레이션 벤치마크")
+        elif fw:
+            sent.append(f"{fw} GPU 시뮬레이션 벤치마크")
+        if speedup is not None:
+            try:
+                f = float(speedup)
+                sent.append(f"GPU 가속비 {f:.2f}x" + (" — GPU 우세" if f > 1 else " — CPU 우세"))
+            except (TypeError, ValueError):
+                pass
+        if cpu_t is not None and gpu_t is not None:
+            try:
+                sent.append(f"CPU {float(cpu_t):.2f}s vs GPU {float(gpu_t):.2f}s")
+            except (TypeError, ValueError):
+                pass
+        if verdict:
+            sent.append(str(verdict))
+        return _join(sent) or "gpu benchmark"
+
+    if record_type == "security_block":
+        file_n  = _v("file_name", "algorithm_file")
+        reason  = _v("reason")
+        pattern = _v("pattern")
+        tool    = _v("tool")
+        line    = d.get("match_line") or d.get("match_lineno")
+        sent = ["보안 정책 위반으로 정적 분석이 차단한 알고리즘 파일"]
+        if file_n:
+            sent.append(f"파일 {file_n}")
+        if reason:
+            sent.append(f"사유: {reason}")
+        if pattern:
+            sent.append(f"감지 패턴 `{pattern}`")
+        if tool:
+            sent.append(f"감지 도구 {tool}")
+        if line:
+            sent.append(f"라인 {line}")
+        return _join(sent)
+
+    if record_type == "pipeline_issue":
+        stage    = _v("stage")
+        sdk      = _v("sdk")
+        qpu      = _v("qpu_name")
+        issue    = _v("issue")
+        solution = _v("solution")
+        severity = _v("severity")
+        sent = []
+        head = []
+        if stage:    head.append(f"파이프라인 단계 {stage}")
+        if sdk:      head.append(f"SDK {sdk}")
+        if qpu and qpu != "auto":
+            head.append(f"QPU {qpu}")
+        if head:
+            sent.append(" / ".join(head) + " 에서 발생한 오류")
+        if issue:
+            sent.append(f"문제: {issue}")
+        if solution:
+            sent.append(f"해결: {solution}")
+        if severity:
+            sent.append(f"심각도 {severity}")
+        return _join(sent) or "pipeline issue"
+
+    if record_type == "transpile_pattern":
+        sdk        = _v("sdk")
+        qpu        = _v("qpu_name")
+        success    = d.get("success")
+        pattern    = _v("pattern")
+        workaround = _v("workaround")
+        desc       = _v("description")
+        sent = []
+        if sdk and qpu:
+            sent.append(f"{sdk} 로 {qpu} 트랜스파일 시 패턴")
+        if pattern:
+            sent.append(f"패턴: {pattern}")
+        if success is True:
+            sent.append("성공")
+        elif success is False:
+            sent.append("실패")
+        if workaround:
+            sent.append(f"우회: {workaround}")
+        if desc:
+            sent.append(str(desc))
+        return _join(sent) or "transpile pattern"
+
+    if record_type == "conversion_pattern":
+        ff      = _v("from_format")
+        tf      = _v("to_format")
+        sdk     = _v("sdk")
+        success = d.get("success")
+        desc    = _v("description") or _v("workaround")
+        sent = []
+        if ff and tf:
+            sent.append(f"양자 회로 변환 {ff} → {tf}")
+        if sdk:
+            sent.append(f"SDK {sdk}")
+        if success is True:
+            sent.append("변환 성공")
+        elif success is False:
+            sent.append("변환 실패")
+        if desc:
+            sent.append(str(desc))
+        return _join(sent) or "conversion pattern"
+
+    # ── fallback: 키/값을 'key 값' 형식으로 평탄화 (콜론 토큰 제거) ──
+    parts = [f"기록 타입 {record_type}"]
+    for k, v in d.items():
+        if isinstance(v, (str, int, float, bool)) and v not in ("", None):
+            parts.append(f"{k} {v}")
+    return ". ".join(parts)
+
+
+# ─────────────────────────────────────────────────────────
 # 메인 클래스
 # ─────────────────────────────────────────────────────────
 
@@ -210,6 +518,10 @@ class UQIRAG:
 
         _init_rag_db(self.rag_file)
         _init_cache_db(self.cache_file)
+        # sqlite-vec 백엔드 (record_vec/record_fts). 실패해도 chroma 로 동작.
+        self._sqlite_vec_ok = _init_sqlite_vec_schema(self.rag_file)
+        if self._sqlite_vec_ok:
+            print(f"  [RAG] sqlite-vec 활성 (dim={EMBED_DIM}, embed_url={EMBED_URL})", flush=True)
         self._init_chroma()
 
     def _init_chroma(self):

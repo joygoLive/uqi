@@ -29,6 +29,7 @@ TEST_MODULES = [
     ("test_uqi_noise.py",            "uqi_noise"),
     ("test_uqi_calibration.py",      "uqi_calibration"),
     ("test_uqi_rag.py",              "uqi_rag"),
+    ("test_rag_quality.py",          None),   # live golden-set 회귀 (embed 서버 가동 시)
     ("test_uqi_qec.py",              "uqi_qec"),
     ("test_uqi_qir_converter.py",    "uqi_qir_converter"),
     ("test_uqi_job_store.py",        "uqi_job_store"),

@@ -49,6 +49,9 @@ def suggest_all(rag: UQIRAG) -> dict:
     def ids(records, k=10):
         return [r["id"] for r in records[:k]]
 
+    def ids_all(records):
+        return [r["id"] for r in records]
+
     sug = {}
     sug["Q01"] = ids(_matches(opt,   lambda r: r["data"].get("qpu_name") == "ibm_fez"))
     sug["Q02"] = ids(_matches(qec,   lambda r: r["data"].get("qpu_name") == "iqm_garnet"))
@@ -137,18 +140,35 @@ def main() -> int:
         print()
 
     # Auto-merge: if --apply, write suggestions into golden_set.json's expected fields
-    if "--apply" in sys.argv:
+    if "--apply" in sys.argv or "--types" in sys.argv:
+        # records 인덱스를 만들어 type 추론에 사용
+        id_to_type: dict[str, str] = {}
+        for type_name in ["optimization", "execution", "gpu_benchmark", "qec_experiment",
+                          "pipeline_issue", "security_block", "transpile_pattern",
+                          "conversion_pattern"]:
+            for r in _by_type(rag, type_name):
+                id_to_type[r["id"]] = type_name
+
         for it in items:
             sugg = suggestions.get(it["id"], [])
-            # only overwrite if empty (don't clobber user edits)
-            if not it.get("expected") and sugg:
-                it["expected"] = sugg
+            if "--apply" in sys.argv:
+                # only overwrite if empty (don't clobber user edits)
+                if not it.get("expected") and sugg:
+                    it["expected"] = sugg
+            # expected_types: expected_ids 의 type set 으로 추론 (Q06 처럼 type 이 명확한 쿼리)
+            exp = it.get("expected") or []
+            types = {id_to_type.get(rid) for rid in exp if id_to_type.get(rid)}
+            types.discard(None)
+            it["expected_types"] = sorted(types)
+
         gs_path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"✓ Suggestions written to {gs_path} (empty expected fields only).")
+        print(f"✓ {gs_path.name} updated"
+              f"{' (+ expected_types)' if '--types' in sys.argv else ''}.")
     else:
         print("To apply suggestions as a starting point:")
         print(f"  python3 tests/golden_set_suggest.py --apply")
-        print("Then manually review/edit each 'expected' in tests/golden_set.json.")
+        print("To re-populate expected_types from current expected lists:")
+        print(f"  python3 tests/golden_set_suggest.py --types")
     return 0
 
 

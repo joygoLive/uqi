@@ -47,6 +47,9 @@
       "f05dfffc",
       "d787fd72",
       "5c8076b4"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -89,6 +92,9 @@
     "expected": [
       "8e508515",
       "5ff53d2a"
+    ],
+    "expected_types": [
+      "qec_experiment"
     ]
   },
   {
@@ -132,6 +138,9 @@
       "b6c6956b",
       "5717611a",
       "f958d19d"
+    ],
+    "expected_types": [
+      "transpile_pattern"
     ]
   },
   {
@@ -182,6 +191,9 @@
       "55a745c8",
       "c5312367",
       "9e614672"
+    ],
+    "expected_types": [
+      "pipeline_issue"
     ]
   },
   {
@@ -232,6 +244,9 @@
       "002f2017",
       "7e11c6a1",
       "9a2f3ae5"
+    ],
+    "expected_types": [
+      "gpu_benchmark"
     ]
   },
   {
@@ -251,6 +266,9 @@
       "2f5d3a55",
       "090668e7",
       "f9fd9ae3"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -299,6 +317,9 @@
       "19a1f0e5",
       "5ff53d2a",
       "55a17279"
+    ],
+    "expected_types": [
+      "qec_experiment"
     ]
   },
   {
@@ -349,6 +370,9 @@
       "c62be06d",
       "1c8e9a10",
       "32feb39d"
+    ],
+    "expected_types": [
+      "execution"
     ]
   },
   {
@@ -399,6 +423,9 @@
       "6ba84955",
       "99b9894e",
       "5283f2d4"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -447,6 +474,10 @@
       "32feb39d",
       "cf4b09dc",
       "706e252c"
+    ],
+    "expected_types": [
+      "execution",
+      "qec_experiment"
     ]
   },
   {
@@ -497,6 +528,9 @@
       "7959bc6c",
       "ce4b118d",
       "612423e8"
+    ],
+    "expected_types": [
+      "gpu_benchmark"
     ]
   },
   {
@@ -547,6 +581,9 @@
       "42012170",
       "5c918ceb",
       "7e2e590f"
+    ],
+    "expected_types": [
+      "execution"
     ]
   },
   {
@@ -597,6 +634,9 @@
       "fd57f57f",
       "9235ec30",
       "a07f5906"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -647,6 +687,9 @@
       "e07f5c2c",
       "0b1adbf4",
       "9bb811c4"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -697,6 +740,9 @@
       "f9fd9ae3",
       "fd57f57f",
       "9235ec30"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -741,6 +787,9 @@
       "5ff53d2a",
       "683a2338",
       "55a17279"
+    ],
+    "expected_types": [
+      "qec_experiment"
     ]
   },
   {
@@ -791,6 +840,9 @@
       "2bae93f9",
       "301b7128",
       "8dd896e1"
+    ],
+    "expected_types": [
+      "security_block"
     ]
   },
   {
@@ -839,6 +891,9 @@
       "c5268c39",
       "20d9c7b2",
       "4587e702"
+    ],
+    "expected_types": [
+      "security_block"
     ]
   },
   {
@@ -889,6 +944,9 @@
       "7d6733ce",
       "cc6ab1f9",
       "228fe96f"
+    ],
+    "expected_types": [
+      "pipeline_issue"
     ]
   },
   {
@@ -939,6 +997,9 @@
       "55a745c8",
       "c5312367",
       "9e614672"
+    ],
+    "expected_types": [
+      "pipeline_issue"
     ]
   },
   {
@@ -984,6 +1045,9 @@
       "182b4207",
       "17facb41",
       "19a1f0e5"
+    ],
+    "expected_types": [
+      "qec_experiment"
     ]
   },
   {
@@ -1034,6 +1098,9 @@
       "acdde35f",
       "364ab36e",
       "cab0d536"
+    ],
+    "expected_types": [
+      "execution"
     ]
   },
   {
@@ -1084,6 +1151,9 @@
       "c032b365",
       "3fe51ff7",
       "e1f391e6"
+    ],
+    "expected_types": [
+      "gpu_benchmark"
     ]
   },
   {
@@ -1127,6 +1197,9 @@
       "b6c6956b",
       "5717611a",
       "f958d19d"
+    ],
+    "expected_types": [
+      "transpile_pattern"
     ]
   },
   {
@@ -1172,6 +1245,10 @@
       "17facb41",
       "19a1f0e5",
       "736d049b"
+    ],
+    "expected_types": [
+      "execution",
+      "qec_experiment"
     ]
   },
   {
@@ -1217,6 +1294,9 @@
       "7959bc6c",
       "612423e8",
       "c032b365"
+    ],
+    "expected_types": [
+      "gpu_benchmark"
     ]
   },
   {
@@ -1265,6 +1345,9 @@
       "0a73cc18",
       "cd4a4464",
       "1c995975"
+    ],
+    "expected_types": [
+      "optimization"
     ]
   },
   {
@@ -1315,6 +1398,9 @@
       "c8c093eb",
       "3b70c9fd",
       "84c90d97"
+    ],
+    "expected_types": [
+      "execution"
     ]
   },
   {
@@ -1363,6 +1449,9 @@
       "c5ebf300",
       "a1f7fcd7",
       "44694b98"
+    ],
+    "expected_types": [
+      "pipeline_issue"
     ]
   },
   {
@@ -1402,6 +1491,7 @@
         "snippet": "file=mclachlan_pde_iqm.py reason=os 모듈 직접 호출 tool=uqi_analyze"
       }
     ],
-    "expected": []
+    "expected": [],
+    "expected_types": []
   }
 ]

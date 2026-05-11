@@ -734,44 +734,164 @@ class UQIRAG:
                         query:       str,
                         limit:       int  = 10,
                         record_type: str  = None,
-                        rerank:      bool = True) -> list:
-        """벡터 유사도 검색. UQI_RAG_BACKEND 환경변수로 백엔드 선택.
+                        rerank:      bool = True,
+                        hybrid:      bool = True) -> list:
+        """다층 검색.
 
-          auto       : sqlite-vec 우선 + 실패 시 chroma fallback (default)
-          sqlite-vec : sqlite-vec 만 사용 — 실패 시 빈 결과
+        백엔드 (UQI_RAG_BACKEND):
+          auto       : sqlite-vec 경로 우선 (dense+BM25+rerank), 빈 결과 시 chroma fallback (default)
+          sqlite-vec : 강제 sqlite-vec 경로 (실패 시 빈 결과)
           chroma     : 강제 chroma (rollback safety)
 
-        rerank=True 이고 sqlite-vec 경로일 때 cross-encoder 재랭킹 1단계 추가:
-          1) dense 검색으로 top-N (= max(limit*5, RERANK_TOPN=50)) 후보
-          2) bge-reranker-v2-m3 로 정밀 정렬 → top-`limit`
-        rerank 서버 다운 시 dense 결과 그대로 반환 (graceful).
+        sqlite-vec 경로 동작:
+          1. (hybrid=True, 기본) dense + FTS5 BM25 → RRF 결합 (over-fetch ~50)
+             (hybrid=False) dense top-N 만
+          2. (rerank=True, 기본) bge-reranker-v2-m3 cross-encoder 로 top-limit 정밀화
+             (rerank=False) RRF 또는 dense 순서 그대로 truncate
+        각 외부 서버(임베딩/재랭커/sqlite-vec) 다운 시 graceful degrade.
         """
         backend = RAG_BACKEND
-        # rerank 사용 시 over-fetch, chroma 백엔드에는 적용 안 함 (Phase 8 까지 잠시 그대로)
-        fetch_n = max(limit * 5, RERANK_TOPN) if rerank else limit
+
+        def _sqlite_vec_pipeline() -> list:
+            if hybrid:
+                candidates = self._search_hybrid(query, limit, record_type)
+            else:
+                fetch_n = max(limit * 5, RERANK_TOPN) if rerank else limit
+                candidates = self._search_sqlite_vec(query, fetch_n, record_type)
+            if rerank:
+                return self._rerank(query, candidates, limit)
+            return candidates[:limit]
 
         if backend == "auto":
             if self._sqlite_vec_ok:
                 try:
-                    candidates = self._search_sqlite_vec(query, fetch_n, record_type)
-                    if candidates:
-                        return self._rerank(query, candidates, limit) if rerank else candidates[:limit]
+                    out = _sqlite_vec_pipeline()
+                    if out:
+                        return out
                 except Exception as e:
-                    print(f"  [RAG] sqlite-vec 검색 실패 → chroma fallback: {e}", flush=True)
+                    print(f"  [RAG] sqlite-vec 파이프라인 실패 → chroma fallback: {e}", flush=True)
             return self._search_chroma(query, limit, record_type)
 
         if backend == "sqlite-vec":
             if not self._sqlite_vec_ok:
                 return []
             try:
-                candidates = self._search_sqlite_vec(query, fetch_n, record_type)
-                return self._rerank(query, candidates, limit) if rerank else candidates[:limit]
+                return _sqlite_vec_pipeline()
             except Exception as e:
-                print(f"  [RAG] sqlite-vec 검색 실패: {e}", flush=True)
+                print(f"  [RAG] sqlite-vec 파이프라인 실패: {e}", flush=True)
                 return []
 
-        # backend == "chroma"  (또는 잘못된 값 → 안전한 기본)
+        # backend == "chroma" (rollback)
         return self._search_chroma(query, limit, record_type)
+
+    def _search_bm25(self,
+                     query:       str,
+                     limit:       int,
+                     record_type: Optional[str] = None) -> list:
+        """FTS5 BM25 lexical 검색. 정확 어휘 / 약어 매칭에 강함.
+
+        `record_fts` 는 contentless FTS5 (content='', UNINDEXED record_id).
+        BM25 점수는 `rank` 컬럼으로 제공, 작은 값일수록 관련성 높음.
+        """
+        conn = _connect(self.rag_file)
+        try:
+            try:
+                over = limit * 3 if record_type else limit
+                rows = conn.execute(
+                    "SELECT record_id, rank FROM record_fts "
+                    "WHERE record_fts MATCH ? ORDER BY rank LIMIT ?",
+                    (query, over),
+                ).fetchall()
+            except Exception:
+                # FTS5 가 query 토큰화 못 할 때 — 예: 모든 토큰이 stopword
+                return []
+            if not rows:
+                return []
+
+            ids = [r[0] for r in rows]
+            rank_map = {r[0]: r[1] for r in rows}
+
+            placeholders = ",".join("?" * len(ids))
+            sql = f"SELECT * FROM records WHERE id IN ({placeholders})"
+            params: list = list(ids)
+            if record_type:
+                sql += " AND type = ?"
+                params.append(record_type)
+            recs = conn.execute(sql, params).fetchall()
+        finally:
+            conn.close()
+
+        record_map = {row["id"]: _row_to_record(row) for row in recs}
+        results = []
+        for rid in ids:
+            if rid not in record_map:
+                continue
+            rec = dict(record_map[rid])
+            # rank 는 SQLite FTS5 의 음수 BM25 점수 (작을수록 관련↑). 표시는 절대값 normalized 로.
+            rec["bm25_rank"] = float(rank_map[rid])
+            results.append(rec)
+            if len(results) >= limit:
+                break
+        return results
+
+    @staticmethod
+    def _rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
+        """Reciprocal Rank Fusion — 각 검색기의 rank 기반 결합.
+
+        score(d) = sum_i 1 / (k + rank_i(d))   (rank_i 1부터)
+        k=60 은 RRF 논문 기본값. document 가 여러 검색기에 모두 등장할수록 점수↑.
+        반환: [(record_id, score), ...] score 내림차순.
+        """
+        scores: dict[str, float] = {}
+        for ids in rankings:
+            for rank_minus_1, rid in enumerate(ids):
+                scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank_minus_1 + 1)
+        return sorted(scores.items(), key=lambda kv: -kv[1])
+
+    def _search_hybrid(self,
+                       query:       str,
+                       limit:       int,
+                       record_type: Optional[str]) -> list:
+        """dense (sqlite-vec) + sparse (FTS5 BM25) RRF 결합.
+
+        각 검색기 top-N (=limit*3 또는 RERANK_TOPN) → RRF → top-limit.
+        한쪽이 빈 결과여도 다른 쪽이 결과 제공 (자동 degrade).
+        """
+        over = max(limit * 3, RERANK_TOPN)
+        dense  = []
+        sparse = []
+        try:
+            dense = self._search_sqlite_vec(query, over, record_type)
+        except Exception as e:
+            print(f"  [RAG] hybrid: dense 실패: {e}", flush=True)
+        try:
+            sparse = self._search_bm25(query, over, record_type)
+        except Exception as e:
+            print(f"  [RAG] hybrid: bm25 실패: {e}", flush=True)
+
+        if not dense and not sparse:
+            return []
+
+        fused = self._rrf_fuse([
+            [r["id"] for r in dense],
+            [r["id"] for r in sparse],
+        ])
+
+        # 원본 record 데이터 join + RRF score 부착
+        record_map: dict[str, dict] = {}
+        for r in dense + sparse:
+            record_map.setdefault(r["id"], r)
+
+        out = []
+        for rid, score in fused[: max(limit, over)]:
+            if rid not in record_map:
+                continue
+            rec = dict(record_map[rid])
+            rec["rrf_score"] = round(score, 6)
+            out.append(rec)
+            if len(out) >= over:
+                break
+        return out
 
     def _search_sqlite_vec(self,
                            query:       str,

@@ -3,6 +3,7 @@
 # SQLite WAL 기반 + ChromaDB 시맨틱 검색
 # UQI (Universal Quantum Infrastructure)
 
+import os
 import json
 import uuid
 import sqlite3
@@ -13,9 +14,11 @@ from datetime import datetime
 
 
 _DATA_DIR   = Path(__file__).parent.parent / "data"
-RAG_FILE    = str(_DATA_DIR / "uqi_rag.db")
-CACHE_FILE  = str(_DATA_DIR / "uqi_cache.db")
-CHROMA_DIR  = str(_DATA_DIR / "uqi_chroma")
+# 환경 변수로 경로/컬렉션 이름 오버라이드 가능 (배포·마이그레이션 시 유용).
+RAG_FILE    = os.environ.get("UQI_RAG_FILE",    str(_DATA_DIR / "uqi_rag.db"))
+CACHE_FILE  = os.environ.get("UQI_CACHE_FILE",  str(_DATA_DIR / "uqi_cache.db"))
+CHROMA_DIR  = os.environ.get("UQI_CHROMA_DIR",  str(_DATA_DIR / "uqi_chroma"))
+CHROMA_NAME = os.environ.get("UQI_CHROMA_COLLECTION", "uqi_knowledge")
 
 # 캐시 타입은 임베딩 제외 (값이 크고 검색 의미 없음)
 _SKIP_EMBED_TYPES = {"cache", "qpu_availability"}
@@ -217,7 +220,7 @@ class UQIRAG:
             client = chromadb.PersistentClient(path=self.chroma_dir)
             ef = embedding_functions.DefaultEmbeddingFunction()  # all-MiniLM-L6-v2
             self._chroma = client.get_or_create_collection(
-                name="uqi_knowledge",
+                name=CHROMA_NAME,
                 embedding_function=ef,
                 metadata={"hnsw:space": "cosine"},
             )
@@ -543,6 +546,39 @@ class UQIRAG:
                 break
         return results
 
+    def search_noise_simulation(self, qpu_name: str = "", limit: int = 20) -> list:
+        """SQL push-down version of noise-simulation lookup.
+
+        `_qpu_submit_*` writes one `execution` record per shot batch, with
+        `backend` LIKE 'noise_sim_<sdk>' when running the calibration-based
+        simulator. Previously mcp_server filtered these in Python after
+        fetching `limit * 10` rows; with growing history that wastes JSON
+        decoding and risks dropping legitimate hits. Push the filter into
+        SQLite using `json_extract` so we read exactly `limit` rows.
+        """
+        conn = _connect(self.rag_file)
+        try:
+            if qpu_name:
+                sql = (
+                    "SELECT * FROM records "
+                    "WHERE type='execution' "
+                    "  AND json_extract(data,'$.backend') LIKE 'noise_sim_%' "
+                    "  AND json_extract(data,'$.qpu_name') = ? "
+                    "ORDER BY timestamp DESC LIMIT ?"
+                )
+                rows = conn.execute(sql, (qpu_name, limit)).fetchall()
+            else:
+                sql = (
+                    "SELECT * FROM records "
+                    "WHERE type='execution' "
+                    "  AND json_extract(data,'$.backend') LIKE 'noise_sim_%' "
+                    "ORDER BY timestamp DESC LIMIT ?"
+                )
+                rows = conn.execute(sql, (limit,)).fetchall()
+        finally:
+            conn.close()
+        return [_row_to_record(r) for r in rows]
+
     def search_best_combination(self, num_qubits=0, qpu_name="", limit=20):
         filters = {"qpu_name": qpu_name} if qpu_name else {}
         candidates = self.search(record_type="optimization", filters=filters, limit=500)
@@ -616,18 +652,27 @@ class UQIRAG:
             conn.close()
 
         chroma_count = 0
-        if self._chroma:
-            try: chroma_count = self._chroma.count()
-            except: pass
+        chroma_health = "disabled"  # disabled | empty | active | error
+        chroma_error = None
+        if self._chroma is not None:
+            try:
+                chroma_count = self._chroma.count()
+                chroma_health = "active" if chroma_count > 0 else "empty"
+            except Exception as e:
+                chroma_health = "error"
+                chroma_error = str(e)
 
         return {
-            "total":        total + cache_count,
-            "by_type":      by_type,
-            "rag_file":     self.rag_file,
-            "cache_file":   self.cache_file,
-            "chroma_dir":   self.chroma_dir,
-            "chroma_index": chroma_count,
-            "last_updated": last_updated,
+            "total":         total + cache_count,
+            "by_type":       by_type,
+            "rag_file":      self.rag_file,
+            "cache_file":    self.cache_file,
+            "chroma_dir":    self.chroma_dir,
+            "chroma_name":   CHROMA_NAME,
+            "chroma_index":  chroma_count,
+            "chroma_health": chroma_health,
+            "chroma_error":  chroma_error,
+            "last_updated":  last_updated,
         }
 
     def print_stats(self):

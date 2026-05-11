@@ -1705,7 +1705,21 @@ async def uqi_rag_search(
     total_gates: int = 0,
     limit:       int = 10,
 ) -> str:
-    """지식베이스 검색. query_type: best_combination|pipeline_issues|transpile_patterns|qec_results|recent|stats"""
+    """지식베이스 검색.
+
+    query_type 지원 값 (11종):
+      stats                    | 레코드 수 + 타입별 분포 + 마지막 갱신
+      best_combination         | gate 감소율 상위 최적화 (qpu_name/num_qubits)
+      suspicious_optimizations | 의심 최적화 (empty/not-equiv/unverified 100%)
+      pipeline_issues          | 파이프라인 실패 로그 (sdk)
+      transpile_patterns       | 트랜스파일 성공/실패 패턴 (sdk)
+      qec_results              | QEC 효과 결과 (qpu_name)
+      gpu_benchmark            | GPU 시뮬레이션 가속비
+      noise_simulation         | 노이즈 모델 fidelity (qpu_name)
+      semantic                 | Chroma 벡터 시맨틱 검색 (query 필수, 2~5000자)
+      security_block           | 정적분석 차단 기록
+      recent                   | 최신 N건 (타입 무관)
+    """
     def _run():
         try:
             if query_type == "stats":
@@ -1729,20 +1743,16 @@ async def uqi_rag_search(
                 records = _rag.search(record_type="gpu_benchmark", limit=limit)
                 return _safe_json([{**r["data"], "_ts": r["timestamp"]} for r in records])
             elif query_type == "noise_simulation":
-                records = _rag.search(record_type="execution", limit=limit * 10)
+                # SQL push-down via json_extract — no more limit*10 over-fetch.
+                records = _rag.search_noise_simulation(qpu_name=qpu_name or "", limit=limit)
                 result = []
                 for r in records:
                     d = r["data"]
-                    backend = d.get("backend", "")
-                    if not backend.startswith("noise_sim"):
-                        continue
-                    if qpu_name and d.get("qpu_name") != qpu_name:
-                        continue
+                    backend = d.get("backend", "") or ""
                     comp = d.get("comparison") or {}
-                    alg = d.get("algorithm_file") or ""
                     result.append({
                         "circuit_name":    d.get("circuit_name"),
-                        "algorithm_file":  alg,
+                        "algorithm_file":  d.get("algorithm_file") or "",
                         "qpu_name":        d.get("qpu_name"),
                         "sdk":             backend.replace("noise_sim_", ""),
                         "shots":           d.get("shots"),
@@ -1752,8 +1762,6 @@ async def uqi_rag_search(
                         "dominant_noise":  comp.get("dominant_b"),
                         "_ts":             r["timestamp"],
                     })
-                    if len(result) >= limit:
-                        break
                 return _safe_json(result)
             elif query_type == "semantic":
                 if not query:
@@ -1787,8 +1795,12 @@ async def uqi_rag_search(
             else:
                 return json.dumps({
                     "error": mcp_unsupported_query_type(query_type),
-                    "supported": ["best_combination", "pipeline_issues",
-                                  "transpile_patterns", "qec_results", "recent", "stats"]
+                    "supported": [
+                        "stats", "best_combination", "suspicious_optimizations",
+                        "pipeline_issues", "transpile_patterns", "qec_results",
+                        "gpu_benchmark", "noise_simulation", "semantic",
+                        "security_block", "recent",
+                    ],
                 })
         except Exception as e:
             return json.dumps({"error": str(e)})

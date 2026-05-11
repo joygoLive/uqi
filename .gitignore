@@ -1,6 +1,8 @@
 # 데이터 (캐시 DB는 재생성 가능 — git 추적 제외)
 #data/
 data/uqi_cache.db
+# 미사용 placeholder (어떤 코드도 참조하지 않음). 재생성되어도 ignore.
+data/uqi_knowledge.db
 
 # 로그
 logs/

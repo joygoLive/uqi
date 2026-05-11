@@ -147,7 +147,9 @@ import traceback
 _request_context: ContextVar[dict] = ContextVar('request_context', default={})
 
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).parent.parent / ".env")
+# override=True: shell 의 빈/낡은 환경변수보다 .env 가 항상 우선.
+# (예: 사용자 셸이 export ANTHROPIC_API_KEY="" 로 덮어 두는 케이스 방어)
+load_dotenv(Path(__file__).parent.parent / ".env", override=True)
 IBM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
 IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 
@@ -1912,10 +1914,11 @@ async def uqi_kb_ask(
             user_msg = f"QUESTION:\n{q}\n\nRECORDS:\n{ctx}"
             model = os.environ.get("UQI_SYNTH_MODEL", "claude-opus-4-7")
 
+            # Opus 4.7+ 부터 temperature 파라미터 deprecated.
+            # SDK default 사용 (각 모델별 권장값 자동 적용).
             resp = client.messages.create(
                 model=model,
                 max_tokens=1024,
-                temperature=0,
                 system=_KB_SYS_PROMPT,
                 messages=[{"role": "user", "content": user_msg}],
             )

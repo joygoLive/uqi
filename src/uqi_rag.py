@@ -30,9 +30,20 @@ CHROMA_DIR  = os.environ.get("UQI_CHROMA_DIR",  str(_DATA_DIR / "uqi_chroma"))
 CHROMA_NAME = os.environ.get("UQI_CHROMA_COLLECTION", "uqi_knowledge")
 
 # 새 RAG 백엔드 (sqlite-vec). chroma 와 병행 운영 후 Phase 8 에서 chroma 제거.
-EMBED_URL   = os.environ.get("UQI_EMBED_URL",   "http://127.0.0.1:7997")
-EMBED_MODEL = os.environ.get("UQI_EMBED_MODEL", "BAAI/bge-m3")
-EMBED_DIM   = int(os.environ.get("UQI_EMBED_DIM", "1024"))
+EMBED_URL    = os.environ.get("UQI_EMBED_URL",    "http://127.0.0.1:7997")
+EMBED_MODEL  = os.environ.get("UQI_EMBED_MODEL",  "BAAI/bge-m3")
+EMBED_DIM    = int(os.environ.get("UQI_EMBED_DIM", "1024"))
+RERANK_URL   = os.environ.get("UQI_RERANK_URL",   "http://127.0.0.1:7998")
+RERANK_MODEL = os.environ.get("UQI_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+RERANK_TOPN  = int(os.environ.get("UQI_RERANK_TOPN", "50"))  # over-fetch before rerank
+
+# search_semantic 백엔드 선택. 운영 안전을 위해 "auto" 가 기본 —
+# sqlite-vec 가능 시 우선 시도하고, 임베딩 서버 다운 등으로 실패하면
+# Chroma 로 폴백.
+#   auto         : sqlite-vec 우선 + chroma fallback (권장 default)
+#   sqlite-vec   : sqlite-vec 만 사용 (실패 시 빈 결과)
+#   chroma       : 강제 chroma (rollback 시)
+RAG_BACKEND = os.environ.get("UQI_RAG_BACKEND", "auto")
 
 # 캐시 타입은 임베딩 제외 (값이 크고 검색 의미 없음)
 _SKIP_EMBED_TYPES = {"cache", "qpu_availability"}
@@ -557,6 +568,108 @@ class UQIRAG:
             print(f"  [RAG] Chroma 인덱싱 실패 {record_id}: {e}", flush=True)
 
     # ─────────────────────────────────────────────────────
+    # sqlite-vec 백엔드 — record_vec + record_fts write-through
+    # ─────────────────────────────────────────────────────
+
+    def _rerank(self,
+                query:     str,
+                records:   list,
+                top_n:     int,
+                timeout:   float = 15.0) -> list:
+        """Cross-encoder 재랭킹. 실패 시 입력 그대로 반환 (graceful)."""
+        if not records:
+            return records
+        # 임베딩 텍스트 v2 를 재랭커 입력으로 그대로 사용 — 임베딩과 동일한 표현이라
+        # 일관성 ↑. 원본 record content 가 너무 길면 truncate.
+        documents = []
+        for r in records:
+            text = _make_embedding_text_v2(r.get("type", ""), r.get("data") or {})
+            documents.append(text[:2000])  # cross-encoder context 보호 (bge-reranker 8K 한계 충분)
+        try:
+            import requests
+            resp = requests.post(
+                f"{RERANK_URL.rstrip('/')}/rerank",
+                json={"query": query, "documents": documents, "top_n": top_n,
+                      "model": RERANK_MODEL},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            results = resp.json().get("results", [])
+        except Exception as e:
+            print(f"  [RAG] rerank 호출 실패 → 원본 순서 유지: {e}", flush=True)
+            return records[:top_n]
+
+        # results: [{"index": i, "score": s}, ...] — distance 작은 순(=관련성 높은 순) 정렬돼 있음
+        out = []
+        for r in results:
+            idx = r.get("index")
+            if idx is None or idx >= len(records):
+                continue
+            rec = dict(records[idx])
+            rec["rerank_score"] = round(float(r.get("score", 0.0)), 4)
+            out.append(rec)
+            if len(out) >= top_n:
+                break
+        return out
+
+    def _embed_text(self, text: str, timeout: float = 10.0) -> Optional[list]:
+        """임베딩 서버 HTTP 호출. 실패 시 None — 호출부가 폴백 처리."""
+        try:
+            import requests  # 지연 import — 임베딩을 안 쓰는 단위 테스트 환경 보호
+            r = requests.post(
+                f"{EMBED_URL.rstrip('/')}/embeddings",
+                json={"model": EMBED_MODEL, "input": text},
+                timeout=timeout,
+            )
+            r.raise_for_status()
+            return r.json()["data"][0]["embedding"]
+        except Exception as e:
+            print(f"  [RAG] embed 호출 실패 ({EMBED_URL}): {e}", flush=True)
+            return None
+
+    def _vec_add(self, record_id: str, record_type: str, data: dict, timestamp: str):
+        """record_vec(임베딩) + record_fts(BM25) 양쪽에 write-through. 실패해도 SQLite 저장에 영향 없음."""
+        if not self._sqlite_vec_ok or record_type in _SKIP_EMBED_TYPES:
+            return
+        if sqlite_vec is None:  # 안전망 — _sqlite_vec_ok와 일치
+            return
+        text = _make_embedding_text_v2(record_type, data)
+        vec = self._embed_text(text)
+        if vec is None:
+            # 임베딩 서버 다운 — record_fts 라도 채워 BM25 검색은 살림
+            try:
+                with self._lock:
+                    conn = _connect(self.rag_file)
+                    try:
+                        conn.execute(
+                            "INSERT INTO record_fts(record_id, content) VALUES (?, ?)",
+                            (record_id, text),
+                        )
+                        conn.commit()
+                    finally:
+                        conn.close()
+            except Exception as e:
+                print(f"  [RAG] fts-only insert 실패 {record_id}: {e}", flush=True)
+            return
+        try:
+            with self._lock:
+                conn = _connect(self.rag_file)
+                try:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO record_vec(record_id, embedding) VALUES (?, ?)",
+                        (record_id, sqlite_vec.serialize_float32(vec)),
+                    )
+                    conn.execute(
+                        "INSERT INTO record_fts(record_id, content) VALUES (?, ?)",
+                        (record_id, text),
+                    )
+                    conn.commit()
+                finally:
+                    conn.close()
+        except Exception as e:
+            print(f"  [RAG] vec_add 실패 {record_id}: {e}", flush=True)
+
+    # ─────────────────────────────────────────────────────
     # 공통 저장 인터페이스
     # ─────────────────────────────────────────────────────
 
@@ -577,8 +690,10 @@ class UQIRAG:
             finally:
                 conn.close()
 
-        # Chroma 동기화 (락 밖에서)
+        # 임베딩 백엔드 write-through (둘 다 락 밖에서 호출 — 자체 락/스레드세이프).
+        # chroma 는 4주 관측 기간 동안 백업 인덱스로 유지. Phase 8 후 제거.
         self._chroma_add(record_id, record_type, data, timestamp)
+        self._vec_add(record_id, record_type, data, timestamp)
         return record_id
 
     # ─────────────────────────────────────────────────────
@@ -618,11 +733,106 @@ class UQIRAG:
     def search_semantic(self,
                         query:       str,
                         limit:       int  = 10,
-                        record_type: str  = None) -> list:
+                        record_type: str  = None,
+                        rerank:      bool = True) -> list:
+        """벡터 유사도 검색. UQI_RAG_BACKEND 환경변수로 백엔드 선택.
+
+          auto       : sqlite-vec 우선 + 실패 시 chroma fallback (default)
+          sqlite-vec : sqlite-vec 만 사용 — 실패 시 빈 결과
+          chroma     : 강제 chroma (rollback safety)
+
+        rerank=True 이고 sqlite-vec 경로일 때 cross-encoder 재랭킹 1단계 추가:
+          1) dense 검색으로 top-N (= max(limit*5, RERANK_TOPN=50)) 후보
+          2) bge-reranker-v2-m3 로 정밀 정렬 → top-`limit`
+        rerank 서버 다운 시 dense 결과 그대로 반환 (graceful).
         """
-        Chroma 벡터 유사도 검색.
-        결과 record_id로 SQLite에서 상세 데이터 조회.
-        """
+        backend = RAG_BACKEND
+        # rerank 사용 시 over-fetch, chroma 백엔드에는 적용 안 함 (Phase 8 까지 잠시 그대로)
+        fetch_n = max(limit * 5, RERANK_TOPN) if rerank else limit
+
+        if backend == "auto":
+            if self._sqlite_vec_ok:
+                try:
+                    candidates = self._search_sqlite_vec(query, fetch_n, record_type)
+                    if candidates:
+                        return self._rerank(query, candidates, limit) if rerank else candidates[:limit]
+                except Exception as e:
+                    print(f"  [RAG] sqlite-vec 검색 실패 → chroma fallback: {e}", flush=True)
+            return self._search_chroma(query, limit, record_type)
+
+        if backend == "sqlite-vec":
+            if not self._sqlite_vec_ok:
+                return []
+            try:
+                candidates = self._search_sqlite_vec(query, fetch_n, record_type)
+                return self._rerank(query, candidates, limit) if rerank else candidates[:limit]
+            except Exception as e:
+                print(f"  [RAG] sqlite-vec 검색 실패: {e}", flush=True)
+                return []
+
+        # backend == "chroma"  (또는 잘못된 값 → 안전한 기본)
+        return self._search_chroma(query, limit, record_type)
+
+    def _search_sqlite_vec(self,
+                           query:       str,
+                           limit:       int,
+                           record_type: Optional[str]) -> list:
+        """sqlite-vec record_vec 코사인 유사도 top-k 검색."""
+        vec = self._embed_text(query)
+        if vec is None:
+            raise RuntimeError("embedding 서버 응답 없음")
+        if sqlite_vec is None:
+            raise RuntimeError("sqlite_vec 모듈 미로드")
+
+        conn = _connect(self.rag_file)
+        try:
+            # vec0 KNN: WHERE embedding MATCH ? AND k = ?
+            # 결과는 distance ASC (가까운 순). over-fetch 후 type 필터 적용.
+            over = limit * 3 if record_type else limit
+            rows = conn.execute(
+                "SELECT record_id, distance FROM record_vec "
+                "WHERE embedding MATCH ? AND k = ? ORDER BY distance",
+                (sqlite_vec.serialize_float32(vec), over),
+            ).fetchall()
+            if not rows:
+                return []
+
+            ids = [r[0] for r in rows]
+            dist_map = {r[0]: r[1] for r in rows}
+
+            placeholders = ",".join("?" * len(ids))
+            sql = f"SELECT * FROM records WHERE id IN ({placeholders})"
+            params: list = list(ids)
+            if record_type:
+                sql += " AND type = ?"
+                params.append(record_type)
+            recs = conn.execute(sql, params).fetchall()
+        finally:
+            conn.close()
+
+        record_map = {row["id"]: _row_to_record(row) for row in recs}
+        results = []
+        for rid in ids:  # distance ASC 순 유지
+            if rid not in record_map:
+                continue
+            rec = dict(record_map[rid])
+            dist = dist_map[rid]
+            # bge-m3 출력은 normalize 됐고 vec0 기본 L2 distance → 0~2 범위.
+            # 0~1 친화적 표시로 1 - distance/2 변환 (cosine 근사).
+            try:
+                rec["similarity"] = round(max(0.0, 1.0 - float(dist) / 2.0), 4)
+            except (TypeError, ValueError):
+                rec["similarity"] = 0.0
+            results.append(rec)
+            if len(results) >= limit:
+                break
+        return results
+
+    def _search_chroma(self,
+                       query:       str,
+                       limit:       int,
+                       record_type: Optional[str]) -> list:
+        """기존 Chroma 벡터 검색 (fallback / rollback path)."""
         if self._chroma is None:
             return []
 
@@ -644,7 +854,6 @@ class UQIRAG:
         if not ids:
             return []
 
-        # SQLite에서 상세 데이터 조회
         conn = _connect(self.rag_file)
         try:
             placeholders = ",".join("?" * len(ids))
@@ -654,13 +863,12 @@ class UQIRAG:
         finally:
             conn.close()
 
-        # id 순서 유지 + similarity score 추가
         record_map = {row["id"]: _row_to_record(row) for row in rows}
         records = []
         for rid, dist in zip(ids, distances):
             if rid in record_map:
                 rec = dict(record_map[rid])
-                rec["similarity"] = round(1 - dist, 4)  # cosine distance → similarity
+                rec["similarity"] = round(1 - dist, 4)  # chroma cosine distance → similarity
                 records.append(rec)
 
         return records

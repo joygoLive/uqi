@@ -146,10 +146,21 @@ import traceback
 
 _request_context: ContextVar[dict] = ContextVar('request_context', default={})
 
-from dotenv import load_dotenv
-# override=True: shell 의 빈/낡은 환경변수보다 .env 가 항상 우선.
-# (예: 사용자 셸이 export ANTHROPIC_API_KEY="" 로 덮어 두는 케이스 방어)
-load_dotenv(Path(__file__).parent.parent / ".env", override=True)
+from dotenv import load_dotenv, dotenv_values
+_ENV_FILE = Path(__file__).parent.parent / ".env"
+load_dotenv(_ENV_FILE)
+# ANTHROPIC_API_KEY 만 선별적 보강: 사용자 셸에서 빈 값으로 export 된 경우
+# (예: `export ANTHROPIC_API_KEY=` 가 .bashrc 어딘가에 있는 케이스) 에도
+# .env 값이 우선되도록. 다른 키들은 monkeypatch 같은 명시적 설정 보존.
+# 테스트가 dotenv 모듈 자체를 MagicMock 으로 sys.modules 에 주입하는 경우
+# dotenv_values() 가 mock 객체를 반환할 수 있어 isinstance(str) 로 가드.
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    try:
+        _v = dotenv_values(_ENV_FILE).get("ANTHROPIC_API_KEY")
+        if isinstance(_v, str) and _v:
+            os.environ["ANTHROPIC_API_KEY"] = _v
+    except Exception:
+        pass
 IBM_TOKEN = os.getenv("IBM_QUANTUM_TOKEN")
 IQM_TOKEN = os.getenv("IQM_QUANTUM_TOKEN")
 

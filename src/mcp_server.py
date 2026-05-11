@@ -18,7 +18,8 @@ from uqi_calibration import UQICalibration
 from uqi_optimizer   import UQIOptimizer
 from uqi_noise       import UQINoise
 from uqi_qec         import UQIQEC
-from uqi_rag         import UQIRAG
+from uqi_rag         import UQIRAG, _make_embedding_text_v2
+from uqi_rag_scrub   import scrub as _rag_scrub
 from uqi_qpu_live_check import live_check_qpu, recommend_alternatives
 import uqi_job_store as _job_store
 from uqi_messages import (
@@ -1804,6 +1805,146 @@ async def uqi_rag_search(
                 })
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    return await asyncio.to_thread(_run)
+
+
+# ─────────────────────────────────────────────────────────
+# 툴 5b: 지식베이스 Q&A (Claude API)
+# ─────────────────────────────────────────────────────────
+
+_anthropic_client = None
+def _get_anthropic_client():
+    """Anthropic 클라이언트 lazy init. ANTHROPIC_API_KEY 미설정 시 None."""
+    global _anthropic_client
+    if _anthropic_client is None:
+        try:
+            import anthropic
+        except ImportError:
+            return None
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+        if not api_key:
+            return None
+        _anthropic_client = anthropic.Anthropic(api_key=api_key)
+    return _anthropic_client
+
+
+_KB_SYS_PROMPT = (
+    "You are UQI's quantum-pipeline knowledge base assistant. "
+    "Use ONLY the provided RECORDS to answer the user's QUESTION. "
+    "Cite specific records by writing [id] (the 8-char hex id) right after the relevant sentence. "
+    "Multiple citations OK: [id1][id2]. "
+    "If the records don't contain the answer, say so plainly — do not invent. "
+    "Answer in the language of the question (Korean or English). "
+    "Be concise: 1~5 sentences plus a brief bullet list if helpful."
+)
+
+
+@mcp.tool(output_schema=None, timeout=60)
+async def uqi_kb_ask(
+    question:    str,
+    limit:       int = 8,
+    record_type: str = "",
+) -> str:
+    """지식베이스 자연어 질의응답.
+
+    Pipeline: hybrid search(dense+BM25) → cross-encoder rerank → sensitive
+    field 마스킹 → Claude 답변 합성 (외부 지식 차단, 인용 강제).
+
+    Args:
+      question    : 사용자 자연어 질문 (한·영 지원)
+      limit       : 컨텍스트에 포함할 record 수 (1~20, default 8)
+      record_type : 검색 범위 제한 (optional, 예: "optimization", "qec_experiment")
+
+    Returns JSON:
+      {
+        "answer":     "...",
+        "citations":  [{"id":"...","type":"...","timestamp":"...","snippet":"..."}],
+        "model":      "claude-opus-4-7",
+        "usage":      {"input_tokens":..., "output_tokens":...},
+        "elapsed_ms": 1234,
+        "n_records":  8
+      }
+    """
+    def _run():
+        import time, json as _json
+        t0 = time.time()
+        try:
+            client = _get_anthropic_client()
+            if client is None:
+                return _json.dumps({
+                    "error": "ANTHROPIC_API_KEY missing — set in .env and restart uqi-mcp",
+                }, ensure_ascii=False)
+
+            q = (question or "").strip()
+            if len(q) < 2:
+                return _json.dumps({"error": "question must be at least 2 characters"},
+                                   ensure_ascii=False)
+            if len(q) > 5000:
+                return _json.dumps({"error": "question too long (max 5000 chars)"},
+                                   ensure_ascii=False)
+
+            n = max(1, min(20, int(limit or 8)))
+            records = _rag.search_semantic(q, limit=n,
+                                            record_type=(record_type or None),
+                                            rerank=True, hybrid=True)
+            if not records:
+                return _json.dumps({
+                    "answer":     "검색 결과 없음 — 지식베이스에 관련 데이터가 없습니다.",
+                    "citations":  [],
+                    "n_records":  0,
+                    "elapsed_ms": int((time.time() - t0) * 1000),
+                }, ensure_ascii=False)
+
+            # 마스킹된 컨텍스트로 LLM 호출
+            scrubbed = _rag_scrub(records)
+            ctx_blocks = []
+            for rec in scrubbed:
+                rid = rec.get("id", "?")
+                rtype = rec.get("type", "?")
+                ts = (rec.get("timestamp") or "")[:19]
+                data_str = _json.dumps(rec.get("data") or {}, ensure_ascii=False, default=str)
+                if len(data_str) > 800:
+                    data_str = data_str[:797] + "..."
+                ctx_blocks.append(f"[{rid}] type={rtype} ts={ts}\n  {data_str}")
+            ctx = "\n\n".join(ctx_blocks)
+
+            user_msg = f"QUESTION:\n{q}\n\nRECORDS:\n{ctx}"
+            model = os.environ.get("UQI_SYNTH_MODEL", "claude-opus-4-7")
+
+            resp = client.messages.create(
+                model=model,
+                max_tokens=1024,
+                temperature=0,
+                system=_KB_SYS_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            answer = "".join(getattr(b, "text", "") for b in resp.content)
+
+            citations = [{
+                "id":        r.get("id"),
+                "type":      r.get("type"),
+                "timestamp": r.get("timestamp"),
+                "snippet":   _make_embedding_text_v2(r.get("type", ""),
+                                                     r.get("data") or {})[:200],
+            } for r in records]  # 인용은 원본 records 기준 (스니펫에 마스킹 미적용 — 사용자 본인 환경)
+
+            return _json.dumps({
+                "answer":     answer,
+                "citations":  citations,
+                "model":      resp.model,
+                "usage":      {
+                    "input_tokens":  resp.usage.input_tokens,
+                    "output_tokens": resp.usage.output_tokens,
+                },
+                "elapsed_ms": int((time.time() - t0) * 1000),
+                "n_records":  len(records),
+            }, ensure_ascii=False)
+        except Exception as e:
+            return _json.dumps({
+                "error":      str(e),
+                "elapsed_ms": int((time.time() - t0) * 1000),
+            }, ensure_ascii=False)
 
     return await asyncio.to_thread(_run)
 

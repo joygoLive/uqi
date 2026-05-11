@@ -1,0 +1,1407 @@
+[
+  {
+    "id": "Q01",
+    "category": "direct",
+    "query": "ibm_fez에서 실행한 최적화 결과",
+    "intent": "ibm_fez QPU에서 수행된 optimization 레코드",
+    "current_top5": [
+      {
+        "id": "3f61a444",
+        "type": "optimization",
+        "similarity": 0.461,
+        "snippet": "qpu=ibm_fez circuit=circuit combo=qiskit+sabre gate_red=0.15647029824993838"
+      },
+      {
+        "id": "0a5dc765",
+        "type": "optimization",
+        "similarity": 0.4578,
+        "snippet": "qpu=ibm_fez circuit=circuit combo=qiskit+sabre gate_red=0.14398707309725303"
+      },
+      {
+        "id": "b08a7dd4",
+        "type": "optimization",
+        "similarity": 0.4546,
+        "snippet": "qpu=ibm_fez circuit=circuit combo=qiskit+sabre gate_red=0.1427710678388519"
+      },
+      {
+        "id": "8ac1d5ac",
+        "type": "execution",
+        "similarity": 0.4527,
+        "snippet": "qpu=ibm_fez circuit=qiskit_circuit_circuit-55012_0 backend=ibm_fez ok=True err=None"
+      },
+      {
+        "id": "44766a58",
+        "type": "optimization",
+        "similarity": 0.4411,
+        "snippet": "qpu=ibm_fez circuit=qpe_interest_rate combo=qiskit+sabre gate_red=0.9977697165121591"
+      }
+    ],
+    "expected": [
+      "54011d1e",
+      "2f5d3a55",
+      "090668e7",
+      "f9fd9ae3",
+      "fd57f57f",
+      "9235ec30",
+      "a07f5906",
+      "f05dfffc",
+      "d787fd72",
+      "5c8076b4"
+    ]
+  },
+  {
+    "id": "Q02",
+    "category": "direct",
+    "query": "iqm_garnet에서의 QEC 효과",
+    "intent": "qpu_name=iqm_garnet 인 qec_experiment 레코드",
+    "current_top5": [
+      {
+        "id": "bfb8dfb3",
+        "type": "execution",
+        "similarity": 0.5807,
+        "snippet": "qpu=iqm_garnet circuit=qae_circuit backend=iqm_garnet ok=True err=None"
+      },
+      {
+        "id": "c2bc3a85",
+        "type": "execution",
+        "similarity": 0.5745,
+        "snippet": "qpu=iqm_garnet circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_garnet ok=True err=None"
+      },
+      {
+        "id": "bdd21823",
+        "type": "execution",
+        "similarity": 0.5745,
+        "snippet": "qpu=iqm_garnet circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_garnet ok=True err=None"
+      },
+      {
+        "id": "a3bd4a2c",
+        "type": "execution",
+        "similarity": 0.5745,
+        "snippet": "qpu=iqm_garnet circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_garnet ok=True err=None"
+      },
+      {
+        "id": "877a5868",
+        "type": "execution",
+        "similarity": 0.5704,
+        "snippet": "qpu=iqm_garnet circuit=IterativeAmplitudeEstimation_qc_5 backend=iqm_garnet ok=True err=None"
+      }
+    ],
+    "expected": [
+      "8e508515",
+      "5ff53d2a"
+    ]
+  },
+  {
+    "id": "Q03",
+    "category": "direct",
+    "query": "CUDAQ 트랜스파일 패턴",
+    "intent": "sdk=CUDAQ 인 transpile_pattern",
+    "current_top5": [
+      {
+        "id": "46c5bf9e",
+        "type": "gpu_benchmark",
+        "similarity": 0.5615,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "e7487969",
+        "type": "gpu_benchmark",
+        "similarity": 0.5575,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "9f29612b",
+        "type": "gpu_benchmark",
+        "similarity": 0.5557,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "2100315b",
+        "type": "gpu_benchmark",
+        "similarity": 0.5545,
+        "snippet": "circuit=benchmark_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "68db462e",
+        "type": "gpu_benchmark",
+        "similarity": 0.551,
+        "snippet": "circuit=benchmark_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "b6c6956b",
+      "5717611a",
+      "f958d19d"
+    ]
+  },
+  {
+    "id": "Q04",
+    "category": "direct",
+    "query": "Perceval pipeline failures",
+    "intent": "sdk=Perceval 인 pipeline_issue",
+    "current_top5": [
+      {
+        "id": "1ef1e9a3",
+        "type": "pipeline_issue",
+        "similarity": 0.623,
+        "snippet": "stage=uqi_noise_simulate sdk=Perceval qpu=qpu:ascella issue='NoneType' object is not iterable"
+      },
+      {
+        "id": "6ce40f46",
+        "type": "pipeline_issue",
+        "similarity": 0.623,
+        "snippet": "stage=uqi_noise_simulate sdk=Perceval qpu=qpu:ascella issue='NoneType' object is not iterable"
+      },
+      {
+        "id": "ea8afc45",
+        "type": "pipeline_issue",
+        "similarity": 0.6209,
+        "snippet": "stage=uqi_optimize sdk=Perceval qpu=ibm_fez issue=Optimization failed — results empty (circuit extraction or conversion failure)"
+      },
+      {
+        "id": "1942da97",
+        "type": "pipeline_issue",
+        "similarity": 0.6209,
+        "snippet": "stage=uqi_optimize sdk=Perceval qpu=ibm_fez issue=Optimization failed — results empty (circuit extraction or conversion failure)"
+      },
+      {
+        "id": "4a9b3593",
+        "type": "pipeline_issue",
+        "similarity": 0.5755,
+        "snippet": "stage=uqi_qec_analyze sdk=Perceval qpu=qpu:ascella issue='NoneType' object is not iterable"
+      }
+    ],
+    "expected": [
+      "bb33b103",
+      "003f9806",
+      "e1a3775e",
+      "1942da97",
+      "f55b4e40",
+      "5259c5f6",
+      "ea8afc45",
+      "55a745c8",
+      "c5312367",
+      "9e614672"
+    ]
+  },
+  {
+    "id": "Q05",
+    "category": "direct",
+    "query": "Qrisp GPU benchmark results",
+    "intent": "framework=Qrisp 인 gpu_benchmark",
+    "current_top5": [
+      {
+        "id": "7db5ce65",
+        "type": "gpu_benchmark",
+        "similarity": 0.7595,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=1.459 verdict=GPU 1.46x 빠름"
+      },
+      {
+        "id": "32e579c7",
+        "type": "gpu_benchmark",
+        "similarity": 0.7564,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=1.016 verdict=GPU 1.02x 빠름"
+      },
+      {
+        "id": "02bcc010",
+        "type": "gpu_benchmark",
+        "similarity": 0.7536,
+        "snippet": "circuit=qmc_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "7f2f1851",
+        "type": "gpu_benchmark",
+        "similarity": 0.7529,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=2.412 verdict=GPU 2.41x 빠름"
+      },
+      {
+        "id": "bf6a79a0",
+        "type": "gpu_benchmark",
+        "similarity": 0.7417,
+        "snippet": "circuit=benchmark_qrisp fw=Qrisp speedup=143.05 verdict=GPU 143.05x 빠름"
+      }
+    ],
+    "expected": [
+      "02bcc010",
+      "7f2f1851",
+      "7db5ce65",
+      "0f406fd9",
+      "32e579c7",
+      "82c423eb",
+      "bf6a79a0",
+      "002f2017",
+      "7e11c6a1",
+      "9a2f3ae5"
+    ]
+  },
+  {
+    "id": "Q06",
+    "category": "direct",
+    "query": "tket+sabre 조합으로 최적화한 회로",
+    "intent": "combination=tket+sabre 인 optimization",
+    "current_top5": [],
+    "expected": [
+      "58f2db07",
+      "0aa4d112",
+      "9c62cad8",
+      "d2074bb2",
+      "1f2fce07",
+      "b99d6b6a",
+      "54011d1e",
+      "2f5d3a55",
+      "090668e7",
+      "f9fd9ae3"
+    ]
+  },
+  {
+    "id": "Q07",
+    "category": "direct",
+    "query": "bit_flip code QEC 실험",
+    "intent": "code=bit_flip 인 qec_experiment",
+    "current_top5": [
+      {
+        "id": "19a1f0e5",
+        "type": "qec_experiment",
+        "similarity": 0.6235,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "55a17279",
+        "type": "qec_experiment",
+        "similarity": 0.6227,
+        "snippet": "qpu=ibm_fez circuit=bell_2q code=bit_flip f_after=0.8729 eff=False"
+      },
+      {
+        "id": "17facb41",
+        "type": "qec_experiment",
+        "similarity": 0.6193,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "182b4207",
+        "type": "qec_experiment",
+        "similarity": 0.6171,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "58ba89ee",
+        "type": "qec_experiment",
+        "similarity": 0.6053,
+        "snippet": "qpu=ibm_fez circuit=perceval_circuit_0 code=bit_flip f_after=0.2567 eff=False"
+      }
+    ],
+    "expected": [
+      "5b4192fc",
+      "4e95bb83",
+      "58ba89ee",
+      "182b4207",
+      "17facb41",
+      "19a1f0e5",
+      "5ff53d2a",
+      "55a17279"
+    ]
+  },
+  {
+    "id": "Q08",
+    "category": "direct",
+    "query": "노이즈 시뮬레이션 실행 결과",
+    "intent": "backend LIKE noise_sim% 인 execution",
+    "current_top5": [
+      {
+        "id": "61c63e89",
+        "type": "gpu_benchmark",
+        "similarity": 0.2094,
+        "snippet": "circuit=benchmark_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "82c423eb",
+        "type": "gpu_benchmark",
+        "similarity": 0.207,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "002f2017",
+        "type": "gpu_benchmark",
+        "similarity": 0.2067,
+        "snippet": "circuit=benchmark_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "7e11c6a1",
+        "type": "gpu_benchmark",
+        "similarity": 0.2063,
+        "snippet": "circuit=benchmark_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "0840a2f5",
+        "type": "gpu_benchmark",
+        "similarity": 0.2034,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "f02f77de",
+      "6054ec62",
+      "42dd3a60",
+      "ace2bfa7",
+      "778afabe",
+      "4cdd64af",
+      "7f06b26d",
+      "c62be06d",
+      "1c8e9a10",
+      "32feb39d"
+    ]
+  },
+  {
+    "id": "Q09",
+    "category": "concept",
+    "query": "게이트 수가 많이 줄어든 회로 최적화",
+    "intent": "gate_reduction 가 높은 optimization 사례",
+    "current_top5": [
+      {
+        "id": "5b6ab001",
+        "type": "security_block",
+        "similarity": 0.3114,
+        "snippet": "file=test_block_eval.py reason=eval() 사용 tool=uqi_qpu_submit"
+      },
+      {
+        "id": "75bca184",
+        "type": "gpu_benchmark",
+        "similarity": 0.2685,
+        "snippet": "circuit=gb_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "c6deb56e",
+        "type": "gpu_benchmark",
+        "similarity": 0.2653,
+        "snippet": "circuit=gb_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "a1f7fcd7",
+        "type": "pipeline_issue",
+        "similarity": 0.2621,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c5ebf300",
+        "type": "pipeline_issue",
+        "similarity": 0.2621,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      }
+    ],
+    "expected": [
+      "ef720f74",
+      "7d7db4cb",
+      "bdbb767e",
+      "1e2b1b9f",
+      "44766a58",
+      "1845de91",
+      "178e65ea",
+      "6ba84955",
+      "99b9894e",
+      "5283f2d4"
+    ]
+  },
+  {
+    "id": "Q10",
+    "category": "concept",
+    "query": "fidelity 가 높은 양자 실험",
+    "intent": "fidelity_after 가 큰 qec_experiment 또는 fidelity 높은 noise_simulate",
+    "current_top5": [
+      {
+        "id": "0840a2f5",
+        "type": "gpu_benchmark",
+        "similarity": 0.2806,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "ce36b819",
+        "type": "security_block",
+        "similarity": 0.2755,
+        "snippet": "file=BS_qmc_qiskit.py reason=비허용 모듈 import: qiskit_finance tool=uqi_analyze"
+      },
+      {
+        "id": "587d84d0",
+        "type": "gpu_benchmark",
+        "similarity": 0.2739,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "75bca184",
+        "type": "gpu_benchmark",
+        "similarity": 0.2736,
+        "snippet": "circuit=gb_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "1b9ba8fb",
+        "type": "gpu_benchmark",
+        "similarity": 0.2733,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "8e508515",
+      "5ff53d2a",
+      "683a2338",
+      "c62be06d",
+      "1c8e9a10",
+      "32feb39d",
+      "cf4b09dc",
+      "706e252c"
+    ]
+  },
+  {
+    "id": "Q11",
+    "category": "concept",
+    "query": "GPU 가속이 큰 시뮬레이션",
+    "intent": "speedup 가 큰 gpu_benchmark",
+    "current_top5": [
+      {
+        "id": "a8efde78",
+        "type": "gpu_benchmark",
+        "similarity": 0.6217,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=1.983 verdict=GPU 1.98x 빠름"
+      },
+      {
+        "id": "08ed0fc5",
+        "type": "gpu_benchmark",
+        "similarity": 0.6138,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=1.834 verdict=GPU 1.83x 빠름"
+      },
+      {
+        "id": "09e71f41",
+        "type": "gpu_benchmark",
+        "similarity": 0.5982,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "9f29612b",
+        "type": "gpu_benchmark",
+        "similarity": 0.5932,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "7db5ce65",
+        "type": "gpu_benchmark",
+        "similarity": 0.593,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=1.459 verdict=GPU 1.46x 빠름"
+      }
+    ],
+    "expected": [
+      "bf6a79a0",
+      "f826bcf8",
+      "8773fb85",
+      "09d4ee51",
+      "a2de21a4",
+      "61b879ab",
+      "cccc2445",
+      "7959bc6c",
+      "ce4b118d",
+      "612423e8"
+    ]
+  },
+  {
+    "id": "Q12",
+    "category": "concept",
+    "query": "high error_rate executions",
+    "intent": "error_rate 가 큰 execution",
+    "current_top5": [
+      {
+        "id": "2c95e86d",
+        "type": "execution",
+        "similarity": 0.3761,
+        "snippet": "qpu=ibm_marrakesh circuit=IterativeAmplitudeEstimation_qc_0 backend=ibm_marrakesh ok=True err=None"
+      },
+      {
+        "id": "cd2ef1ab",
+        "type": "execution",
+        "similarity": 0.3761,
+        "snippet": "qpu=ibm_marrakesh circuit=IterativeAmplitudeEstimation_qc_0 backend=ibm_marrakesh ok=True err=None"
+      },
+      {
+        "id": "15a76f27",
+        "type": "execution",
+        "similarity": 0.3753,
+        "snippet": "qpu=ibm_marrakesh circuit=IterativeAmplitudeEstimation_qc_5 backend=ibm_marrakesh ok=True err=None"
+      },
+      {
+        "id": "640feae8",
+        "type": "execution",
+        "similarity": 0.3744,
+        "snippet": "qpu=ibm_marrakesh circuit=IterativeAmplitudeEstimation_qc_3 backend=ibm_marrakesh ok=True err=None"
+      },
+      {
+        "id": "db995923",
+        "type": "execution",
+        "similarity": 0.3744,
+        "snippet": "qpu=ibm_marrakesh circuit=IterativeAmplitudeEstimation_qc_3 backend=ibm_marrakesh ok=True err=None"
+      }
+    ],
+    "expected": [
+      "f02f77de",
+      "6054ec62",
+      "42dd3a60",
+      "ace2bfa7",
+      "778afabe",
+      "4cdd64af",
+      "7f06b26d",
+      "42012170",
+      "5c918ceb",
+      "7e2e590f"
+    ]
+  },
+  {
+    "id": "Q13",
+    "category": "concept",
+    "query": "Iterative Amplitude Estimation 회로",
+    "intent": "circuit_name 에 IterativeAmplitudeEstimation 포함된 레코드",
+    "current_top5": [
+      {
+        "id": "91d71a22",
+        "type": "execution",
+        "similarity": 0.2801,
+        "snippet": "qpu=ionq_aria1 circuit=IterativeAmplitudeEstimation_qc_0 backend=ionq_aria1 ok=False err=None"
+      },
+      {
+        "id": "99f7b38b",
+        "type": "execution",
+        "similarity": 0.2789,
+        "snippet": "qpu=ionq_aria1 circuit=IterativeAmplitudeEstimation_qc_1 backend=ionq_aria1 ok=False err=None"
+      },
+      {
+        "id": "b5a7fa7e",
+        "type": "execution",
+        "similarity": 0.2781,
+        "snippet": "qpu=ibm_fez circuit=IterativeAmplitudeEstimation_qc_1 backend=noise_sim_qiskit ok=True err=None"
+      },
+      {
+        "id": "22b82423",
+        "type": "execution",
+        "similarity": 0.2781,
+        "snippet": "qpu=ibm_fez circuit=IterativeAmplitudeEstimation_qc_1 backend=noise_sim_qiskit ok=True err=None"
+      },
+      {
+        "id": "778afabe",
+        "type": "execution",
+        "similarity": 0.2781,
+        "snippet": "qpu=ibm_fez circuit=IterativeAmplitudeEstimation_qc_1 backend=noise_sim_qiskit ok=True err=None"
+      }
+    ],
+    "expected": [
+      "58f2db07",
+      "0aa4d112",
+      "9c62cad8",
+      "d2074bb2",
+      "1f2fce07",
+      "b99d6b6a",
+      "f9fd9ae3",
+      "fd57f57f",
+      "9235ec30",
+      "a07f5906"
+    ]
+  },
+  {
+    "id": "Q14",
+    "category": "concept",
+    "query": "Quantum Phase Estimation 시도",
+    "intent": "circuit_name 에 qpe 또는 phase_estimation 포함",
+    "current_top5": [
+      {
+        "id": "8e508515",
+        "type": "qec_experiment",
+        "similarity": 0.3692,
+        "snippet": "qpu=iqm_garnet circuit=bell_2q code=phase_flip f_after=0.998 eff=True"
+      },
+      {
+        "id": "683a2338",
+        "type": "qec_experiment",
+        "similarity": 0.3537,
+        "snippet": "qpu=ibm_fez circuit=bell_2q code=phase_flip f_after=0.9803 eff=False"
+      },
+      {
+        "id": "c3e183a2",
+        "type": "optimization",
+        "similarity": 0.3145,
+        "snippet": "qpu=iqm_garnet circuit=IterativeAmplitudeEstimation_qc_1 combo=tket+sabre gate_red=0.45830455403600867"
+      },
+      {
+        "id": "fd982408",
+        "type": "execution",
+        "similarity": 0.3098,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-46_0 backend=noise_sim_pennylane ok=True err=None"
+      },
+      {
+        "id": "4cdd64af",
+        "type": "execution",
+        "similarity": 0.3083,
+        "snippet": "qpu=ibm_fez circuit=IterativeAmplitudeEstimation_qc_0 backend=noise_sim_qiskit ok=True err=None"
+      }
+    ],
+    "expected": [
+      "bdbb767e",
+      "1e2b1b9f",
+      "44766a58",
+      "747167cc",
+      "5ead7aeb",
+      "46ced174",
+      "fdece35f",
+      "e07f5c2c",
+      "0b1adbf4",
+      "9bb811c4"
+    ]
+  },
+  {
+    "id": "Q15",
+    "category": "concept",
+    "query": "옵션 가격 책정 양자 알고리즘",
+    "intent": "qpe_interest_rate 또는 option pricing 관련 회로",
+    "current_top5": [
+      {
+        "id": "44694b98",
+        "type": "pipeline_issue",
+        "similarity": 0.2165,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "a1f7fcd7",
+        "type": "pipeline_issue",
+        "similarity": 0.2165,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c5ebf300",
+        "type": "pipeline_issue",
+        "similarity": 0.2165,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "82c423eb",
+        "type": "gpu_benchmark",
+        "similarity": 0.2076,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "b45e6038",
+        "type": "gpu_benchmark",
+        "similarity": 0.2049,
+        "snippet": "circuit=test_perceval_phase_sweep fw=Perceval speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "58f2db07",
+      "0aa4d112",
+      "9c62cad8",
+      "d2074bb2",
+      "1f2fce07",
+      "b99d6b6a",
+      "090668e7",
+      "f9fd9ae3",
+      "fd57f57f",
+      "9235ec30"
+    ]
+  },
+  {
+    "id": "Q16",
+    "category": "concept",
+    "query": "Bell state experiment",
+    "intent": "circuit_name 에 bell 포함",
+    "current_top5": [
+      {
+        "id": "8e508515",
+        "type": "qec_experiment",
+        "similarity": 0.4508,
+        "snippet": "qpu=iqm_garnet circuit=bell_2q code=phase_flip f_after=0.998 eff=True"
+      },
+      {
+        "id": "683a2338",
+        "type": "qec_experiment",
+        "similarity": 0.4254,
+        "snippet": "qpu=ibm_fez circuit=bell_2q code=phase_flip f_after=0.9803 eff=False"
+      },
+      {
+        "id": "5ff53d2a",
+        "type": "qec_experiment",
+        "similarity": 0.4089,
+        "snippet": "qpu=iqm_garnet circuit=bell_2q code=bit_flip f_after=0.9341 eff=False"
+      },
+      {
+        "id": "55a17279",
+        "type": "qec_experiment",
+        "similarity": 0.3886,
+        "snippet": "qpu=ibm_fez circuit=bell_2q code=bit_flip f_after=0.8729 eff=False"
+      },
+      {
+        "id": "5b4192fc",
+        "type": "qec_experiment",
+        "similarity": 0.2991,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-47_1 code=bit_flip f_after=0.3142 eff=False"
+      }
+    ],
+    "expected": [
+      "8e508515",
+      "5ff53d2a",
+      "683a2338",
+      "55a17279"
+    ]
+  },
+  {
+    "id": "Q17",
+    "category": "diagnostic",
+    "query": "왜 보안 차단이 일어났나",
+    "intent": "security_block — reason 다양, 정적분석 차단 사례",
+    "current_top5": [
+      {
+        "id": "5b6ab001",
+        "type": "security_block",
+        "similarity": 0.3257,
+        "snippet": "file=test_block_eval.py reason=eval() 사용 tool=uqi_qpu_submit"
+      },
+      {
+        "id": "c05c4c02",
+        "type": "security_block",
+        "similarity": 0.2862,
+        "snippet": "file=mclachlan_pde_iqm.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "4cd6269b",
+        "type": "security_block",
+        "similarity": 0.2851,
+        "snippet": "file=test_malicious.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "c5268c39",
+        "type": "security_block",
+        "similarity": 0.2528,
+        "snippet": "file=test_perceval_hom_single.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "ab691e0b",
+        "type": "security_block",
+        "similarity": 0.235,
+        "snippet": "file=test_malicious.py reason=os 모듈 직접 호출 tool=None"
+      }
+    ],
+    "expected": [
+      "b575f263",
+      "2bbf6ae3",
+      "f25320aa",
+      "633adb77",
+      "0c1f9da7",
+      "d7dc8ce2",
+      "d9e71833",
+      "2bae93f9",
+      "301b7128",
+      "8dd896e1"
+    ]
+  },
+  {
+    "id": "Q18",
+    "category": "diagnostic",
+    "query": "os 모듈 임포트로 차단된 파일",
+    "intent": "security_block 중 os 모듈 관련",
+    "current_top5": [
+      {
+        "id": "75bca184",
+        "type": "gpu_benchmark",
+        "similarity": 0.408,
+        "snippet": "circuit=gb_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "d47455d0",
+        "type": "gpu_benchmark",
+        "similarity": 0.4077,
+        "snippet": "circuit=benchmark_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "c6deb56e",
+        "type": "gpu_benchmark",
+        "similarity": 0.4065,
+        "snippet": "circuit=gb_qiskit fw=Qiskit speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "82c423eb",
+        "type": "gpu_benchmark",
+        "similarity": 0.3997,
+        "snippet": "circuit=gb_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "0840a2f5",
+        "type": "gpu_benchmark",
+        "similarity": 0.396,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "f25320aa",
+      "c05c4c02",
+      "4cd6269b",
+      "ab691e0b",
+      "7244ed19",
+      "c5268c39",
+      "20d9c7b2",
+      "4587e702"
+    ]
+  },
+  {
+    "id": "Q19",
+    "category": "diagnostic",
+    "query": "uqi_analyze stage에서의 실패",
+    "intent": "stage=uqi_analyze 인 pipeline_issue",
+    "current_top5": [
+      {
+        "id": "e3662cff",
+        "type": "pipeline_issue",
+        "similarity": 0.4928,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=회로 추출 실패 — circuits 비어있음 (커널 컴파일 오류 또는 실행 실패)"
+      },
+      {
+        "id": "150ffa4b",
+        "type": "pipeline_issue",
+        "similarity": 0.4928,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=회로 추출 실패 — circuits 비어있음 (커널 컴파일 오류 또는 실행 실패)"
+      },
+      {
+        "id": "e82dbd97",
+        "type": "pipeline_issue",
+        "similarity": 0.4655,
+        "snippet": "stage=uqi_optimize sdk=Qiskit qpu=ibm_fez issue=최적화 실패 — results 비어있음 (회로 추출 또는 변환 실패)"
+      },
+      {
+        "id": "b415b156",
+        "type": "pipeline_issue",
+        "similarity": 0.4538,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=no such table: cache"
+      },
+      {
+        "id": "717ec2de",
+        "type": "pipeline_issue",
+        "similarity": 0.4538,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=no such table: cache"
+      }
+    ],
+    "expected": [
+      "717ec2de",
+      "b415b156",
+      "e1a3775e",
+      "f55b4e40",
+      "5259c5f6",
+      "55a745c8",
+      "9e614672",
+      "7d6733ce",
+      "cc6ab1f9",
+      "228fe96f"
+    ]
+  },
+  {
+    "id": "Q20",
+    "category": "diagnostic",
+    "query": "Quandela 제출 실패 사례",
+    "intent": "Perceval/Quandela 관련 pipeline_issue",
+    "current_top5": [
+      {
+        "id": "fd982408",
+        "type": "execution",
+        "similarity": 0.356,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-46_0 backend=noise_sim_pennylane ok=True err=None"
+      },
+      {
+        "id": "4da2f138",
+        "type": "execution",
+        "similarity": 0.3537,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-47_1 backend=noise_sim_pennylane ok=True err=None"
+      },
+      {
+        "id": "481b667d",
+        "type": "optimization",
+        "similarity": 0.3331,
+        "snippet": "qpu=quantinuum_h2_1 circuit=circuit combo=tket+sabre gate_red=0.0"
+      },
+      {
+        "id": "fda998d4",
+        "type": "optimization",
+        "similarity": 0.322,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-47_1 combo=tket+sabre gate_red=0.0"
+      },
+      {
+        "id": "f5bfb82c",
+        "type": "optimization",
+        "similarity": 0.3168,
+        "snippet": "qpu=quantinuum_h2_2 circuit=qiskit_circuit_circuit-46_0 combo=tket+sabre gate_red=0.0"
+      }
+    ],
+    "expected": [
+      "bb33b103",
+      "003f9806",
+      "e1a3775e",
+      "1942da97",
+      "f55b4e40",
+      "5259c5f6",
+      "ea8afc45",
+      "55a745c8",
+      "c5312367",
+      "9e614672"
+    ]
+  },
+  {
+    "id": "Q21",
+    "category": "diagnostic",
+    "query": "QEC를 적용했는데 효과 없었던 경우",
+    "intent": "qec_experiment with effective=False",
+    "current_top5": [
+      {
+        "id": "182b4207",
+        "type": "qec_experiment",
+        "similarity": 0.3788,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "02bcc010",
+        "type": "gpu_benchmark",
+        "similarity": 0.3776,
+        "snippet": "circuit=qmc_qrisp fw=Qrisp speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "17facb41",
+        "type": "qec_experiment",
+        "similarity": 0.3717,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "19a1f0e5",
+        "type": "qec_experiment",
+        "similarity": 0.364,
+        "snippet": "qpu=ibm_fez circuit=grover_circuit code=bit_flip f_after=0.0 eff=False"
+      },
+      {
+        "id": "27e87343",
+        "type": "security_block",
+        "similarity": 0.3638,
+        "snippet": "file=var_qiskit.py reason=비허용 모듈 import: qiskit_algorithms tool=uqi_analyze"
+      }
+    ],
+    "expected": [
+      "5b4192fc",
+      "58ba89ee",
+      "182b4207",
+      "17facb41",
+      "19a1f0e5"
+    ]
+  },
+  {
+    "id": "Q22",
+    "category": "diagnostic",
+    "query": "device error 가 난 실 QPU 제출",
+    "intent": "execution 중 ok=False 또는 error_rate 매우 높음",
+    "current_top5": [
+      {
+        "id": "bc514d88",
+        "type": "execution",
+        "similarity": 0.5796,
+        "snippet": "qpu=ibm_kingston circuit=qiskit_circuit_circuit-55040_0 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "c4da246a",
+        "type": "execution",
+        "similarity": 0.5783,
+        "snippet": "qpu=ibm_kingston circuit=qiskit_circuit_circuit-55040_1 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "99675a7a",
+        "type": "execution",
+        "similarity": 0.5488,
+        "snippet": "qpu=ibm_fez circuit=qiskit_circuit_circuit-217444_1 backend=noise_sim_qiskit ok=True err=None"
+      },
+      {
+        "id": "5fbf8306",
+        "type": "execution",
+        "similarity": 0.5469,
+        "snippet": "qpu=ibm_fez circuit=qiskit_circuit_circuit-13574_19 backend=noise_sim_qiskit ok=True err=None"
+      },
+      {
+        "id": "b98865bd",
+        "type": "execution",
+        "similarity": 0.5466,
+        "snippet": "qpu=ibm_fez circuit=qiskit_circuit_circuit-217444_0 backend=noise_sim_qiskit ok=True err=None"
+      }
+    ],
+    "expected": [
+      "42012170",
+      "5c918ceb",
+      "7e2e590f",
+      "e8991628",
+      "ee211253",
+      "b653984c",
+      "6a768b0d",
+      "acdde35f",
+      "364ab36e",
+      "cab0d536"
+    ]
+  },
+  {
+    "id": "Q23",
+    "category": "diagnostic",
+    "query": "GPU 시뮬레이션이 CPU보다 느렸던 경우",
+    "intent": "gpu_benchmark with verdict=cpu_win 또는 speedup<1",
+    "current_top5": [
+      {
+        "id": "a8efde78",
+        "type": "gpu_benchmark",
+        "similarity": 0.6421,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=1.983 verdict=GPU 1.98x 빠름"
+      },
+      {
+        "id": "08ed0fc5",
+        "type": "gpu_benchmark",
+        "similarity": 0.6312,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=1.834 verdict=GPU 1.83x 빠름"
+      },
+      {
+        "id": "09e71f41",
+        "type": "gpu_benchmark",
+        "similarity": 0.629,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "9f29612b",
+        "type": "gpu_benchmark",
+        "similarity": 0.6256,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "46c5bf9e",
+        "type": "gpu_benchmark",
+        "similarity": 0.6229,
+        "snippet": "circuit=gb_cudaq fw=CUDAQ speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "bf94dcc4",
+      "8df8c1bb",
+      "338f5419",
+      "0f406fd9",
+      "17ee6248",
+      "e4b76895",
+      "8c83b0cd",
+      "c032b365",
+      "3fe51ff7",
+      "e1f391e6"
+    ]
+  },
+  {
+    "id": "Q24",
+    "category": "diagnostic",
+    "query": "transpile workaround 가 있었던 사례",
+    "intent": "transpile_pattern 중 workaround 필드 있는 레코드",
+    "current_top5": [
+      {
+        "id": "f958d19d",
+        "type": "transpile_pattern",
+        "similarity": 0.5005,
+        "snippet": "sdk=CUDAQ qpu=iqm_garnet pattern=exec() 기반 커널 로드"
+      },
+      {
+        "id": "5717611a",
+        "type": "transpile_pattern",
+        "similarity": 0.5005,
+        "snippet": "sdk=CUDAQ qpu=iqm_garnet pattern=exec() 기반 커널 로드"
+      },
+      {
+        "id": "b6c6956b",
+        "type": "transpile_pattern",
+        "similarity": 0.5005,
+        "snippet": "sdk=CUDAQ qpu=iqm_garnet pattern=exec() 기반 커널 로드"
+      },
+      {
+        "id": "44694b98",
+        "type": "pipeline_issue",
+        "similarity": 0.418,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c5ebf300",
+        "type": "pipeline_issue",
+        "similarity": 0.418,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      }
+    ],
+    "expected": [
+      "b6c6956b",
+      "5717611a",
+      "f958d19d"
+    ]
+  },
+  {
+    "id": "Q25",
+    "category": "cross_type",
+    "query": "IBM에서 fidelity 가 좋지 않았던 회로",
+    "intent": "ibm_* qpu 에서 noise_simulate fidelity 낮거나 qec effective=False",
+    "current_top5": [
+      {
+        "id": "c4da246a",
+        "type": "execution",
+        "similarity": 0.4355,
+        "snippet": "qpu=ibm_kingston circuit=qiskit_circuit_circuit-55040_1 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "bc514d88",
+        "type": "execution",
+        "similarity": 0.4316,
+        "snippet": "qpu=ibm_kingston circuit=qiskit_circuit_circuit-55040_0 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "b5107f2e",
+        "type": "execution",
+        "similarity": 0.4198,
+        "snippet": "qpu=ibm_kingston circuit=IterativeAmplitudeEstimation_qc_1 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "b678d8f8",
+        "type": "execution",
+        "similarity": 0.4198,
+        "snippet": "qpu=ibm_kingston circuit=IterativeAmplitudeEstimation_qc_1 backend=ibm_kingston ok=True err=None"
+      },
+      {
+        "id": "dab7aa12",
+        "type": "execution",
+        "similarity": 0.4198,
+        "snippet": "qpu=ibm_kingston circuit=IterativeAmplitudeEstimation_qc_1 backend=ibm_kingston ok=True err=None"
+      }
+    ],
+    "expected": [
+      "58ba89ee",
+      "182b4207",
+      "17facb41",
+      "19a1f0e5",
+      "736d049b"
+    ]
+  },
+  {
+    "id": "Q26",
+    "category": "cross_type",
+    "query": "PennyLane 사용한 모든 작업",
+    "intent": "sdk=PennyLane 또는 framework=PennyLane 모두",
+    "current_top5": [
+      {
+        "id": "d0e8bd9c",
+        "type": "gpu_benchmark",
+        "similarity": 0.4166,
+        "snippet": "circuit=test_pennylane_qae fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "0840a2f5",
+        "type": "gpu_benchmark",
+        "similarity": 0.414,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "1b9ba8fb",
+        "type": "gpu_benchmark",
+        "similarity": 0.4092,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "587d84d0",
+        "type": "gpu_benchmark",
+        "similarity": 0.4067,
+        "snippet": "circuit=gb_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      },
+      {
+        "id": "61c63e89",
+        "type": "gpu_benchmark",
+        "similarity": 0.4039,
+        "snippet": "circuit=benchmark_pennylane fw=PennyLane speedup=None verdict=비교 불가"
+      }
+    ],
+    "expected": [
+      "ce4b118d",
+      "cccc2445",
+      "7959bc6c",
+      "612423e8",
+      "c032b365"
+    ]
+  },
+  {
+    "id": "Q27",
+    "category": "cross_type",
+    "query": "8큐빗 회로의 모든 처리 이력",
+    "intent": "num_qubits=8 인 optimization + 같은 회로의 execution",
+    "current_top5": [
+      {
+        "id": "5b6ab001",
+        "type": "security_block",
+        "similarity": 0.3338,
+        "snippet": "file=test_block_eval.py reason=eval() 사용 tool=uqi_qpu_submit"
+      },
+      {
+        "id": "c05c4c02",
+        "type": "security_block",
+        "similarity": 0.282,
+        "snippet": "file=mclachlan_pde_iqm.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "4cd6269b",
+        "type": "security_block",
+        "similarity": 0.276,
+        "snippet": "file=test_malicious.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "c5268c39",
+        "type": "security_block",
+        "similarity": 0.2548,
+        "snippet": "file=test_perceval_hom_single.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      },
+      {
+        "id": "e82dbd97",
+        "type": "pipeline_issue",
+        "similarity": 0.2491,
+        "snippet": "stage=uqi_optimize sdk=Qiskit qpu=ibm_fez issue=최적화 실패 — results 비어있음 (회로 추출 또는 변환 실패)"
+      }
+    ],
+    "expected": [
+      "9698f0eb",
+      "51bf18c1",
+      "b50fb9ed",
+      "2b045acb",
+      "13794f2d",
+      "0a73cc18",
+      "cd4a4464",
+      "1c995975"
+    ]
+  },
+  {
+    "id": "Q28",
+    "category": "cross_type",
+    "query": "iqm 계열 QPU에서의 최근 활동",
+    "intent": "qpu_name LIKE iqm_% 인 최근 레코드",
+    "current_top5": [
+      {
+        "id": "bc73317f",
+        "type": "execution",
+        "similarity": 0.4215,
+        "snippet": "qpu=iqm_sirius circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_sirius ok=True err=None"
+      },
+      {
+        "id": "1f03a0a8",
+        "type": "execution",
+        "similarity": 0.4215,
+        "snippet": "qpu=iqm_sirius circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_sirius ok=True err=None"
+      },
+      {
+        "id": "6451de10",
+        "type": "execution",
+        "similarity": 0.4215,
+        "snippet": "qpu=iqm_sirius circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_sirius ok=True err=None"
+      },
+      {
+        "id": "505694fb",
+        "type": "execution",
+        "similarity": 0.4176,
+        "snippet": "qpu=iqm_sirius circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_sirius ok=False err=None"
+      },
+      {
+        "id": "897474e1",
+        "type": "execution",
+        "similarity": 0.4176,
+        "snippet": "qpu=iqm_sirius circuit=IterativeAmplitudeEstimation_qc_0 backend=iqm_sirius ok=False err=None"
+      }
+    ],
+    "expected": [
+      "81e6a3e4",
+      "15f81b69",
+      "6d4457cf",
+      "11e6f334",
+      "ccd9eb8c",
+      "651fae6f",
+      "09809294",
+      "c8c093eb",
+      "3b70c9fd",
+      "84c90d97"
+    ]
+  },
+  {
+    "id": "Q29",
+    "category": "mixed",
+    "query": "Qiskit 으로 transpile 할 때 자주 발생하는 issue",
+    "intent": "sdk=Qiskit pipeline_issue",
+    "current_top5": [
+      {
+        "id": "44694b98",
+        "type": "pipeline_issue",
+        "similarity": 0.612,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "a1f7fcd7",
+        "type": "pipeline_issue",
+        "similarity": 0.612,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c5ebf300",
+        "type": "pipeline_issue",
+        "similarity": 0.612,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "e3662cff",
+        "type": "pipeline_issue",
+        "similarity": 0.501,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=회로 추출 실패 — circuits 비어있음 (커널 컴파일 오류 또는 실행 실패)"
+      },
+      {
+        "id": "150ffa4b",
+        "type": "pipeline_issue",
+        "similarity": 0.501,
+        "snippet": "stage=uqi_analyze sdk=Qiskit qpu=ibm_fez issue=회로 추출 실패 — circuits 비어있음 (커널 컴파일 오류 또는 실행 실패)"
+      }
+    ],
+    "expected": [
+      "717ec2de",
+      "b415b156",
+      "e82dbd97",
+      "150ffa4b",
+      "e3662cff",
+      "c5ebf300",
+      "a1f7fcd7",
+      "44694b98"
+    ]
+  },
+  {
+    "id": "Q30",
+    "category": "mixed",
+    "query": "신한금융 양자 우편 같은 자료",
+    "intent": "예상: 빈 결과 또는 매우 낮은 유사도 (시스템 거짓 양성 검증)",
+    "current_top5": [
+      {
+        "id": "5b6ab001",
+        "type": "security_block",
+        "similarity": 0.3025,
+        "snippet": "file=test_block_eval.py reason=eval() 사용 tool=uqi_qpu_submit"
+      },
+      {
+        "id": "44694b98",
+        "type": "pipeline_issue",
+        "similarity": 0.2435,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "a1f7fcd7",
+        "type": "pipeline_issue",
+        "similarity": 0.2435,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c5ebf300",
+        "type": "pipeline_issue",
+        "similarity": 0.2435,
+        "snippet": "stage=optimize sdk=Qiskit qpu=None issue=IBM transpile 후 156q 가상 할당 → 등가성 검증 큐비트 불일치"
+      },
+      {
+        "id": "c05c4c02",
+        "type": "security_block",
+        "similarity": 0.2278,
+        "snippet": "file=mclachlan_pde_iqm.py reason=os 모듈 직접 호출 tool=uqi_analyze"
+      }
+    ],
+    "expected": []
+  }
+]

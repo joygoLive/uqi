@@ -244,6 +244,20 @@ PRICING: dict[str, dict] = {
         ],
     },
 
+    # PCS 무료 emulator (EMU_FREE): 작은 회로 즉시 실행용. 큐 거의 없음.
+    # EMU_FRESNEL 권한 활성 전까지 PCS end-to-end 검증·간단 시험 용도.
+    "pasqal_emu_free": {
+        "vendor": "pasqal",
+        "model": "free",
+        "confidence": "exact",
+        "source": "PCS portal — EMU_FREE emulator (무료)",
+        "updated_at": "2026-05-12",
+        "warnings": [
+            "EMU_FREE emulator — 무료, 작은 회로 / 짧은 sequence 만 가능",
+            "큐 거의 없어 즉시 실행. EMU_FRESNEL 권한 활성 전까지 1차 검증 용",
+        ],
+    },
+
     # ────────── Quantinuum (HQC, 별도 계약 필요) ──────────
     "quantinuum_*": {
         "vendor": "quantinuum",
@@ -589,8 +603,10 @@ _QPU_CATALOG: dict[str, dict] = {
     # ── Azure Quantum 경유 ──
     "pasqal_fresnel":      {"vendor": "Pasqal",     "model": "Fresnel",        "runtime": "Azure Quantum", "modality": "neutral-atom"},
     "pasqal_fresnel_can1": {"vendor": "Pasqal",     "model": "Fresnel-CAN1",   "runtime": "Azure Quantum", "modality": "neutral-atom"},
-    # PCS 경유 emulator (EMU_FRESNEL): Fresnel QPU 동일 사양 + noise 모델 — 큐 X, dry-run 용
+    # PCS 경유 emulator: 모두 Fresnel-flavored. EMU_FRESNEL 은 실 QPU 동일 사양 + noise,
+    # EMU_FREE 는 무료 emulator (작은 회로 즉시 실행).
     "pasqal_emu_fresnel":  {"vendor": "Pasqal",     "model": "EMU-Fresnel",    "family": "Emulator", "runtime": "Pasqal Cloud", "modality": "neutral-atom"},
+    "pasqal_emu_free":     {"vendor": "Pasqal",     "model": "EMU-Free",       "family": "Emulator", "runtime": "Pasqal Cloud", "modality": "neutral-atom"},
     "quantinuum_h2_1":     {"vendor": "Quantinuum", "model": "H2-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
     "quantinuum_h2_2":     {"vendor": "Quantinuum", "model": "H2-2",           "runtime": "Azure Quantum", "modality": "ion-trap"},
     "quantinuum_h1_1":     {"vendor": "Quantinuum", "model": "H1-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
@@ -605,7 +621,9 @@ _QPU_CATALOG: dict[str, dict] = {
 
 # Analog 회로 모드 QPU (gate 회로 비호환 — AHS 전용)
 # UI 카드/디테일에서 보조 뱃지로 표시. 검색 필터에는 영향 없음.
-_ANALOG_QPUS: set[str] = {"pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel", "quera_aquila"}
+_ANALOG_QPUS: set[str] = {"pasqal_fresnel", "pasqal_fresnel_can1",
+                          "pasqal_emu_fresnel", "pasqal_emu_free",
+                          "quera_aquila"}
 
 # Modality 표시 라벨 (내부 키 → UI 라벨)
 # webapp 의 기존 radar tab (line 569~572) 표기와 일치

@@ -168,8 +168,9 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "rigetti_cepheus",
                    "ionq_forte1",
-                   # Pasqal Fresnel 실 QPU + PCS emulator (EMU_FRESNEL)
-                   "pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel",
+                   # Pasqal Fresnel 실 QPU + PCS emulator (EMU_FRESNEL / EMU_FREE)
+                   "pasqal_fresnel", "pasqal_fresnel_can1",
+                   "pasqal_emu_fresnel", "pasqal_emu_free",
                    # Quantinuum — 분석/추천만 가능 (자사 클라우드 통합 전까지 submit 차단)
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    # Braket QuEra (AHS — gate 회로 비호환)
@@ -201,7 +202,9 @@ _FRAMEWORK_QPU_MAP = {
     # 회로 호환 가능한 QPU 가 *유일*. extractor 가 framework 분류한 시점에
     # 이미 vendor 가 결정되므로 default = 유일한 QPU.
     "Braket-AHS": {"qpus": ["quera_aquila"], "default": "quera_aquila"},
-    "Pulser":     {"qpus": ["pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel"], "default": "pasqal_emu_fresnel"},
+    "Pulser":     {"qpus": ["pasqal_fresnel", "pasqal_fresnel_can1",
+                            "pasqal_emu_fresnel", "pasqal_emu_free"],
+                   "default": "pasqal_emu_fresnel"},
 }
 
 def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
@@ -348,6 +351,9 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
         "pasqal_fresnel_can1": {"max_atoms": 100, "min_spacing_um": 5.0,  "max_duration_ns": 6000},
         # EMU_FRESNEL: Fresnel QPU 동일 한계 + noise 모델
         "pasqal_emu_fresnel":  {"max_atoms": 100, "min_spacing_um": 5.0,  "max_duration_ns": 6000},
+        # EMU_FREE: 무료 emulator — 한계는 EMU_FRESNEL 보다 작음 (작은 회로 전용).
+        # 정확한 무료 한계 미공개라 보수적으로 atom/duration 절반 적용.
+        "pasqal_emu_free":     {"max_atoms":  10, "min_spacing_um": 5.0,  "max_duration_ns": 4000},
     }
     limits = LIMITS.get(qpu_name, {})
 
@@ -620,7 +626,8 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
     # 둘 다 정의해도 사용자가 선택한 QPU 에 맞는 executor 사용
     if qpu_name == "quera_aquila":
         framework = "Braket-AHS"
-    elif qpu_name in ("pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel"):
+    elif qpu_name in ("pasqal_fresnel", "pasqal_fresnel_can1",
+                      "pasqal_emu_fresnel", "pasqal_emu_free"):
         framework = "Pulser"
 
     # 분석 단계: 비용/메트릭 + 안내 메시지
@@ -3109,7 +3116,8 @@ async def uqi_qpu_submit(
                     # Pasqal Fresnel — Pulser pulse program 입력 (Qiskit gate 회로 비호환)
                     # Azure target API: input_data_format='pasqal.pulser.v1'
                     # 향후 Pulser 알고리즘 워크플로우 지원 시 SKIP에서 제거
-                    'pasqal_fresnel', 'pasqal_fresnel_can1', 'pasqal_emu_fresnel',
+                    'pasqal_fresnel', 'pasqal_fresnel_can1',
+                    'pasqal_emu_fresnel', 'pasqal_emu_free',
                     # Quantinuum — 자사 클라우드(Nexus) 통합 전까지 submit 차단
                     # (분석/추천은 가능, 단 캘리브레이션은 정적 OFFLINE 데이터)
                     'quantinuum_h2_1', 'quantinuum_h2_2', 'quantinuum_h1_1',
@@ -3478,6 +3486,7 @@ async def uqi_qpu_submit(
                     'pasqal_fresnel':       'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
                     'pasqal_fresnel_can1':  'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
                     'pasqal_emu_fresnel':   'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
+                    'pasqal_emu_free':      'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
                     'quantinuum_h2_1':      'Quantinuum Nexus 통합 대기',
                     'quantinuum_h2_2':      'Quantinuum Nexus 통합 대기',
                     'quantinuum_h1_1':      'Quantinuum Nexus 통합 대기',

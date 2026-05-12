@@ -18,7 +18,8 @@ from uqi_qir_converter import UQIQIRConverter
 _PCS_DEVICE_MAP = {
     "pasqal_fresnel":      ("FRESNEL",      None),          # 실 QPU (West US)
     "pasqal_fresnel_can1": ("FRESNEL_CAN1", None),          # 실 QPU (Canada)
-    "pasqal_emu_fresnel":  ("FRESNEL",      "EMU_FRESNEL"), # emulator
+    "pasqal_emu_fresnel":  ("FRESNEL",      "EMU_FRESNEL"), # emulator (실 사양 + noise)
+    "pasqal_emu_free":     ("FRESNEL",      "EMU_FREE"),    # emulator (무료, 작은 회로)
 }
 
 

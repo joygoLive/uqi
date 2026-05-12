@@ -28,6 +28,7 @@ def test_TC001_device_map_keys():
     assert "pasqal_fresnel" in _PCS_DEVICE_MAP
     assert "pasqal_fresnel_can1" in _PCS_DEVICE_MAP
     assert "pasqal_emu_fresnel" in _PCS_DEVICE_MAP
+    assert "pasqal_emu_free" in _PCS_DEVICE_MAP
 
 
 def test_TC002_device_map_real_qpu_no_emulator():
@@ -41,6 +42,12 @@ def test_TC003_device_map_emu_fresnel():
     from uqi_executor_pasqal import _PCS_DEVICE_MAP
     # EMU_FRESNEL: base device FRESNEL + emulator flag
     assert _PCS_DEVICE_MAP["pasqal_emu_fresnel"] == ("FRESNEL", "EMU_FRESNEL")
+
+
+def test_TC004_device_map_emu_free():
+    from uqi_executor_pasqal import _PCS_DEVICE_MAP
+    # EMU_FREE: 무료 emulator (작은 회로용)
+    assert _PCS_DEVICE_MAP["pasqal_emu_free"] == ("FRESNEL", "EMU_FREE")
 
 
 # ─────────────────────────────────────────────────────────────

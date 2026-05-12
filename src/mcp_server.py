@@ -639,8 +639,12 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         atom_count = analysis["circuits"]["ahs_main"]["ahs"].get("atom_count")
         duration_ns = analysis["circuits"]["ahs_main"]["ahs"].get("total_duration_ns")
         _meta = parse_qpu_full(qpu_name)
+        is_emulator = _meta.get("family") == "Emulator"
+        # Analog AHS 는 vendor 별 유일 매핑이라 "추천" 의미가 약함 — 선택한 QPU
+        # 자체를 추천값으로 채워 webapp 의 "Not recommended QPU" 오경고 방지.
         msg_lines = [
-            f"AHS 제출 분석 — {_meta['vendor']} {_meta['model']}",
+            f"AHS 제출 분석 — {_meta['vendor']} {_meta['model']}"
+            + (" (Emulator)" if is_emulator else ""),
             f"  framework:      {framework}",
             f"  atom_count:     {atom_count}",
             f"  duration_ns:    {duration_ns}",
@@ -651,18 +655,20 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
             "💡 confirmed=True 로 다시 호출하면 실제 제출됩니다.",
         ]
         return _json.dumps({
-            "ok":             True,
-            "confirmed":      False,
-            "status":         "awaiting_confirmation",   # webapp Confirm 버튼 표시 트리거
-            "selected_qpu":   qpu_name,
-            "framework":      framework,
-            "shots":          shots,
-            "atom_count":     atom_count,
-            "duration_ns":    duration_ns,
-            "cost":           cost,
-            "cost_display":   format_actual_cost(_pricing_vendor, qpu_name, cost),
-            "cost_token":     format_actual_cost_token(_pricing_vendor, qpu_name, cost),
-            "message":        "\n".join(msg_lines),
+            "ok":              True,
+            "confirmed":       False,
+            "status":          "awaiting_confirmation",   # webapp Confirm 버튼 표시 트리거
+            "selected_qpu":    qpu_name,
+            "recommended_qpu": qpu_name,
+            "is_emulator":     is_emulator,
+            "framework":       framework,
+            "shots":           shots,
+            "atom_count":      atom_count,
+            "duration_ns":     duration_ns,
+            "cost":            cost,
+            "cost_display":    format_actual_cost(_pricing_vendor, qpu_name, cost),
+            "cost_token":      format_actual_cost_token(_pricing_vendor, qpu_name, cost),
+            "message":         "\n".join(msg_lines),
         }, ensure_ascii=False)
 
     # 실제 제출 (confirmed=True)

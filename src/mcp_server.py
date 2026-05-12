@@ -1963,6 +1963,109 @@ async def uqi_kb_ask(
     return await asyncio.to_thread(_run)
 
 
+_KB_EXPLAIN_SYS_PROMPT = (
+    "You are UQI's knowledge base assistant. Given a SINGLE record from the "
+    "quantum-pipeline knowledge base, explain it to the user in plain language. "
+    "Cover: (1) what this record is, (2) what each metric/field means, (3) whether "
+    "the result is good/bad/notable and why. Be concise: 3~6 sentences. "
+    "Answer in the user's preferred language (Korean if 'ko', English if 'en'); "
+    "if 'auto', detect from any text content; default Korean. Use markdown bullets "
+    "if multiple metrics to explain. DO NOT invent fields not present in the record."
+)
+
+
+@mcp.tool(output_schema=None, timeout=60)
+async def uqi_kb_explain(
+    record_id: str,
+    language:  str = "auto",
+) -> str:
+    """단일 레코드 의미 풀이 (개별 카드 우측 🤖 버튼에서 호출).
+
+    검색 결과의 한 row 를 사람이 이해하기 쉬운 자연어로 설명.
+
+    Args:
+      record_id : records 테이블의 8자 hex id
+      language  : 'auto' (default) / 'ko' / 'en'
+
+    Returns JSON:
+      {
+        "record_id":  "...",
+        "type":       "...",
+        "explanation": "...",
+        "model":      "...",
+        "usage":      {...},
+        "elapsed_ms": ...
+      }
+    """
+    def _run():
+        import time, json as _json
+        t0 = time.time()
+        try:
+            client = _get_anthropic_client()
+            if client is None:
+                return _json.dumps({
+                    "error": "ANTHROPIC_API_KEY missing — set in .env and restart uqi-mcp",
+                }, ensure_ascii=False)
+
+            rid = (record_id or "").strip()
+            if not rid:
+                return _json.dumps({"error": "record_id required"}, ensure_ascii=False)
+
+            # SQLite 에서 직접 조회 — 검색 단계 불필요
+            from uqi_rag import _connect, _row_to_record
+            conn = _connect(_rag.rag_file)
+            try:
+                row = conn.execute(
+                    "SELECT * FROM records WHERE id = ?", (rid,)
+                ).fetchone()
+            finally:
+                conn.close()
+            if not row:
+                return _json.dumps({
+                    "error": f"record not found: {rid}",
+                    "elapsed_ms": int((time.time() - t0) * 1000),
+                }, ensure_ascii=False)
+
+            rec = _row_to_record(row)
+            scrubbed = _rag_scrub(rec)
+            ctx = (
+                f"[{rec['id']}] type={rec['type']} ts={(rec.get('timestamp') or '')[:19]}\n"
+                f"data={_json.dumps(scrubbed.get('data') or {}, ensure_ascii=False, default=str)}"
+            )
+            lang = (language or "auto").lower()
+            user_msg = (
+                f"[language preference: {lang}]\n\nRecord to explain:\n{ctx}"
+            )
+            model = os.environ.get("UQI_SYNTH_MODEL", "claude-opus-4-7")
+
+            resp = client.messages.create(
+                model=model,
+                max_tokens=512,
+                system=_KB_EXPLAIN_SYS_PROMPT,
+                messages=[{"role": "user", "content": user_msg}],
+            )
+            text = "".join(getattr(b, "text", "") for b in resp.content)
+
+            return _json.dumps({
+                "record_id":   rec["id"],
+                "type":        rec["type"],
+                "explanation": text,
+                "model":       resp.model,
+                "usage": {
+                    "input_tokens":  resp.usage.input_tokens,
+                    "output_tokens": resp.usage.output_tokens,
+                },
+                "elapsed_ms": int((time.time() - t0) * 1000),
+            }, ensure_ascii=False)
+        except Exception as e:
+            return _json.dumps({
+                "error":      str(e),
+                "elapsed_ms": int((time.time() - t0) * 1000),
+            }, ensure_ascii=False)
+
+    return await asyncio.to_thread(_run)
+
+
 # ─────────────────────────────────────────────────────────
 # 툴 6: 캘리브레이션 조회
 # ─────────────────────────────────────────────────────────

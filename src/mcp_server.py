@@ -360,7 +360,12 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
     try:
         framework = UQIExtractor(algorithm_file).detect_framework()
     except Exception as e:
-        return _json.dumps({"ok": False, "error": f"framework 감지 실패: {e}"})
+        return _json.dumps({
+            "ok":           False,
+            "error_key":    "backend.framework_detect_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"framework 감지 실패: {e}",
+        })
 
     checks = []
     metrics = {}
@@ -446,10 +451,19 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
                            is_parameterized,
                            "Parameterized (variables present)" if is_parameterized else f"build failed: {msg[:80]}")
         else:
-            return _json.dumps({"ok": False,
-                                "error": f"AHS framework 아님: {framework}"})
+            return _json.dumps({
+                "ok":           False,
+                "error_key":    "backend.ahs.not_ahs_framework",
+                "error_params": {"framework": framework},
+                "error":        f"AHS framework 아님: {framework}",
+            })
     except Exception as e:
-        return _json.dumps({"ok": False, "error": f"AHS validation 실패: {e}"})
+        return _json.dumps({
+            "ok":           False,
+            "error_key":    "backend.ahs.validation_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"AHS validation 실패: {e}",
+        })
 
     overall_ok = all(c["passed"] for c in checks) if checks else False
     _result = _json.dumps({
@@ -501,7 +515,11 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
         ext = UQIExtractor(algorithm_file)
         framework = ext.detect_framework()
     except Exception as e:
-        return _json.dumps({"error": f"framework 감지 실패: {e}"})
+        return _json.dumps({
+            "error_key":    "backend.framework_detect_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"framework 감지 실패: {e}",
+        })
 
     try:
         if framework == "Pulser":
@@ -530,7 +548,11 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
                 key = "".join(str(int(b)) for b in post)
                 counts[key] = counts.get(key, 0) + 1
         else:
-            return _json.dumps({"error": f"AHS framework 아님: {framework}"})
+            return _json.dumps({
+                "error_key":    "backend.ahs.not_ahs_framework",
+                "error_params": {"framework": framework},
+                "error":        f"AHS framework 아님: {framework}",
+            })
 
         total = sum(counts.values()) or 1
         probs = {k: v/total for k, v in counts.items()}
@@ -551,7 +573,11 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
                 pass
         return _result
     except Exception as e:
-        return _json.dumps({"error": f"AHS noise sim 실패: {e}"})
+        return _json.dumps({
+            "error_key":    "backend.ahs.noise_sim_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"AHS noise sim 실패: {e}",
+        })
 
 
 # Pasqal 백엔드 선택: PCS 직제출(=pcs) primary + Azure Quantum(=azure) fallback.
@@ -4059,7 +4085,11 @@ async def uqi_job_status(job_id: str) -> str:
             # 1) job store에서 캐시 확인
             stored = _job_store.get_job(job_id)
             if stored is None:
-                return json.dumps({"error": f"job_id를 찾을 수 없습니다: {job_id}"})
+                return json.dumps({
+                    "error_key":    "backend.job.not_found",
+                    "error_params": {"job_id": job_id},
+                    "error":        f"job_id를 찾을 수 없습니다: {job_id}",
+                })
 
             # 완료/취소/확정실패 상태면 클라우드 재조회 없이 즉시 리턴
             # error는 polling 버그로 인한 오기록일 수 있으므로 클라우드 재조회 허용
@@ -4109,7 +4139,11 @@ async def uqi_job_status(job_id: str) -> str:
                     from uqi_executor_azure import UQIExecutorAzure
                     result = UQIExecutorAzure.fetch_job_status(job_id)
             else:
-                return json.dumps({"error": f"미지원 vendor: {vendor}"})
+                return json.dumps({
+                    "error_key":    "backend.job.unsupported_vendor",
+                    "error_params": {"vendor": vendor},
+                    "error":        f"미지원 vendor: {vendor}",
+                })
 
             # 3) job store 업데이트
             if result.get("done") and result.get("counts"):
@@ -4157,13 +4191,20 @@ async def uqi_job_cancel(job_id: str) -> str:
         try:
             stored = _job_store.get_job(job_id)
             if stored is None:
-                return json.dumps({"ok": False, "error": f"job_id 없음: {job_id}"})
+                return json.dumps({
+                    "ok":           False,
+                    "error_key":    "backend.job.not_found",
+                    "error_params": {"job_id": job_id},
+                    "error":        f"job_id 없음: {job_id}",
+                })
 
             if stored["status"] in ("done", "cancelled"):
                 return json.dumps({
-                    "ok": False,
-                    "error": f"이미 {stored['status']} 상태 — 취소 불가",
-                    "status": stored["status"],
+                    "ok":           False,
+                    "error_key":    "backend.job.cancel_already_terminal",
+                    "error_params": {"status": stored["status"]},
+                    "error":        f"이미 {stored['status']} 상태 — 취소 불가",
+                    "status":       stored["status"],
                 })
             # error 상태는 로컬 버그 오기록일 수 있으므로 클라우드 취소 시도 허용
 
@@ -4171,7 +4212,9 @@ async def uqi_job_cancel(job_id: str) -> str:
             from uqi_pricing import get_pricing
             _pmeta = get_pricing(stored["qpu_name"]) or {}
             vendor = _pmeta.get("vendor", "")
-            cloud_result = {"ok": False, "error": "클라우드 취소 미지원"}
+            # cloud_result 의 error 는 webapp 의 msg.cancel_local_only 에 detail 로
+            # 합쳐 표시됨 — error_key 별도 부여보다 detail 그대로 노출이 자연스러움.
+            cloud_result = {"ok": False, "error": "cloud cancel not supported"}
 
             # 클라우드 취소 시도 (실패해도 로컬 취소는 진행)
             try:

@@ -5882,27 +5882,163 @@ async function runSemantic() {
   }
 }
 
+// ── Semantic search 결과 카드 렌더링 ─────────────────────────
+// 다른 카테고리 검색(Best Optimizations / QEC Results / Pipeline Errors 등)이
+// 풍부한 테이블 / 카드를 제공하는데 시맨틱 검색만 raw 한 줄이라 일관성 부족.
+// type 별 전용 렌더러로 분기해 동일한 시각 언어(배지·색상·진행률·화살표) 적용.
+
+function _semFmtPct(v, opts) {
+  if (v == null) return '';
+  try {
+    const f = parseFloat(v);
+    if (isNaN(f)) return '';
+    const sign = opts?.signed ? (f >= 0 ? '+' : '') : '';
+    return `${sign}${(f * 100).toFixed(1)}%`;
+  } catch { return ''; }
+}
+function _semQpuLabel(qpu) {
+  if (!qpu) return '';
+  const m = qpuMeta(qpu);
+  const md = m.family === 'sim' ? `${m.model} (sim)` : m.model;
+  return `<span title="${escHtml(qpu)}">${escHtml(m.vendor)} <strong>${escHtml(md)}</strong></span>`;
+}
+function _semBar(pct, color) {
+  // 0~1 비율 (예: 0.36) → 6-segment progress bar
+  const filled = Math.max(0, Math.min(6, Math.round(pct * 6)));
+  return `<span style="display:inline-block;letter-spacing:1px;color:${color};font-family:var(--font-mono)">${'▮'.repeat(filled)}${'▯'.repeat(6-filled)}</span>`;
+}
+function _semChip(text, color) {
+  return `<span style="display:inline-block;padding:1px 6px;font-size:9px;font-weight:600;letter-spacing:0.5px;color:${color};background:${color}1a;border:1px solid ${color}40;border-radius:4px">${escHtml(text)}</span>`;
+}
+
+const _SEM_RENDER = {
+  optimization: (d) => {
+    const fields = [];
+    if (d.circuit_name) fields.push(`<strong>${escHtml(d.circuit_name)}</strong>`);
+    if (d.qpu_name)     fields.push(`on ${_semQpuLabel(d.qpu_name)}`);
+    if (d.combination)  fields.push(`<span style="color:var(--accent2)">${escHtml(d.combination)}</span>`);
+    if (d.num_qubits)   fields.push(`<span style="color:var(--text3)">${d.num_qubits}q</span>`);
+    const metrics = [];
+    if (d.gate_reduction != null) {
+      const gr = parseFloat(d.gate_reduction) || 0;
+      const color = gr > 0.3 ? 'var(--success)' : gr > 0.1 ? 'var(--warn)' : 'var(--text2)';
+      metrics.push(`<span>Gate <strong style="color:${color}">${_semFmtPct(d.gate_reduction)}</strong> ${_semBar(gr, color)}</span>`);
+    }
+    if (d.depth_reduction != null)
+      metrics.push(`<span style="color:var(--text3)">Depth ${_semFmtPct(d.depth_reduction)}</span>`);
+    return `<div>${fields.join(' · ')}</div>${metrics.length ? `<div style="margin-top:4px;font-size:11px">${metrics.join(' · ')}</div>` : ''}`;
+  },
+  execution: (d) => {
+    const isNoise = String(d.backend || '').startsWith('noise_sim');
+    const head = [];
+    if (d.circuit_name) head.push(`<strong>${escHtml(d.circuit_name)}</strong>`);
+    if (d.qpu_name)     head.push(`on ${_semQpuLabel(d.qpu_name)}`);
+    head.push(_semChip(isNoise ? 'NOISE SIM' : 'REAL QPU', isNoise ? '#7c3aed' : 'var(--accent)'));
+    const sdk = d.sdk || (isNoise ? String(d.backend).replace('noise_sim_','') : '');
+    if (sdk) head.push(`<span style="color:var(--text3)">${escHtml(sdk)}</span>`);
+    const metrics = [];
+    if (d.ok === true)  metrics.push(`<span style="color:var(--success)">✓ Success</span>`);
+    if (d.ok === false) metrics.push(`<span style="color:var(--error)">✗ Failed</span>`);
+    if (d.shots != null) metrics.push(`<span style="color:var(--text3)">${d.shots} shots</span>`);
+    if (d.error_rate != null && d.error_rate > 0)
+      metrics.push(`error rate <strong>${parseFloat(d.error_rate).toFixed(3)}</strong>`);
+    if (isNoise && d.comparison) {
+      const c = d.comparison;
+      if (c.fidelity != null) metrics.push(`fidelity <strong>${parseFloat(c.fidelity).toFixed(3)}</strong>`);
+      if (c.tvd != null)      metrics.push(`<span style="color:var(--text3)">TVD ${parseFloat(c.tvd).toFixed(3)}</span>`);
+    }
+    return `<div>${head.join(' · ')}</div>${metrics.length ? `<div style="margin-top:4px;font-size:11px">${metrics.join(' · ')}</div>` : ''}`;
+  },
+  qec_experiment: (d) => {
+    const head = [];
+    if (d.circuit_name) head.push(`<strong>${escHtml(d.circuit_name)}</strong>`);
+    if (d.qpu_name)     head.push(`on ${_semQpuLabel(d.qpu_name)}`);
+    if (d.code)         head.push(_semChip(d.code, 'var(--accent2)'));
+    const fb = d.fidelity_before, fa = d.fidelity_after;
+    const metrics = [];
+    if (fb != null && fa != null) {
+      const delta = parseFloat(fa) - parseFloat(fb);
+      const color = delta > 0 ? 'var(--success)' : 'var(--error)';
+      metrics.push(`F <strong>${parseFloat(fb).toFixed(3)}</strong> → <strong style="color:${color}">${parseFloat(fa).toFixed(3)}</strong>`);
+      metrics.push(`<span style="color:${color}">${delta >= 0 ? '↑' : '↓'} ${_semFmtPct(Math.abs(delta), {signed:false})}</span>`);
+    }
+    if (d.effective === true)  metrics.push(_semChip('EFFECTIVE',     'var(--success)'));
+    if (d.effective === false) metrics.push(_semChip('NOT EFFECTIVE', 'var(--error)'));
+    return `<div>${head.join(' · ')}</div>${metrics.length ? `<div style="margin-top:4px;font-size:11px">${metrics.join(' · ')}</div>` : ''}`;
+  },
+  gpu_benchmark: (d) => {
+    const head = [];
+    if (d.circuit_name) head.push(`<strong>${escHtml(d.circuit_name)}</strong>`);
+    if (d.framework)    head.push(_semChip(d.framework, 'var(--accent2)'));
+    const sp = d.speedup;
+    const metrics = [];
+    if (sp != null) {
+      const s = parseFloat(sp);
+      const color = s > 1.5 ? 'var(--success)' : s > 1 ? 'var(--warn)' : 'var(--error)';
+      metrics.push(`<strong style="color:${color}">${s.toFixed(2)}× ${s>1?'⇡':'⇣'}</strong>`);
+    }
+    if (d.cpu_time_sec != null && d.gpu_time_sec != null)
+      metrics.push(`<span style="color:var(--text3)">CPU ${parseFloat(d.cpu_time_sec).toFixed(2)}s · GPU ${parseFloat(d.gpu_time_sec).toFixed(2)}s</span>`);
+    if (d.verdict) metrics.push(`<span style="color:var(--text3)">${escHtml(d.verdict)}</span>`);
+    return `<div>${head.join(' · ')}</div>${metrics.length ? `<div style="margin-top:4px;font-size:11px">${metrics.join(' · ')}</div>` : ''}`;
+  },
+  pipeline_issue: (d) => {
+    const head = [];
+    if (d.stage)    head.push(_semChip(d.stage, 'var(--warn)'));
+    if (d.sdk)      head.push(`<span style="color:var(--text3)">${escHtml(d.sdk)}</span>`);
+    if (d.qpu_name && d.qpu_name !== 'auto') head.push(`on ${_semQpuLabel(d.qpu_name)}`);
+    if (d.severity) head.push(_semChip(d.severity, d.severity === 'error' ? 'var(--error)' : 'var(--warn)'));
+    const body = [];
+    if (d.issue)    body.push(`<span style="color:var(--text2)">${escHtml(String(d.issue).slice(0,120))}</span>`);
+    if (d.solution) body.push(`<span style="color:var(--success);font-size:11px">→ ${escHtml(String(d.solution).slice(0,80))}</span>`);
+    return `<div>${head.join(' · ')}</div>${body.length ? `<div style="margin-top:4px;font-size:11px">${body.join('<br>')}</div>` : ''}`;
+  },
+  security_block: (d) => {
+    const head = [_semChip('BLOCKED', 'var(--error)')];
+    if (d.file_name) head.push(`<strong>${escHtml(d.file_name)}</strong>`);
+    if (d.tool)      head.push(`<span style="color:var(--text3)">${escHtml(d.tool)}</span>`);
+    const body = [];
+    if (d.reason)    body.push(`<span style="color:var(--error)">${escHtml(String(d.reason).slice(0,100))}</span>`);
+    if (d.pattern)   body.push(`<code style="font-size:10px;color:var(--text3)">${escHtml(String(d.pattern).slice(0,80))}</code>`);
+    return `<div>${head.join(' · ')}</div>${body.length ? `<div style="margin-top:4px;font-size:11px">${body.join(' · ')}</div>` : ''}`;
+  },
+  transpile_pattern: (d) => {
+    const head = [];
+    if (d.sdk)      head.push(_semChip(d.sdk, 'var(--accent2)'));
+    if (d.qpu_name) head.push(`on ${_semQpuLabel(d.qpu_name)}`);
+    if (d.success === true)  head.push(_semChip('SUCCESS', 'var(--success)'));
+    if (d.success === false) head.push(_semChip('FAILED',  'var(--error)'));
+    const body = [];
+    if (d.pattern)    body.push(`<code style="font-size:10px">${escHtml(String(d.pattern).slice(0,100))}</code>`);
+    if (d.workaround) body.push(`<span style="color:var(--success);font-size:11px">→ ${escHtml(String(d.workaround).slice(0,100))}</span>`);
+    return `<div>${head.join(' · ')}</div>${body.length ? `<div style="margin-top:4px;font-size:11px">${body.join('<br>')}</div>` : ''}`;
+  },
+  conversion_pattern: (d) => {
+    const head = [];
+    if (d.from_format && d.to_format) head.push(`<strong>${escHtml(d.from_format)} → ${escHtml(d.to_format)}</strong>`);
+    if (d.sdk) head.push(_semChip(d.sdk, 'var(--accent2)'));
+    if (d.success === true)  head.push(_semChip('SUCCESS', 'var(--success)'));
+    if (d.success === false) head.push(_semChip('FAILED',  'var(--error)'));
+    const body = [];
+    if (d.description) body.push(`<span style="color:var(--text2)">${escHtml(String(d.description).slice(0,120))}</span>`);
+    return `<div>${head.join(' · ')}</div>${body.length ? `<div style="margin-top:4px;font-size:11px">${body.join(' · ')}</div>` : ''}`;
+  },
+};
+
 function _semanticSnippet(type, data) {
-  if (!data) return '—';
-  const parts = [];
-  if (data.qpu_name) {
-    // catalog 4축 라벨 (Job Manager / KB 메타라인과 정합)
-    const _m = qpuMeta(data.qpu_name);
-    const _md = _m.family === 'sim' ? `${_m.model} (sim)` : _m.model;
-    parts.push(`QPU: <strong title="${escHtml(data.qpu_name)}">${escHtml(`${_m.vendor} ${_md}`)}</strong>`);
+  if (!data) return '<span style="color:var(--text3)">—</span>';
+  const renderer = _SEM_RENDER[type];
+  if (renderer) {
+    try { return renderer(data); } catch (_e) { /* fall through to generic */ }
   }
-  if (data.circuit_name)  parts.push(`Circuit: <strong>${escHtml(data.circuit_name)}</strong>`);
-  // SDK / framework 둘 다 가능 — 단일 'SDK:' 라벨로 통일 (백엔드 데이터 호환)
-  if (data.sdk || data.framework) parts.push(`SDK: ${escHtml(data.sdk || data.framework)}`);
-  if (data.combination)   parts.push(`Combination: ${escHtml(data.combination)}`);
-  if (data.gate_reduction != null) parts.push(`Gate reduction: <strong>${(data.gate_reduction*100).toFixed(1)}%</strong>`);
-  if (data.fidelity != null)       parts.push(`Fidelity: <strong>${data.fidelity}</strong>`);
-  if (data.fidelity_after != null) parts.push(`Fidelity after: <strong>${data.fidelity_after}</strong>`);
-  if (data.speedup != null)        parts.push(`Speedup: <strong>${data.speedup}x</strong>`);
-  if (data.ok != null)             parts.push(`Result: <strong>${data.ok ? '✓ Success' : '✗ Failed'}</strong>`);
-  if (data.issue)         parts.push(`Issue: ${escHtml(String(data.issue).slice(0,60))}`);
-  if (data.verdict)       parts.push(`Verdict: ${escHtml(data.verdict)}`);
-  return parts.length ? parts.join(' · ') : escHtml(JSON.stringify(data).slice(0, 100));
+  // Fallback for unknown types — show key:value pairs (no raw JSON dump)
+  const parts = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (v == null || v === '' || typeof v === 'object') continue;
+    parts.push(`<span style="color:var(--text3)">${escHtml(k)}</span> ${escHtml(String(v).slice(0,60))}`);
+    if (parts.length >= 4) break;
+  }
+  return parts.length ? parts.join(' · ') : '<span style="color:var(--text3)">(no data fields)</span>';
 }
 
 function _showRagDetail(jsonStr) {

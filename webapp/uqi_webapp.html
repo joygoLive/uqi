@@ -5694,37 +5694,48 @@ const _ASK_MAX_LEN = 5000;
 window._lastSemanticQuery = '';
 
 // Render the answer text, turning citation ids into clickable chips.
-// LLM 이 인용 형식을 어겨도(연속 hex, 대괄호 누락 등) 관용적으로 처리:
-//   [d88a1ac2]            ← 정상
-//   [d88a1ac23f61a444]    ← chained inside one bracket → split
-//   bdbb767e44766a58      ← bracket 없는 chain → known ids 면 chip
-//   22108ba5              ← bracket 없는 단일 → known id 면 chip
+// LLM 이 인용 형식을 어겨도(연속 hex, 대괄호 누락 등) 관용적으로 처리.
+// 중요: chip HTML 안의 data-id="..." 가 다음 regex 에 또 매치되는 cascading
+// 방지를 위해 모든 매칭을 먼저 placeholder 토큰으로 바꾸고, 마지막에
+// 일괄로 실제 chip HTML 로 변환.
 function _renderAskAnswer(answer, citationsById) {
   const _chip = (id) => `<a href="#" class="ask-cite" data-id="${id}" onclick="event.preventDefault(); _scrollToCitation('${id}'); return false;" style="display:inline-block;padding:1px 6px;margin:0 2px;font-size:10px;font-weight:600;color:var(--accent);background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:4px;text-decoration:none;font-family:var(--font-mono)">${id}</a>`;
-  // citation map은 lowercase 키도 허용 (LLM 이 대소문자 섞을 수 있음)
   const _known = (id) => citationsById[id] || citationsById[id.toLowerCase()];
+
+  // 매칭된 id 들을 임시 보관 — chip HTML 은 마지막에 일괄 삽입
+  const chips = [];
+  const _stash = (id) => {
+    const idx = chips.length;
+    chips.push(id);
+    //  … 은 일반 텍스트에 나올 수 없는 control char ─ 안전한 placeholder
+    return `CHIP${idx}`;
+  };
 
   let html = escHtml(answer);
 
-  // 1) bracket 안의 chained ids 분리: [bdbb767e44766a58] → [bdbb767e][44766a58]
+  // 1) bracket 안 chained hex: [bdbb767e44766a58] → 각각 placeholder
   html = html.replace(/\[([0-9a-fA-F]{16,})\]/g, (m, chained) => {
     if (chained.length % 8 !== 0) return m;
-    const ids = chained.match(/.{8}/g) || [];
-    return ids.map(id => `[${id}]`).join('');
+    const parts = chained.match(/.{8}/g) || [];
+    return parts.map(id => _known(id) ? _stash(id) : `[${id}]`).join('');
   });
 
-  // 2) 정상 [id] — known 만 chip
-  html = html.replace(/\[([0-9a-fA-F]{8})\]/g, (m, id) => _known(id) ? _chip(id) : m);
+  // 2) 정상 [id] — known 이면 placeholder
+  html = html.replace(/\[([0-9a-fA-F]{8})\]/g, (m, id) => _known(id) ? _stash(id) : m);
 
-  // 3) bracket 없는 plain hex — 모든 8자 토막이 known 일 때만 chip (false positive 방지)
+  // 3) bracket 없는 plain hex chain — 모든 8자 부분이 known 일 때만 placeholder
+  //    (placeholder 자체에 hex 가 없으니 cascading 위험 0)
   html = html.replace(/(?<![\w\-/])([0-9a-fA-F]{8,})(?![\w\-/])/g, (m, hex) => {
     if (hex.length % 8 !== 0) return m;
     const parts = hex.match(/.{8}/g) || [];
     if (!parts.every(_known)) return m;
-    return parts.map(_chip).join('');
+    return parts.map(_stash).join('');
   });
 
-  // 4) 줄바꿈 보존
+  // 4) placeholder → 실제 chip HTML (이 시점엔 더 이상 regex 매칭 없음)
+  html = html.replace(/CHIP(\d+)/g, (_m, idx) => _chip(chips[parseInt(idx, 10)]));
+
+  // 5) 줄바꿈 보존
   return html.replace(/\n/g, '<br>');
 }
 

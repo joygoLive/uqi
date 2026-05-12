@@ -165,7 +165,7 @@
   "pipeline.qpu.confirm_btn": "⚡ CONFIRMER ET SOUMETTRE AU QPU",
   "knowledge.structured_results": "Résultats de recherche structurée",
   "knowledge.semantic_results": "Semantic Results",
-  "knowledge.semantic_hint": "Entrée pour rechercher · Maj+Entrée pour nouvelle ligne\nRecherche par similarité vectorielle Chroma",
+  "knowledge.semantic_hint": "Entrée pour rechercher · Maj+Entrée pour nouvelle ligne\nRecherche hybride vecteur + BM25 avec reranking neuronal",
   "knowledge.semantic_no_results": "Aucun résultat pertinent",
   "knowledge.semantic_similarity_label": "Similarité",
   "knowledge.semantic_count": "{count} résultats",

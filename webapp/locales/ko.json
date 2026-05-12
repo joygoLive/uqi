@@ -165,7 +165,7 @@
   "pipeline.qpu.confirm_btn": "⚡ 확인 후 QPU에 제출",
   "knowledge.structured_results": "구조화 검색 결과",
   "knowledge.semantic_results": "Semantic Results",
-  "knowledge.semantic_hint": "Enter로 검색 · Shift+Enter로 줄바꿈\nChroma 벡터 유사도 검색",
+  "knowledge.semantic_hint": "Enter로 검색 · Shift+Enter로 줄바꿈\n벡터 + BM25 하이브리드 검색 + 신경망 재랭킹",
   "knowledge.semantic_no_results": "관련 결과 없음",
   "knowledge.semantic_similarity_label": "유사도",
   "knowledge.semantic_count": "결과 {count}개",

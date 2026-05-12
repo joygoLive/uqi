@@ -165,7 +165,7 @@
   "pipeline.qpu.confirm_btn": "⚡ CONFIRM & SUBMIT TO QPU",
   "knowledge.structured_results": "Structured Search Results",
   "knowledge.semantic_results": "Semantic Results",
-  "knowledge.semantic_hint": "Press Enter to search · Shift+Enter for new line\nChroma vector similarity search",
+  "knowledge.semantic_hint": "Press Enter to search · Shift+Enter for new line\nHybrid vector + BM25 search with neural reranking",
   "knowledge.semantic_no_results": "No relevant results",
   "knowledge.semantic_similarity_label": "Similarity",
   "knowledge.semantic_count": "{count} results",

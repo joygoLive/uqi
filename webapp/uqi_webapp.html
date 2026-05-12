@@ -5693,14 +5693,38 @@ const _ASK_MAX_LEN = 5000;
 // requiring the user to re-type the question.
 window._lastSemanticQuery = '';
 
-// Render the answer text, turning bracket-citation ids [d88a1ac2] into clickable chips.
+// Render the answer text, turning citation ids into clickable chips.
+// LLM 이 인용 형식을 어겨도(연속 hex, 대괄호 누락 등) 관용적으로 처리:
+//   [d88a1ac2]            ← 정상
+//   [d88a1ac23f61a444]    ← chained inside one bracket → split
+//   bdbb767e44766a58      ← bracket 없는 chain → known ids 면 chip
+//   22108ba5              ← bracket 없는 단일 → known id 면 chip
 function _renderAskAnswer(answer, citationsById) {
-  // Split by [8-hex] pattern; rebuild with HTML inline chips
-  const html = escHtml(answer).replace(/\[([0-9a-fA-F]{8})\]/g, (_m, id) => {
-    if (!citationsById[id]) return `[${id}]`;
-    return `<a href="#" class="ask-cite" data-id="${id}" onclick="event.preventDefault(); _scrollToCitation('${id}'); return false;" style="display:inline-block;padding:1px 6px;margin:0 2px;font-size:10px;font-weight:600;color:var(--accent);background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:4px;text-decoration:none;font-family:var(--font-mono)">${id}</a>`;
+  const _chip = (id) => `<a href="#" class="ask-cite" data-id="${id}" onclick="event.preventDefault(); _scrollToCitation('${id}'); return false;" style="display:inline-block;padding:1px 6px;margin:0 2px;font-size:10px;font-weight:600;color:var(--accent);background:rgba(0,212,255,0.08);border:1px solid rgba(0,212,255,0.25);border-radius:4px;text-decoration:none;font-family:var(--font-mono)">${id}</a>`;
+  // citation map은 lowercase 키도 허용 (LLM 이 대소문자 섞을 수 있음)
+  const _known = (id) => citationsById[id] || citationsById[id.toLowerCase()];
+
+  let html = escHtml(answer);
+
+  // 1) bracket 안의 chained ids 분리: [bdbb767e44766a58] → [bdbb767e][44766a58]
+  html = html.replace(/\[([0-9a-fA-F]{16,})\]/g, (m, chained) => {
+    if (chained.length % 8 !== 0) return m;
+    const ids = chained.match(/.{8}/g) || [];
+    return ids.map(id => `[${id}]`).join('');
   });
-  // Preserve line breaks
+
+  // 2) 정상 [id] — known 만 chip
+  html = html.replace(/\[([0-9a-fA-F]{8})\]/g, (m, id) => _known(id) ? _chip(id) : m);
+
+  // 3) bracket 없는 plain hex — 모든 8자 토막이 known 일 때만 chip (false positive 방지)
+  html = html.replace(/(?<![\w\-/])([0-9a-fA-F]{8,})(?![\w\-/])/g, (m, hex) => {
+    if (hex.length % 8 !== 0) return m;
+    const parts = hex.match(/.{8}/g) || [];
+    if (!parts.every(_known)) return m;
+    return parts.map(_chip).join('');
+  });
+
+  // 4) 줄바꿈 보존
   return html.replace(/\n/g, '<br>');
 }
 

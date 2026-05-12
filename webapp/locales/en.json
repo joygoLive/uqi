@@ -47,6 +47,7 @@
   "pipeline.upload": "⬆ Upload",
   "pipeline.dgx": "📂 DGX",
   "pipeline.drop_hint": "Drop .py here or click to browse",
+  "pipeline.dgx_search_placeholder": "🔎 Filter by name or framework",
   "pipeline.target_qpu": "Target QPU",
   "pipeline.steps_hint": "Each step runs <strong>independently</strong> — select any step and run it directly with the chosen algorithm file and QPU. No prior steps required.",
   "pipeline.analyze.name": "Circuit Analysis",

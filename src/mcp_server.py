@@ -1905,25 +1905,41 @@ def _get_anthropic_client():
     return _anthropic_client
 
 
-_KB_SYS_PROMPT = (
-    "You are UQI's quantum-pipeline knowledge base assistant. "
-    "Use ONLY the provided RECORDS to answer the user's QUESTION. "
-    # 인용 형식 — 반드시 대괄호로 감싸고 여러 id 도 각각 대괄호. 공백/연결 금지.
-    "CITATION FORMAT (STRICT): cite records by writing [id] where id is the 8-char hex. "
-    "Each id MUST be wrapped in its own square brackets. "
-    "Correct (multiple ids):  [d88a1ac2][3f61a444]   or   [d88a1ac2] [3f61a444] . "
-    "WRONG: 'd88a1ac2 3f61a444' (no brackets), 'd88a1ac23f61a444' (chained no brackets), "
-    "'[d88a1ac23f61a444]' (multiple ids inside one bracket). "
-    "Bad citation formatting breaks the UI's click-to-jump. "
-    "If the records don't contain the answer, say so plainly — do not invent. "
-    "Answer in the language of the question (Korean or English). "
-    "Be concise: 1~5 sentences plus a brief bullet list if helpful. "
-    # algorithm_file 인용 강제 — 사용자가 검색 결과를 원본 코드로 추적할 수 있도록
-    "Whenever you mention a circuit or algorithm by name, you MUST also include the "
-    "algorithm_file (basename only, in parentheses) if it is present in the record's data, "
-    "e.g. 'qft_8q (qft.py)' or 'grover_circuit (grover_search.py)'. "
-    "If algorithm_file is missing, just use the circuit_name."
-)
+def _kb_lang_directive(language: str) -> str:
+    """webapp 의 현재 언어 코드 → LLM 시스템 프롬프트의 응답 언어 지시문.
+
+    'auto' 면 질문 언어 자동 감지. 'ko'/'en'/'fr' 이면 강제 지정.
+    """
+    lang = (language or "auto").lower().strip()
+    if lang in ("ko", "kor", "korean"):
+        return "ALWAYS answer in Korean (한국어), regardless of the language of the question."
+    if lang in ("en", "eng", "english"):
+        return "ALWAYS answer in English, regardless of the language of the question."
+    if lang in ("fr", "fra", "french"):
+        return "ALWAYS answer in French (français), regardless of the language of the question."
+    return "Answer in the language of the question (Korean / English / French)."
+
+
+def _build_kb_sys_prompt(language: str = "auto") -> str:
+    return (
+        "You are UQI's quantum-pipeline knowledge base assistant. "
+        "Use ONLY the provided RECORDS to answer the user's QUESTION. "
+        # 인용 형식 — 반드시 대괄호로 감싸고 여러 id 도 각각 대괄호. 공백/연결 금지.
+        "CITATION FORMAT (STRICT): cite records by writing [id] where id is the 8-char hex. "
+        "Each id MUST be wrapped in its own square brackets. "
+        "Correct (multiple ids):  [d88a1ac2][3f61a444]   or   [d88a1ac2] [3f61a444] . "
+        "WRONG: 'd88a1ac2 3f61a444' (no brackets), 'd88a1ac23f61a444' (chained no brackets), "
+        "'[d88a1ac23f61a444]' (multiple ids inside one bracket). "
+        "Bad citation formatting breaks the UI's click-to-jump. "
+        "If the records don't contain the answer, say so plainly — do not invent. "
+        f"{_kb_lang_directive(language)} "
+        "Be concise: 1~5 sentences plus a brief bullet list if helpful. "
+        # algorithm_file 인용 강제 — 사용자가 검색 결과를 원본 코드로 추적할 수 있도록
+        "Whenever you mention a circuit or algorithm by name, you MUST also include the "
+        "algorithm_file (basename only, in parentheses) if it is present in the record's data, "
+        "e.g. 'qft_8q (qft.py)' or 'grover_circuit (grover_search.py)'. "
+        "If algorithm_file is missing, just use the circuit_name."
+    )
 
 
 @mcp.tool(output_schema=None, timeout=60)
@@ -1931,6 +1947,7 @@ async def uqi_kb_ask(
     question:    str,
     limit:       int = 8,
     record_type: str = "",
+    language:    str = "auto",
 ) -> str:
     """지식베이스 자연어 질의응답.
 
@@ -1938,9 +1955,11 @@ async def uqi_kb_ask(
     field 마스킹 → Claude 답변 합성 (외부 지식 차단, 인용 강제).
 
     Args:
-      question    : 사용자 자연어 질문 (한·영 지원)
+      question    : 사용자 자연어 질문 (한·영·불 지원)
       limit       : 컨텍스트에 포함할 record 수 (1~20, default 8)
       record_type : 검색 범위 제한 (optional, 예: "optimization", "qec_experiment")
+      language    : 답변 언어 강제 — "auto" (기본: 질문 언어 감지) / "ko" /
+                    "en" / "fr". webapp UI 언어 설정과 연동되어 일관된 응답.
 
     Returns JSON:
       {
@@ -2003,7 +2022,7 @@ async def uqi_kb_ask(
             resp = client.messages.create(
                 model=model,
                 max_tokens=1024,
-                system=_KB_SYS_PROMPT,
+                system=_build_kb_sys_prompt(language),
                 messages=[{"role": "user", "content": user_msg}],
             )
             answer = "".join(getattr(b, "text", "") for b in resp.content)
@@ -2036,18 +2055,19 @@ async def uqi_kb_ask(
     return await asyncio.to_thread(_run)
 
 
-_KB_EXPLAIN_SYS_PROMPT = (
-    "You are UQI's knowledge base assistant. Given a SINGLE record from the "
-    "quantum-pipeline knowledge base, explain it to the user in plain language. "
-    "Cover: (1) what this record is, (2) what each metric/field means, (3) whether "
-    "the result is good/bad/notable and why. Be concise: 3~6 sentences. "
-    "Answer in the user's preferred language (Korean if 'ko', English if 'en'); "
-    "if 'auto', detect from any text content; default Korean. Use markdown bullets "
-    "if multiple metrics to explain. DO NOT invent fields not present in the record. "
-    # algorithm_file 인용 강제
-    "Whenever you mention a circuit or algorithm by name, also include the "
-    "algorithm_file (basename, in parentheses) if present, e.g. 'qft_8q (qft.py)'."
-)
+def _build_kb_explain_sys_prompt(language: str = "auto") -> str:
+    return (
+        "You are UQI's knowledge base assistant. Given a SINGLE record from the "
+        "quantum-pipeline knowledge base, explain it to the user in plain language. "
+        "Cover: (1) what this record is, (2) what each metric/field means, (3) whether "
+        "the result is good/bad/notable and why. Be concise: 3~6 sentences. "
+        f"{_kb_lang_directive(language)} "
+        "Use markdown bullets if multiple metrics to explain. "
+        "DO NOT invent fields not present in the record. "
+        # algorithm_file 인용 강제
+        "Whenever you mention a circuit or algorithm by name, also include the "
+        "algorithm_file (basename, in parentheses) if present, e.g. 'qft_8q (qft.py)'."
+    )
 
 
 @mcp.tool(output_schema=None, timeout=60)
@@ -2061,7 +2081,7 @@ async def uqi_kb_explain(
 
     Args:
       record_id : records 테이블의 8자 hex id
-      language  : 'auto' (default) / 'ko' / 'en'
+      language  : 'auto' (default) / 'ko' / 'en' / 'fr'
 
     Returns JSON:
       {
@@ -2117,7 +2137,7 @@ async def uqi_kb_explain(
             resp = client.messages.create(
                 model=model,
                 max_tokens=512,
-                system=_KB_EXPLAIN_SYS_PROMPT,
+                system=_build_kb_explain_sys_prompt(language),
                 messages=[{"role": "user", "content": user_msg}],
             )
             text = "".join(getattr(b, "text", "") for b in resp.content)

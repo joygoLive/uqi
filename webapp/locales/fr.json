@@ -47,6 +47,7 @@
   "pipeline.upload": "⬆ Téléverser",
   "pipeline.dgx": "📂 DGX",
   "pipeline.drop_hint": "Déposer .py ici ou cliquer pour parcourir",
+  "pipeline.dgx_search_placeholder": "🔎 Filtrer par nom ou framework",
   "pipeline.target_qpu": "QPU cible",
   "pipeline.steps_hint": "Chaque étape s'exécute de manière <strong>indépendante</strong> — sélectionnez n'importe quelle étape et lancez-la directement avec le fichier et le QPU choisis. Aucune étape préalable n'est requise.",
   "pipeline.analyze.name": "Analyse de circuit",

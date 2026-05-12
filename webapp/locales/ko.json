@@ -47,6 +47,7 @@
   "pipeline.upload": "⬆ 업로드",
   "pipeline.dgx": "📂 DGX",
   "pipeline.drop_hint": ".py 파일을 여기에 놓거나 클릭하여 찾아보기",
+  "pipeline.dgx_search_placeholder": "🔎 이름 또는 프레임워크로 필터",
   "pipeline.target_qpu": "Target QPU",
   "pipeline.steps_hint": "각 단계는 <strong>독립적으로</strong> 실행됩니다 — 알고리즘 파일과 QPU를 선택하여 바로 실행하세요. 이전 단계 불필요.",
   "pipeline.analyze.name": "Circuit Analysis",

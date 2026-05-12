@@ -23,6 +23,15 @@ _PCS_DEVICE_MAP = {
 }
 
 
+# pasqal_cloud SDK 의 errors (BatchCreationError 등) 는 BaseException 직접
+# 상속이라 일반적인 `except Exception` 으로 잡히지 않음. 호출부에서는
+# `except (Exception, _PASQAL_SDK_ERROR_BASE)` 로 함께 잡아야 한다.
+try:
+    from pasqal_cloud.errors import ExceptionWithResponseContext as _PASQAL_SDK_ERROR_BASE
+except Exception:  # pragma: no cover — SDK 버전 호환
+    _PASQAL_SDK_ERROR_BASE = BaseException
+
+
 class UQIExecutorPasqal:
     """
     PCS (Pasqal Cloud Services) 직제출 executor — Azure executor 와 동일 인터페이스.
@@ -138,7 +147,7 @@ class UQIExecutorPasqal:
             result["ok"] = True
             print(f"    ✓ PCS batch 제출: batch_id={batch.id} "
                   f"({'emulator='+emulator_value if emulator_value else device_key})")
-        except Exception as e:
+        except (Exception, _PASQAL_SDK_ERROR_BASE) as e:
             result["error"] = str(e)
             print(f"    ✗ PCS batch 제출 실패: {e}")
         return result
@@ -188,7 +197,7 @@ class UQIExecutorPasqal:
         try:
             sdk = UQIExecutorPasqal._new_sdk_or_raise()
             batch = sdk.get_batch(job_id)
-        except Exception as e:
+        except (Exception, _PASQAL_SDK_ERROR_BASE) as e:
             out["error"] = f"PCS get_batch 실패: {e}"
             return out
 
@@ -227,7 +236,7 @@ class UQIExecutorPasqal:
             out["submitted_at"] = getattr(batch, "created_at", None)
             out["started_at"]   = getattr(batch, "start_datetime", None)
             out["ended_at"]     = getattr(batch, "end_datetime", None)
-        except Exception as e:
+        except (Exception, _PASQAL_SDK_ERROR_BASE) as e:
             out["error"] = str(e)
         return out
 
@@ -238,5 +247,5 @@ class UQIExecutorPasqal:
             sdk = UQIExecutorPasqal._new_sdk_or_raise()
             sdk.cancel_batch(job_id)
             return {"ok": True, "job_id": job_id}
-        except Exception as e:
+        except (Exception, _PASQAL_SDK_ERROR_BASE) as e:
             return {"ok": False, "error": str(e), "job_id": job_id}

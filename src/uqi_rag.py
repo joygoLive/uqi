@@ -1,6 +1,6 @@
 # uqi_rag.py
 # UQI 지식베이스 (RAG - Retrieval Augmented Generation)
-# SQLite WAL 기반 + ChromaDB 시맨틱 검색
+# SQLite WAL + sqlite-vec (dense) + FTS5 (BM25) 하이브리드 + 외부 임베딩/리랭커 서버
 # UQI (Universal Quantum Infrastructure)
 
 import os
@@ -26,24 +26,14 @@ _DATA_DIR   = Path(__file__).parent.parent / "data"
 # 환경 변수로 경로/컬렉션 이름 오버라이드 가능 (배포·마이그레이션 시 유용).
 RAG_FILE    = os.environ.get("UQI_RAG_FILE",    str(_DATA_DIR / "uqi_rag.db"))
 CACHE_FILE  = os.environ.get("UQI_CACHE_FILE",  str(_DATA_DIR / "uqi_cache.db"))
-CHROMA_DIR  = os.environ.get("UQI_CHROMA_DIR",  str(_DATA_DIR / "uqi_chroma"))
-CHROMA_NAME = os.environ.get("UQI_CHROMA_COLLECTION", "uqi_knowledge")
 
-# 새 RAG 백엔드 (sqlite-vec). chroma 와 병행 운영 후 Phase 8 에서 chroma 제거.
+# RAG 백엔드 (sqlite-vec + 외부 임베딩/리랭커 서버).
 EMBED_URL    = os.environ.get("UQI_EMBED_URL",    "http://127.0.0.1:7997")
 EMBED_MODEL  = os.environ.get("UQI_EMBED_MODEL",  "BAAI/bge-m3")
 EMBED_DIM    = int(os.environ.get("UQI_EMBED_DIM", "1024"))
 RERANK_URL   = os.environ.get("UQI_RERANK_URL",   "http://127.0.0.1:7998")
 RERANK_MODEL = os.environ.get("UQI_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
 RERANK_TOPN  = int(os.environ.get("UQI_RERANK_TOPN", "50"))  # over-fetch before rerank
-
-# search_semantic 백엔드 선택. 운영 안전을 위해 "auto" 가 기본 —
-# sqlite-vec 가능 시 우선 시도하고, 임베딩 서버 다운 등으로 실패하면
-# Chroma 로 폴백.
-#   auto         : sqlite-vec 우선 + chroma fallback (권장 default)
-#   sqlite-vec   : sqlite-vec 만 사용 (실패 시 빈 결과)
-#   chroma       : 강제 chroma (rollback 시)
-RAG_BACKEND = os.environ.get("UQI_RAG_BACKEND", "auto")
 
 # 캐시 타입은 임베딩 제외 (값이 크고 검색 의미 없음)
 _SKIP_EMBED_TYPES = {"cache", "qpu_availability"}
@@ -111,7 +101,7 @@ def _init_rag_db(db_path: str):
 def _init_sqlite_vec_schema(db_path: str) -> bool:
     """records DB 에 record_vec (sqlite-vec) + record_fts (BM25) 가상 테이블 추가.
 
-    원자적·멱등적. 확장 로드 실패 시 False 반환하고 호출부에서 chroma fallback.
+    원자적·멱등적. 확장 로드 실패 시 False 반환하고 호출부에서 빈 결과로 graceful degrade.
     """
     if not _SQLITE_VEC_OK:
         return False
@@ -163,11 +153,12 @@ def _row_to_record(row: sqlite3.Row) -> dict:
 
 
 # ─────────────────────────────────────────────────────────
-# Chroma 임베딩 텍스트 생성
+# 임베딩 텍스트 생성 (v1: flatten key-value 형태, 테스트/베이스라인 비교용)
+# 운영 경로에서는 _make_embedding_text_v2 (자연어 문장형) 가 사용된다.
 # ─────────────────────────────────────────────────────────
 
 def _make_embedding_text(record_type: str, data: dict) -> str:
-    """레코드 타입별 임베딩용 텍스트 생성"""
+    """레코드 타입별 임베딩용 텍스트 생성 (v1, 보존용)"""
     parts = [f"type:{record_type}"]
 
     if record_type == "optimization":
@@ -510,62 +501,30 @@ def _make_embedding_text_v2(record_type: str, data: dict) -> str:
 
 class UQIRAG:
     """
-    UQI 지식베이스 — SQLite WAL + ChromaDB 시맨틱 검색
+    UQI 지식베이스 — SQLite WAL + sqlite-vec (dense) + FTS5 (BM25) 하이브리드 검색
 
-    - records DB (SQLite): source of truth
-    - cache DB (SQLite):   작업 결과 캐시
-    - Chroma:              시맨틱 검색 인덱스 (SQLite 보조)
+    - records DB (SQLite):        source of truth
+    - cache DB (SQLite):          작업 결과 캐시
+    - record_vec (sqlite-vec):    bge-m3 1024-dim dense 인덱스
+    - record_fts (FTS5):          BM25 lexical 인덱스
+    - 외부 임베딩/리랭커 서버:    bge-m3 + bge-reranker-v2-m3 (HTTP)
     """
 
     def __init__(self,
                  rag_file:   str = RAG_FILE,
-                 cache_file: str = CACHE_FILE,
-                 chroma_dir: str = CHROMA_DIR):
+                 cache_file: str = CACHE_FILE):
         self.rag_file   = rag_file
         self.cache_file = cache_file
-        self.chroma_dir = chroma_dir
         self._lock      = threading.Lock()
-        self._chroma    = None
 
         _init_rag_db(self.rag_file)
         _init_cache_db(self.cache_file)
-        # sqlite-vec 백엔드 (record_vec/record_fts). 실패해도 chroma 로 동작.
+        # sqlite-vec 백엔드 (record_vec/record_fts). 실패 시 검색은 graceful degrade.
         self._sqlite_vec_ok = _init_sqlite_vec_schema(self.rag_file)
         if self._sqlite_vec_ok:
             print(f"  [RAG] sqlite-vec 활성 (dim={EMBED_DIM}, embed_url={EMBED_URL})", flush=True)
-        self._init_chroma()
-
-    def _init_chroma(self):
-        """Chroma 컬렉션 초기화. 실패해도 서버 시작 차단 안 함."""
-        try:
-            import chromadb
-            from chromadb.utils import embedding_functions
-            client = chromadb.PersistentClient(path=self.chroma_dir)
-            ef = embedding_functions.DefaultEmbeddingFunction()  # all-MiniLM-L6-v2
-            self._chroma = client.get_or_create_collection(
-                name=CHROMA_NAME,
-                embedding_function=ef,
-                metadata={"hnsw:space": "cosine"},
-            )
-            print(f"  [RAG] Chroma 초기화 완료: {self.chroma_dir} "
-                  f"(인덱스 {self._chroma.count()}개)", flush=True)
-        except Exception as e:
-            print(f"  [RAG] Chroma 비활성화 (chromadb 미설치 또는 오류: {e})", flush=True)
-            self._chroma = None
-
-    def _chroma_add(self, record_id: str, record_type: str, data: dict, timestamp: str):
-        """Chroma에 임베딩 추가. 실패해도 SQLite 저장에 영향 없음."""
-        if self._chroma is None or record_type in _SKIP_EMBED_TYPES:
-            return
-        try:
-            text = _make_embedding_text(record_type, data)
-            self._chroma.add(
-                ids=[record_id],
-                documents=[text],
-                metadatas=[{"type": record_type, "timestamp": timestamp}],
-            )
-        except Exception as e:
-            print(f"  [RAG] Chroma 인덱싱 실패 {record_id}: {e}", flush=True)
+        else:
+            print("  [RAG] sqlite-vec 비활성 — 시맨틱 검색 불가 (extension 미설치)", flush=True)
 
     # ─────────────────────────────────────────────────────
     # sqlite-vec 백엔드 — record_vec + record_fts write-through
@@ -690,9 +649,7 @@ class UQIRAG:
             finally:
                 conn.close()
 
-        # 임베딩 백엔드 write-through (둘 다 락 밖에서 호출 — 자체 락/스레드세이프).
-        # chroma 는 4주 관측 기간 동안 백업 인덱스로 유지. Phase 8 후 제거.
-        self._chroma_add(record_id, record_type, data, timestamp)
+        # 임베딩 백엔드 write-through (락 밖에서 호출 — 자체 락/스레드세이프).
         self._vec_add(record_id, record_type, data, timestamp)
         return record_id
 
@@ -736,23 +693,19 @@ class UQIRAG:
                         record_type: str  = None,
                         rerank:      bool = True,
                         hybrid:      bool = True) -> list:
-        """다층 검색.
+        """sqlite-vec 기반 다층 검색.
 
-        백엔드 (UQI_RAG_BACKEND):
-          auto       : sqlite-vec 경로 우선 (dense+BM25+rerank), 빈 결과 시 chroma fallback (default)
-          sqlite-vec : 강제 sqlite-vec 경로 (실패 시 빈 결과)
-          chroma     : 강제 chroma (rollback safety)
-
-        sqlite-vec 경로 동작:
+        파이프라인:
           1. (hybrid=True, 기본) dense + FTS5 BM25 → RRF 결합 (over-fetch ~50)
              (hybrid=False) dense top-N 만
           2. (rerank=True, 기본) bge-reranker-v2-m3 cross-encoder 로 top-limit 정밀화
              (rerank=False) RRF 또는 dense 순서 그대로 truncate
-        각 외부 서버(임베딩/재랭커/sqlite-vec) 다운 시 graceful degrade.
-        """
-        backend = RAG_BACKEND
 
-        def _sqlite_vec_pipeline() -> list:
+        각 외부 서버(임베딩/재랭커) 또는 sqlite-vec 다운 시 graceful degrade — 빈 결과 반환.
+        """
+        if not self._sqlite_vec_ok:
+            return []
+        try:
             if hybrid:
                 candidates = self._search_hybrid(query, limit, record_type)
             else:
@@ -761,28 +714,9 @@ class UQIRAG:
             if rerank:
                 return self._rerank(query, candidates, limit)
             return candidates[:limit]
-
-        if backend == "auto":
-            if self._sqlite_vec_ok:
-                try:
-                    out = _sqlite_vec_pipeline()
-                    if out:
-                        return out
-                except Exception as e:
-                    print(f"  [RAG] sqlite-vec 파이프라인 실패 → chroma fallback: {e}", flush=True)
-            return self._search_chroma(query, limit, record_type)
-
-        if backend == "sqlite-vec":
-            if not self._sqlite_vec_ok:
-                return []
-            try:
-                return _sqlite_vec_pipeline()
-            except Exception as e:
-                print(f"  [RAG] sqlite-vec 파이프라인 실패: {e}", flush=True)
-                return []
-
-        # backend == "chroma" (rollback)
-        return self._search_chroma(query, limit, record_type)
+        except Exception as e:
+            print(f"  [RAG] sqlite-vec 파이프라인 실패: {e}", flush=True)
+            return []
 
     def _search_bm25(self,
                      query:       str,
@@ -947,98 +881,6 @@ class UQIRAG:
             if len(results) >= limit:
                 break
         return results
-
-    def _search_chroma(self,
-                       query:       str,
-                       limit:       int,
-                       record_type: Optional[str]) -> list:
-        """기존 Chroma 벡터 검색 (fallback / rollback path)."""
-        if self._chroma is None:
-            return []
-
-        try:
-            where = {"type": record_type} if record_type else None
-            results = self._chroma.query(
-                query_texts=[query],
-                n_results=min(limit, self._chroma.count() or 1),
-                where=where,
-                include=["documents", "metadatas", "distances"],
-            )
-        except Exception as e:
-            print(f"  [RAG] Chroma 검색 실패: {e}", flush=True)
-            return []
-
-        ids       = results["ids"][0] if results["ids"] else []
-        distances = results["distances"][0] if results["distances"] else []
-
-        if not ids:
-            return []
-
-        conn = _connect(self.rag_file)
-        try:
-            placeholders = ",".join("?" * len(ids))
-            rows = conn.execute(
-                f"SELECT * FROM records WHERE id IN ({placeholders})", ids
-            ).fetchall()
-        finally:
-            conn.close()
-
-        record_map = {row["id"]: _row_to_record(row) for row in rows}
-        records = []
-        for rid, dist in zip(ids, distances):
-            if rid in record_map:
-                rec = dict(record_map[rid])
-                rec["similarity"] = round(1 - dist, 4)  # chroma cosine distance → similarity
-                records.append(rec)
-
-        return records
-
-    def reindex_chroma(self) -> int:
-        """SQLite 전체 레코드를 Chroma에 재인덱싱. 마이그레이션/복구용."""
-        if self._chroma is None:
-            print("  [RAG] Chroma 비활성화 상태 — 재인덱싱 불가")
-            return 0
-
-        conn = _connect(self.rag_file)
-        try:
-            rows = conn.execute("SELECT * FROM records").fetchall()
-        finally:
-            conn.close()
-
-        count = 0
-        batch_ids, batch_docs, batch_metas = [], [], []
-
-        for row in rows:
-            rec = _row_to_record(row)
-            if rec["type"] in _SKIP_EMBED_TYPES:
-                continue
-
-            # 이미 인덱싱된 ID는 스킵
-            try:
-                existing = self._chroma.get(ids=[rec["id"]])
-                if existing["ids"]:
-                    continue
-            except Exception:
-                pass
-
-            text = _make_embedding_text(rec["type"], rec["data"])
-            batch_ids.append(rec["id"])
-            batch_docs.append(text)
-            batch_metas.append({"type": rec["type"], "timestamp": rec["timestamp"]})
-
-            # 배치 100개씩 upsert
-            if len(batch_ids) >= 100:
-                self._chroma.add(ids=batch_ids, documents=batch_docs, metadatas=batch_metas)
-                count += len(batch_ids)
-                print(f"  [RAG] Chroma 인덱싱 진행: {count}개", flush=True)
-                batch_ids, batch_docs, batch_metas = [], [], []
-
-        if batch_ids:
-            self._chroma.add(ids=batch_ids, documents=batch_docs, metadatas=batch_metas)
-            count += len(batch_ids)
-
-        print(f"  [RAG] Chroma 재인덱싱 완료: {count}개 추가")
-        return count
 
     # ─────────────────────────────────────────────────────
     # 타입별 저장 헬퍼 (기존과 동일)
@@ -1288,30 +1130,36 @@ class UQIRAG:
             finally:
                 conn_c.close()
             by_type["cache"] = cache_count
+
+            # sqlite-vec / FTS5 인덱스 카운트 (확장 활성 시).
+            vec_count = 0
+            fts_count = 0
+            vec_health = "disabled"
+            vec_error = None
+            if self._sqlite_vec_ok:
+                try:
+                    vec_count = conn.execute("SELECT COUNT(*) FROM record_vec").fetchone()[0]
+                    fts_count = conn.execute("SELECT COUNT(*) FROM record_fts").fetchone()[0]
+                    vec_health = "active" if vec_count > 0 else "empty"
+                except Exception as e:
+                    vec_health = "error"
+                    vec_error = str(e)
         finally:
             conn.close()
-
-        chroma_count = 0
-        chroma_health = "disabled"  # disabled | empty | active | error
-        chroma_error = None
-        if self._chroma is not None:
-            try:
-                chroma_count = self._chroma.count()
-                chroma_health = "active" if chroma_count > 0 else "empty"
-            except Exception as e:
-                chroma_health = "error"
-                chroma_error = str(e)
 
         return {
             "total":         total + cache_count,
             "by_type":       by_type,
             "rag_file":      self.rag_file,
             "cache_file":    self.cache_file,
-            "chroma_dir":    self.chroma_dir,
-            "chroma_name":   CHROMA_NAME,
-            "chroma_index":  chroma_count,
-            "chroma_health": chroma_health,
-            "chroma_error":  chroma_error,
+            "vec_index":     vec_count,
+            "fts_index":     fts_count,
+            "vec_health":    vec_health,
+            "vec_error":     vec_error,
+            "embed_url":     EMBED_URL,
+            "embed_model":   EMBED_MODEL,
+            "rerank_url":    RERANK_URL,
+            "rerank_model":  RERANK_MODEL,
             "last_updated":  last_updated,
         }
 
@@ -1321,7 +1169,7 @@ class UQIRAG:
         print(f"  총 레코드: {s['total']}")
         print(f"  이력 DB:   {s['rag_file']}")
         print(f"  캐시 DB:   {s['cache_file']}")
-        print(f"  Chroma:    {s['chroma_dir']} ({s['chroma_index']}개 인덱싱)")
+        print(f"  sqlite-vec: {s['vec_health']} (dense {s['vec_index']}건 / fts {s['fts_index']}건)")
         print(f"  최근 업데이트: {s['last_updated']}")
         print(f"  타입별:")
         for t, c in sorted(s["by_type"].items()):

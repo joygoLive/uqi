@@ -6,7 +6,6 @@ import json
 import sqlite3
 import tempfile
 import pytest
-from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from uqi_rag import (
@@ -24,17 +23,11 @@ from uqi_rag import (
 # Helpers
 # ─────────────────────────────────────────────────────────────
 
-def _tmp_rag(chroma=False) -> UQIRAG:
-    rag_f    = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
-    cache_f  = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
-    chroma_d = tempfile.mkdtemp()
-
-    if not chroma:
-        with patch("chromadb.PersistentClient", side_effect=Exception("chroma disabled")):
-            rag = UQIRAG(rag_file=rag_f, cache_file=cache_f, chroma_dir=chroma_d)
-    else:
-        rag = UQIRAG(rag_file=rag_f, cache_file=cache_f, chroma_dir=chroma_d)
-
+def _tmp_rag(**_kwargs) -> UQIRAG:
+    """테스트용 임시 RAG. 예전 시그니처 (chroma=...) 와 호환 위해 **_kwargs 흡수."""
+    rag_f   = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+    cache_f = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+    rag = UQIRAG(rag_file=rag_f, cache_file=cache_f)
     return rag, rag_f, cache_f
 
 
@@ -175,13 +168,6 @@ class TestUQIRAGInit:
         finally:
             _cleanup(rag_f, cache_f)
 
-    def test_TC033_chroma_none_when_import_fails(self):
-        rag, rag_f, cache_f = _tmp_rag(chroma=False)
-        try:
-            assert rag._chroma is None
-        finally:
-            _cleanup(rag_f, cache_f)
-
     def test_TC034_rag_db_created(self):
         rag, rag_f, cache_f = _tmp_rag()
         try:
@@ -248,24 +234,13 @@ class TestAdd:
         results = self.rag.search(record_type="optimization")
         assert "ibm_fez" in results[0]["tags"]
 
-    def test_TC046_chroma_add_skipped_when_none(self):
-        # _chroma가 None이면 예외 없이 동작
-        assert self.rag._chroma is None
-        rid = self.rag.add("optimization", {"test": True})
-        assert rid is not None
-
     def test_TC047_skip_embed_types_not_indexed(self):
-        # cache/qpu_availability 타입은 Chroma 인덱싱 스킵
-        mock_chroma = MagicMock()
-        self.rag._chroma = mock_chroma
-        self.rag.add("cache", {"key": "val"})
-        mock_chroma.add.assert_not_called()
-
-    def test_TC048_non_skip_type_indexed_when_chroma_active(self):
-        mock_chroma = MagicMock()
-        self.rag._chroma = mock_chroma
-        self.rag.add("optimization", {"qpu_name": "ibm_fez"})
-        mock_chroma.add.assert_called_once()
+        # cache/qpu_availability 타입은 임베딩 인덱싱 스킵 (_vec_add 가 직접 가드)
+        from uqi_rag import _SKIP_EMBED_TYPES
+        assert "cache" in _SKIP_EMBED_TYPES
+        # 호출 자체는 성공해야 함 (write-through 실패 무시).
+        rid = self.rag.add("cache", {"key": "val"})
+        assert isinstance(rid, str)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -495,7 +470,7 @@ class TestStats:
     def test_TC081_required_keys_present(self):
         s = self.rag.stats()
         assert {"total", "by_type", "rag_file", "cache_file",
-                "chroma_dir", "chroma_index", "last_updated"} <= set(s.keys())
+                "vec_index", "vec_health", "last_updated"} <= set(s.keys())
 
     def test_TC082_empty_db_total_zero(self):
         s = self.rag.stats()

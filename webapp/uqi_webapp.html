@@ -5671,7 +5671,7 @@ async function runRAG() {
     if (qpu) args.qpu_name=qpu;
     if (sdk) args.sdk=sdk;
 
-    // stats 쿼리는 풀스캔 + chroma.count() 까지 포함되어 무거움. 30s 부여.
+    // stats 쿼리는 record_vec/record_fts 카운트 포함되어 다소 무거움. 30s 부여.
     // 그 외는 기존 15s 유지.
     const _ragTimeoutMs = (queryType === 'stats') ? 30000 : 15000;
     const _ragTimeout = new Promise((_,rej) => setTimeout(() => rej(new Error('Search timed out — server busy, click to retry')), _ragTimeoutMs));

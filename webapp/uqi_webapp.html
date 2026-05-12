@@ -3521,7 +3521,7 @@ function _qpuOptGroups(qpus) {
   const groups = new Map();
   for (const q of qpus) {
     const m = qpuMeta(q);
-    const k = `${m.vendor}${m.runtime}`;
+    const k = `${m.vendor}${m.runtime}`;
     if (!groups.has(k)) groups.set(k, {vendor: m.vendor, runtime: m.runtime, items: []});
     groups.get(k).items.push({q, label: _qpuOptionLabel(q)});
   }
@@ -5693,6 +5693,25 @@ const _ASK_MAX_LEN = 5000;
 // requiring the user to re-type the question.
 window._lastSemanticQuery = '';
 
+// LLM 답변용 간이 마크다운 → HTML. escape 된 텍스트에 적용.
+//   ## / ### Header  → 굵은 한 줄 (h-tag 충돌 회피)
+//   **bold**         → <strong>
+//   `code`           → <code>
+//   - item / • item  → bullet 들여쓰기
+//   \n\n             → 단락 분리, \n → <br>
+function _mdInline(s) {
+  return s
+    .replace(/^#{1,6}\s+(.+)$/gm,
+      '<div style="font-size:13px;font-weight:700;margin:10px 0 4px;color:var(--text1)">$1</div>')
+    .replace(/`([^`\n]+)`/g,
+      '<code style="font-size:11px;background:var(--surface2);padding:1px 5px;border-radius:3px;font-family:var(--font-mono);color:var(--text2)">$1</code>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^[\-•\*]\s+(.+)$/gm,
+      '<div style="margin:2px 0 2px 12px">• $1</div>')
+    .replace(/\n\n+/g, '<br><br>')
+    .replace(/\n/g, '<br>');
+}
+
 // Render the answer text, turning citation ids into clickable chips.
 // LLM 이 인용 형식을 어겨도(연속 hex, 대괄호 누락 등) 관용적으로 처리.
 // 중요: chip HTML 안의 data-id="..." 가 다음 regex 에 또 매치되는 cascading
@@ -5707,8 +5726,8 @@ function _renderAskAnswer(answer, citationsById) {
   const _stash = (id) => {
     const idx = chips.length;
     chips.push(id);
-    //  … 은 일반 텍스트에 나올 수 없는 control char ─ 안전한 placeholder
-    return `CHIP${idx}`;
+    //  … 은 일반 텍스트에 나올 수 없는 control char ─ 안전한 placeholder
+    return `CHIP${idx}`;
   };
 
   let html = escHtml(answer);
@@ -5732,11 +5751,13 @@ function _renderAskAnswer(answer, citationsById) {
     return parts.map(_stash).join('');
   });
 
-  // 4) placeholder → 실제 chip HTML (이 시점엔 더 이상 regex 매칭 없음)
-  html = html.replace(/CHIP(\d+)/g, (_m, idx) => _chip(chips[parseInt(idx, 10)]));
+  // 4) markdown 변환 (## 헤더 / `code` / **bold** / 불릿 / 줄바꿈)
+  html = _mdInline(html);
 
-  // 5) 줄바꿈 보존
-  return html.replace(/\n/g, '<br>');
+  // 5) placeholder → 실제 chip HTML
+  html = html.replace(/CHIP(\d+)/g, (_m, idx) => _chip(chips[parseInt(idx, 10)]));
+
+  return html;
 }
 
 function _scrollToCitation(id) {
@@ -5804,11 +5825,8 @@ async function runExplainRecord(rid) {
     const usage = d.usage || {};
     const elapsed = ((d.elapsed_ms || (Date.now() - t0)) / 1000).toFixed(1);
     const usageStr = `${d.model || '—'} · ${usage.input_tokens||0}/${usage.output_tokens||0} tok · ${elapsed}s`;
-    // Convert simple markdown bullets + line breaks
-    let html = escHtml(d.explanation || '');
-    html = html.replace(/^- (.+)$/gm, '<div style="margin:2px 0 2px 8px">• $1</div>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\n\n+/g, '<br><br>').replace(/\n/g, ' ');
+    // markdown 변환 — _renderAskAnswer 와 동일 헬퍼 사용
+    const html = _mdInline(escHtml(d.explanation || ''));
     box.innerHTML = `
       <div style="font-size:10px;color:var(--accent2);font-weight:600;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:4px">
         🤖 ${escHtml(t('knowledge.explain_heading'))}

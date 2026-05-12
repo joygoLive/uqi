@@ -168,8 +168,8 @@ SUPPORTED_QPUS = ["ibm_fez", "ibm_marrakesh", "ibm_kingston",
                    "iqm_garnet", "iqm_emerald", "iqm_sirius",
                    "rigetti_cepheus",
                    "ionq_forte1",
-                   # Azure Quantum — Pasqal Fresnel 실 QPU만
-                   "pasqal_fresnel", "pasqal_fresnel_can1",
+                   # Pasqal Fresnel 실 QPU + PCS emulator (EMU_FRESNEL)
+                   "pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel",
                    # Quantinuum — 분석/추천만 가능 (자사 클라우드 통합 전까지 submit 차단)
                    "quantinuum_h2_1", "quantinuum_h2_2", "quantinuum_h1_1",
                    # Braket QuEra (AHS — gate 회로 비호환)
@@ -201,7 +201,7 @@ _FRAMEWORK_QPU_MAP = {
     # 회로 호환 가능한 QPU 가 *유일*. extractor 가 framework 분류한 시점에
     # 이미 vendor 가 결정되므로 default = 유일한 QPU.
     "Braket-AHS": {"qpus": ["quera_aquila"], "default": "quera_aquila"},
-    "Pulser":     {"qpus": ["pasqal_fresnel", "pasqal_fresnel_can1"], "default": "pasqal_fresnel"},
+    "Pulser":     {"qpus": ["pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel"], "default": "pasqal_emu_fresnel"},
 }
 
 def _resolve_qpu(algorithm_file: str, qpu_name: str) -> str:
@@ -343,8 +343,11 @@ def _validate_ahs(algorithm_file: str, qpu_name: str) -> str:
     # device constraint (대략값 — 실 SDK 의 device.properties 와 다를 수 있음)
     LIMITS = {
         "quera_aquila":        {"max_atoms": 256, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
-        "pasqal_fresnel":      {"max_atoms": 100, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
-        "pasqal_fresnel_can1": {"max_atoms": 100, "min_spacing_um": 4.0,  "max_duration_ns": 4000},
+        # PCS 실측 (2026-05-12): max_atom_num=100 / min_atom_distance=5µm / max_sequence_duration=6000ns
+        "pasqal_fresnel":      {"max_atoms": 100, "min_spacing_um": 5.0,  "max_duration_ns": 6000},
+        "pasqal_fresnel_can1": {"max_atoms": 100, "min_spacing_um": 5.0,  "max_duration_ns": 6000},
+        # EMU_FRESNEL: Fresnel QPU 동일 한계 + noise 모델
+        "pasqal_emu_fresnel":  {"max_atoms": 100, "min_spacing_um": 5.0,  "max_duration_ns": 6000},
     }
     limits = LIMITS.get(qpu_name, {})
 
@@ -545,6 +548,55 @@ def _noise_simulate_ahs(algorithm_file: str, qpu_name: str, shots: int) -> str:
         return _json.dumps({"error": f"AHS noise sim 실패: {e}"})
 
 
+# Pasqal 백엔드 선택: PCS 직제출(=pcs) primary + Azure Quantum(=azure) fallback.
+#   auto  : PCS 시도 → 실패 시 Azure fallback (default)
+#   pcs   : PCS 강제 (실패 시 에러)
+#   azure : Azure 강제 (기존 동작)
+# Emulator (pasqal_emu_*) 는 항상 PCS — Azure 에 EMU 없음.
+def _pasqal_submit_with_fallback(name: str, algorithm_file: str,
+                                 qpu_name: str, shots: int) -> dict:
+    """Pasqal 제출 라우터. result dict 는 _qpu_submit_ahs 가 그대로 사용.
+
+    반환 dict 의 `via` 필드:
+      "pcs-pulser"          — PCS 단독 제출 성공
+      "azure-pulser"        — Azure 단독 제출 성공
+      "pcs→azure-pulser"    — PCS 실패 → Azure fallback 성공
+    실패 시 `ok=False` + `error` 채움.
+    """
+    backend = (os.environ.get("UQI_PASQAL_BACKEND", "auto") or "auto").lower()
+    # Emulator 는 PCS 전용 — backend 강제 옵션 무시.
+    if qpu_name.startswith("pasqal_emu_"):
+        backend = "pcs"
+
+    def _try_pcs() -> dict:
+        from uqi_executor_pasqal import UQIExecutorPasqal
+        ex = UQIExecutorPasqal(converter=None, shots=shots)
+        return ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
+
+    def _try_azure() -> dict:
+        from uqi_executor_azure import UQIExecutorAzure
+        ex = UQIExecutorAzure(converter=None, shots=shots)
+        out = ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
+        out["via"] = "azure-pulser"
+        return out
+
+    if backend == "pcs":
+        return _try_pcs()
+    if backend == "azure":
+        return _try_azure()
+
+    # auto: PCS → Azure fallback (단, emulator 는 위에서 이미 처리)
+    pcs_result = _try_pcs()
+    if pcs_result.get("ok"):
+        return pcs_result
+    print(f"  [Pasqal] PCS 제출 실패 → Azure fallback. err={pcs_result.get('error')}")
+    az_result = _try_azure()
+    if az_result.get("ok"):
+        az_result["via"] = "pcs→azure-pulser"
+        az_result["pcs_error"] = pcs_result.get("error")
+    return az_result
+
+
 def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
                     confirmed: bool) -> str:
     """AHS QPU submit — Braket-AHS (QuEra) / Pulser (Pasqal) 분기.
@@ -568,7 +620,7 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
     # 둘 다 정의해도 사용자가 선택한 QPU 에 맞는 executor 사용
     if qpu_name == "quera_aquila":
         framework = "Braket-AHS"
-    elif qpu_name in ("pasqal_fresnel", "pasqal_fresnel_can1"):
+    elif qpu_name in ("pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel"):
         framework = "Pulser"
 
     # 분석 단계: 비용/메트릭 + 안내 메시지
@@ -614,9 +666,7 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
             ex = UQIExecutorBraket(converter=None, shots=shots)
             sub = ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
         elif framework == "Pulser":
-            from uqi_executor_azure import UQIExecutorAzure
-            ex = UQIExecutorAzure(converter=None, shots=shots)
-            sub = ex._submit_single_ahs(name, algorithm_file, backend_name=qpu_name)
+            sub = _pasqal_submit_with_fallback(name, algorithm_file, qpu_name, shots)
         else:
             return _json.dumps({"error": f"AHS 가 아닌 framework: {framework}"})
     except Exception as e:
@@ -3059,7 +3109,7 @@ async def uqi_qpu_submit(
                     # Pasqal Fresnel — Pulser pulse program 입력 (Qiskit gate 회로 비호환)
                     # Azure target API: input_data_format='pasqal.pulser.v1'
                     # 향후 Pulser 알고리즘 워크플로우 지원 시 SKIP에서 제거
-                    'pasqal_fresnel', 'pasqal_fresnel_can1',
+                    'pasqal_fresnel', 'pasqal_fresnel_can1', 'pasqal_emu_fresnel',
                     # Quantinuum — 자사 클라우드(Nexus) 통합 전까지 submit 차단
                     # (분석/추천은 가능, 단 캘리브레이션은 정적 OFFLINE 데이터)
                     'quantinuum_h2_1', 'quantinuum_h2_2', 'quantinuum_h1_1',
@@ -3427,6 +3477,7 @@ async def uqi_qpu_submit(
                     'quera_aquila':         'AHS analog (Qiskit gate 회로 비호환)',
                     'pasqal_fresnel':       'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
                     'pasqal_fresnel_can1':  'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
+                    'pasqal_emu_fresnel':   'Pulser pulse 입력 (Qiskit gate 회로 비호환)',
                     'quantinuum_h2_1':      'Quantinuum Nexus 통합 대기',
                     'quantinuum_h2_2':      'Quantinuum Nexus 통합 대기',
                     'quantinuum_h1_1':      'Quantinuum Nexus 통합 대기',
@@ -3746,9 +3797,18 @@ async def uqi_job_status(job_id: str) -> str:
             elif vendor == "braket":
                 from uqi_executor_braket import UQIExecutorBraket
                 result = UQIExecutorBraket.fetch_job_status(job_id)
+            elif vendor == "pasqal":
+                from uqi_executor_pasqal import UQIExecutorPasqal
+                result = UQIExecutorPasqal.fetch_job_status(job_id)
             elif vendor == "azure":
-                from uqi_executor_azure import UQIExecutorAzure
-                result = UQIExecutorAzure.fetch_job_status(job_id)
+                # Pasqal Pulser job 이 PCS 로 제출됐을 수 있으니 extra.via 확인 후 분기.
+                _via = (stored.get("extra") or {}).get("via", "")
+                if isinstance(_via, str) and _via.startswith("pcs"):
+                    from uqi_executor_pasqal import UQIExecutorPasqal
+                    result = UQIExecutorPasqal.fetch_job_status(job_id)
+                else:
+                    from uqi_executor_azure import UQIExecutorAzure
+                    result = UQIExecutorAzure.fetch_job_status(job_id)
             else:
                 return json.dumps({"error": f"미지원 vendor: {vendor}"})
 
@@ -3827,9 +3887,17 @@ async def uqi_job_cancel(job_id: str) -> str:
                 elif vendor == "braket":
                     from uqi_executor_braket import UQIExecutorBraket
                     cloud_result = UQIExecutorBraket.cancel_job(job_id)
+                elif vendor == "pasqal":
+                    from uqi_executor_pasqal import UQIExecutorPasqal
+                    cloud_result = UQIExecutorPasqal.cancel_job(job_id)
                 elif vendor == "azure":
-                    from uqi_executor_azure import UQIExecutorAzure
-                    cloud_result = UQIExecutorAzure.cancel_job(job_id)
+                    _via = (stored.get("extra") or {}).get("via", "")
+                    if isinstance(_via, str) and _via.startswith("pcs"):
+                        from uqi_executor_pasqal import UQIExecutorPasqal
+                        cloud_result = UQIExecutorPasqal.cancel_job(job_id)
+                    else:
+                        from uqi_executor_azure import UQIExecutorAzure
+                        cloud_result = UQIExecutorAzure.cancel_job(job_id)
             except Exception as ce:
                 cloud_result = {"ok": False, "error": str(ce)}
 
@@ -4015,7 +4083,14 @@ def _fetch_vendor_timing(vendor: str, job_id: str, extra: dict) -> dict:
         if vendor == "ibm":
             from uqi_executor_ibm import UQIExecutorIBM
             return UQIExecutorIBM.fetch_job_timing(job_id, token=IBM_TOKEN)
+        if vendor == "pasqal":
+            from uqi_executor_pasqal import UQIExecutorPasqal
+            return UQIExecutorPasqal.fetch_job_timing(job_id)
         if vendor == "azure":
+            _via = (extra or {}).get("via", "")
+            if isinstance(_via, str) and _via.startswith("pcs"):
+                from uqi_executor_pasqal import UQIExecutorPasqal
+                return UQIExecutorPasqal.fetch_job_timing(job_id)
             from uqi_executor_azure import UQIExecutorAzure
             return UQIExecutorAzure.fetch_job_timing(job_id)
         if vendor == "braket":

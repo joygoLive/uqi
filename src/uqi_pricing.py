@@ -229,6 +229,21 @@ PRICING: dict[str, dict] = {
         ],
     },
 
+    # PCS 직제출 emulator (EMU_FRESNEL): Fresnel QPU 동일 사양 + noise 모델.
+    # 실 QPU dry-run / 알고리즘 검증 용. 정확한 단가는 본사 확인 대기.
+    # 일단 0 USD 로 둬서 사용자 확인 게이트 + 비용 표시 일관성 유지.
+    "pasqal_emu_fresnel": {
+        "vendor": "pasqal",
+        "model": "free",
+        "confidence": "unknown",
+        "source": "PCS portal — EMU_FRESNEL emulator (단가 확인 대기)",
+        "updated_at": "2026-05-12",
+        "warnings": [
+            "EMU_FRESNEL emulator — Fresnel QPU 와 동일 사양 + noise 모델",
+            "실제 단가 본사 확인 중 — 임시 0 USD 표시 (실 비용 발생 가능)",
+        ],
+    },
+
     # ────────── Quantinuum (HQC, 별도 계약 필요) ──────────
     "quantinuum_*": {
         "vendor": "quantinuum",
@@ -574,6 +589,8 @@ _QPU_CATALOG: dict[str, dict] = {
     # ── Azure Quantum 경유 ──
     "pasqal_fresnel":      {"vendor": "Pasqal",     "model": "Fresnel",        "runtime": "Azure Quantum", "modality": "neutral-atom"},
     "pasqal_fresnel_can1": {"vendor": "Pasqal",     "model": "Fresnel-CAN1",   "runtime": "Azure Quantum", "modality": "neutral-atom"},
+    # PCS 경유 emulator (EMU_FRESNEL): Fresnel QPU 동일 사양 + noise 모델 — 큐 X, dry-run 용
+    "pasqal_emu_fresnel":  {"vendor": "Pasqal",     "model": "EMU-Fresnel",    "family": "Emulator", "runtime": "Pasqal Cloud", "modality": "neutral-atom"},
     "quantinuum_h2_1":     {"vendor": "Quantinuum", "model": "H2-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
     "quantinuum_h2_2":     {"vendor": "Quantinuum", "model": "H2-2",           "runtime": "Azure Quantum", "modality": "ion-trap"},
     "quantinuum_h1_1":     {"vendor": "Quantinuum", "model": "H1-1",           "runtime": "Azure Quantum", "modality": "ion-trap"},
@@ -588,7 +605,7 @@ _QPU_CATALOG: dict[str, dict] = {
 
 # Analog 회로 모드 QPU (gate 회로 비호환 — AHS 전용)
 # UI 카드/디테일에서 보조 뱃지로 표시. 검색 필터에는 영향 없음.
-_ANALOG_QPUS: set[str] = {"pasqal_fresnel", "pasqal_fresnel_can1", "quera_aquila"}
+_ANALOG_QPUS: set[str] = {"pasqal_fresnel", "pasqal_fresnel_can1", "pasqal_emu_fresnel", "quera_aquila"}
 
 # Modality 표시 라벨 (내부 키 → UI 라벨)
 # webapp 의 기존 radar tab (line 569~572) 표기와 일치

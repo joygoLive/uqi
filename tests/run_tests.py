@@ -25,6 +25,7 @@ TEST_MODULES = [
     ("test_uqi_executor_perceval.py","uqi_executor_perceval"),
     ("test_uqi_executor_braket.py",  "uqi_executor_braket"),
     ("test_uqi_executor_azure.py",   "uqi_executor_azure"),
+    ("test_uqi_executor_pasqal.py",  "uqi_executor_pasqal"),
     ("test_uqi_optimizer.py",        "uqi_optimizer"),
     ("test_uqi_noise.py",            "uqi_noise"),
     ("test_uqi_calibration.py",      "uqi_calibration"),

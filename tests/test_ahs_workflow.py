@@ -123,11 +123,15 @@ def test_TC510_framework_map_braket_ahs_quera_only():
 
 
 def test_TC511_framework_map_pulser_pasqal_only():
+    """Pulser 호환 QPU = Pasqal 실 QPU 2개 + PCS emulator 1개.
+    default 는 PCS emulator (pasqal_emu_fresnel) — 큐/비용 0 인 안전한 기본값.
+    사용자가 명시적으로 pasqal_fresnel(_can1) 선택 시 실 QPU 로 라우팅됨."""
     from mcp_server import _FRAMEWORK_QPU_MAP
     m = _FRAMEWORK_QPU_MAP["Pulser"]
     assert "pasqal_fresnel"      in m["qpus"]
     assert "pasqal_fresnel_can1" in m["qpus"]
-    assert m["default"]          == "pasqal_fresnel"
+    assert "pasqal_emu_fresnel"  in m["qpus"]
+    assert m["default"]          == "pasqal_emu_fresnel"
 
 
 def test_TC512_resolve_qpu_braket_ahs_auto_to_quera():
@@ -141,22 +145,23 @@ def test_TC512_resolve_qpu_braket_ahs_auto_to_quera():
 
 
 def test_TC513_resolve_qpu_pulser_auto_to_pasqal():
+    """'auto' → Pulser default (pasqal_emu_fresnel, PCS emulator)."""
     from mcp_server import _resolve_qpu
     path = _write(_PULSER_SAMPLE)
     try:
         result = _resolve_qpu(path, "auto")
-        assert result == "pasqal_fresnel"
+        assert result == "pasqal_emu_fresnel"
     finally:
         _clean(path)
 
 
 def test_TC514_resolve_qpu_pulser_with_wrong_qpu_corrects():
-    """Pulser 파일에 ibm_fez 선택 → pasqal_fresnel 자동 보정"""
+    """Pulser 파일에 ibm_fez 선택 → 자동 보정. default 는 emulator (안전)."""
     from mcp_server import _resolve_qpu
     path = _write(_PULSER_SAMPLE)
     try:
         result = _resolve_qpu(path, "ibm_fez")
-        assert result == "pasqal_fresnel"
+        assert result == "pasqal_emu_fresnel"
     finally:
         _clean(path)
 

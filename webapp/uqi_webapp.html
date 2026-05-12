@@ -6106,12 +6106,204 @@ function _semanticSnippet(type, data) {
   return parts.length ? parts.join(' · ') : '<span style="color:var(--text3)">(no data fields)</span>';
 }
 
+// ── Semantic record detail modal — type별 친화 표기 ──
+// 기존엔 raw JSON 만 펼침. 같은 Knowledge 탭의 _showOptDetail (Best
+// Optimizations) 처럼 type 별 풍부한 레이아웃으로 통일.
+
+function _kvRow(label, value, opts) {
+  if (value == null || value === '') return '';
+  const valStr = typeof value === 'string' ? value : String(value);
+  const color = opts?.color || 'var(--text1)';
+  const mono  = opts?.mono ? 'font-family:var(--font-mono);font-size:11px;' : '';
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;min-width:130px">${escHtml(label)}</div>
+      <div style="font-size:12px;color:${color};${mono}text-align:right;flex:1;word-break:break-word">${opts?.html ? valStr : escHtml(valStr)}</div>
+    </div>`;
+}
+
+function _ragDetailHeader(rec) {
+  const d = rec.data || {};
+  const qpu = d.qpu_name ? _semQpuLabel(d.qpu_name) : '';
+  const file = d.algorithm_file || d.file_name || '';
+  const fileBase = file ? _baseName(file) : '';
+  return `
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+      <code style="font-size:11px;color:var(--accent);background:var(--surface2);padding:3px 8px;border-radius:4px">${escHtml(rec.id || '—')}</code>
+      <span style="font-size:11px;font-weight:700;letter-spacing:1px;color:var(--accent2);text-transform:uppercase">${escHtml(rec.type || '—')}</span>
+      ${qpu ? `<span style="font-size:11px;color:var(--text2)">${qpu}</span>` : ''}
+      <span style="margin-left:auto;font-size:10px;color:var(--text3)">${rec.timestamp ? _fmtDate(rec.timestamp) : ''}</span>
+    </div>
+    ${fileBase ? `<div style="font-size:10px;color:var(--text3);font-family:var(--font-mono);margin-bottom:8px">📄 ${escHtml(fileBase)}</div>` : ''}`;
+}
+
+const _RAG_DETAIL_RENDER = {
+  optimization: (d) => {
+    const pct = v => v != null ? (parseFloat(v) * 100).toFixed(1) + '%' : '—';
+    return `
+      ${_kvRow('Circuit',         d.circuit_name)}
+      ${_kvRow('Combination',     d.combination, { color: 'var(--accent)' })}
+      ${_kvRow('Opt engine',      d.opt_engine)}
+      ${_kvRow('Map engine',      d.map_engine)}
+      ${_kvRow('Qubits',          d.num_qubits != null ? `${d.num_qubits}` : null)}
+      ${_kvRow('Gate reduction',  pct(d.gate_reduction),  { color: 'var(--success)' })}
+      ${_kvRow('Depth reduction', pct(d.depth_reduction), { color: 'var(--text2)' })}
+      ${_kvRow('Original gates',  d.orig_gates)}
+      ${_kvRow('Original depth',  d.orig_depth)}
+      ${_kvRow('T-ratio',         d.t_ratio != null ? parseFloat(d.t_ratio).toFixed(3) : null)}
+      ${_kvRow('Two-Q ratio',     d.two_q_ratio != null ? parseFloat(d.two_q_ratio).toFixed(3) : null)}
+      ${_kvRow('Equivalent',      d.equivalent == null ? null : (d.equivalent ? '≡ Yes' : '≠ No'),
+              { color: d.equivalent === false ? 'var(--error)' : 'var(--success)' })}`;
+  },
+  execution: (d) => {
+    const isNoise = String(d.backend || '').startsWith('noise_sim');
+    const comp = d.comparison || {};
+    return `
+      ${_kvRow('Circuit',  d.circuit_name)}
+      ${_kvRow('Mode',     isNoise ? 'Noise Simulation' : 'Real QPU',
+              { color: isNoise ? 'var(--accent2)' : 'var(--accent)' })}
+      ${_kvRow('Backend',  d.backend, { mono: true })}
+      ${_kvRow('SDK',      d.sdk || (isNoise ? String(d.backend).replace('noise_sim_','') : null))}
+      ${_kvRow('Shots',    d.shots)}
+      ${_kvRow('Result',   d.ok == null ? null : (d.ok ? '✓ Success' : '✗ Failed'),
+              { color: d.ok === false ? 'var(--error)' : 'var(--success)' })}
+      ${_kvRow('Error rate', d.error_rate != null ? parseFloat(d.error_rate).toFixed(4) : null)}
+      ${_kvRow('Queue time',  d.queue_time_sec != null ? parseFloat(d.queue_time_sec).toFixed(2) + 's' : null)}
+      ${_kvRow('Exec time',   d.exec_time_sec  != null ? parseFloat(d.exec_time_sec).toFixed(2)  + 's' : null)}
+      ${_kvRow('Cost',     d.cost)}
+      ${comp.fidelity != null ? _kvRow('Sim fidelity', parseFloat(comp.fidelity).toFixed(3),
+                                       { color: 'var(--success)' }) : ''}
+      ${comp.tvd      != null ? _kvRow('Sim TVD',      parseFloat(comp.tvd).toFixed(3)) : ''}
+      ${comp.dominant_a ? _kvRow('Dominant (ideal)', comp.dominant_a, { mono: true }) : ''}
+      ${comp.dominant_b ? _kvRow('Dominant (noisy)', comp.dominant_b, { mono: true }) : ''}`;
+  },
+  qec_experiment: (d) => {
+    const fb = d.fidelity_before, fa = d.fidelity_after;
+    let arrow = '';
+    if (fb != null && fa != null) {
+      const delta = parseFloat(fa) - parseFloat(fb);
+      const color = delta > 0 ? 'var(--success)' : 'var(--error)';
+      arrow = `<span>${parseFloat(fb).toFixed(3)} → <strong style="color:${color}">${parseFloat(fa).toFixed(3)}</strong> (<span style="color:${color}">${delta >= 0 ? '+' : ''}${(delta * 100).toFixed(1)}%</span>)</span>`;
+    }
+    return `
+      ${_kvRow('Circuit', d.circuit_name)}
+      ${_kvRow('Code',    d.code, { color: 'var(--accent2)' })}
+      ${_kvRow('Fidelity', arrow, { html: true })}
+      ${_kvRow('TVD before', d.tvd_before != null ? parseFloat(d.tvd_before).toFixed(3) : null)}
+      ${_kvRow('TVD after',  d.tvd_after  != null ? parseFloat(d.tvd_after).toFixed(3)  : null)}
+      ${_kvRow('Effective',  d.effective == null ? null : (d.effective ? '✓ Yes' : '✗ No'),
+              { color: d.effective === false ? 'var(--error)' : 'var(--success)' })}
+      ${_kvRow('Qubit overhead', d.qubit_overhead != null ? `${d.qubit_overhead}×` : null)}
+      ${_kvRow('Gate overhead',  d.gate_overhead  != null ? `${d.gate_overhead}×`  : null)}
+      ${_kvRow('Original qubits', d.orig_qubits)}`;
+  },
+  gpu_benchmark: (d) => {
+    return `
+      ${_kvRow('Circuit',     d.circuit_name)}
+      ${_kvRow('Framework',   d.framework, { color: 'var(--accent2)' })}
+      ${_kvRow('GPU available',  d.gpu_available == null ? null : (d.gpu_available ? '✓ Yes' : '✗ No'))}
+      ${_kvRow('GPU accelerated', d.gpu_accelerated == null ? null : (d.gpu_accelerated ? '✓ Yes' : '✗ No'))}
+      ${_kvRow('Speedup',     d.speedup != null ? parseFloat(d.speedup).toFixed(2) + '×' : null,
+              { color: parseFloat(d.speedup) > 1 ? 'var(--success)' : 'var(--error)' })}
+      ${_kvRow('CPU time',    d.cpu_time_sec != null ? parseFloat(d.cpu_time_sec).toFixed(2) + 's' : null)}
+      ${_kvRow('GPU time',    d.gpu_time_sec != null ? parseFloat(d.gpu_time_sec).toFixed(2) + 's' : null)}
+      ${_kvRow('CPU status',  d.cpu_status)}
+      ${_kvRow('GPU status',  d.gpu_status)}
+      ${_kvRow('CPU error',   d.cpu_error)}
+      ${_kvRow('GPU error',   d.gpu_error)}
+      ${_kvRow('Verdict',     d.verdict)}`;
+  },
+  pipeline_issue: (d) => {
+    return `
+      ${_kvRow('Stage',     d.stage,    { color: 'var(--warn)' })}
+      ${_kvRow('SDK',       d.sdk)}
+      ${_kvRow('QPU',       d.qpu_name && d.qpu_name !== 'auto' ? d.qpu_name : null)}
+      ${_kvRow('Severity',  d.severity, { color: d.severity === 'error' ? 'var(--error)' : 'var(--warn)' })}
+      ${_kvRow('Issue',     d.issue,    { color: 'var(--text1)' })}
+      ${_kvRow('Solution',  d.solution, { color: 'var(--success)' })}
+      ${_kvRow('Transport', d.transport)}
+      ${_kvRow('Client IP', d.client_ip, { mono: true })}
+      ${d.traceback ? `
+        <div style="margin-top:8px">
+          <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px">Traceback</div>
+          <pre style="font-size:10px;color:var(--text2);background:var(--surface2);padding:8px;border-radius:4px;max-height:200px;overflow:auto">${escHtml(d.traceback)}</pre>
+        </div>` : ''}`;
+  },
+  security_block: (d) => {
+    return `
+      ${_kvRow('File',      d.file_name || _baseName(d.algorithm_file || ''))}
+      ${_kvRow('Reason',    d.reason,  { color: 'var(--error)' })}
+      ${_kvRow('Tool',      d.tool)}
+      ${_kvRow('Pattern',   d.pattern, { mono: true, color: 'var(--text2)' })}
+      ${_kvRow('Match line #', d.match_lineno)}
+      ${_kvRow('Match line',   d.match_line, { mono: true, color: 'var(--text2)' })}`;
+  },
+  transpile_pattern: (d) => {
+    return `
+      ${_kvRow('SDK',         d.sdk,      { color: 'var(--accent2)' })}
+      ${_kvRow('QPU',         d.qpu_name)}
+      ${_kvRow('Pattern',     d.pattern,  { mono: true })}
+      ${_kvRow('Success',     d.success == null ? null : (d.success ? '✓ Yes' : '✗ No'),
+              { color: d.success === false ? 'var(--error)' : 'var(--success)' })}
+      ${_kvRow('Workaround',  d.workaround, { color: 'var(--success)' })}
+      ${_kvRow('Description', d.description)}`;
+  },
+  conversion_pattern: (d) => {
+    return `
+      ${_kvRow('From',    d.from_format)}
+      ${_kvRow('To',      d.to_format)}
+      ${_kvRow('SDK',     d.sdk, { color: 'var(--accent2)' })}
+      ${_kvRow('Success', d.success == null ? null : (d.success ? '✓ Yes' : '✗ No'),
+              { color: d.success === false ? 'var(--error)' : 'var(--success)' })}
+      ${_kvRow('Workaround',  d.workaround,  { color: 'var(--success)' })}
+      ${_kvRow('Description', d.description)}`;
+  },
+};
+
+function _ragDetailFallback(d) {
+  // 알 수 없는 type — 모든 string/number/bool 필드를 key-value 형태로
+  const rows = [];
+  for (const [k, v] of Object.entries(d || {})) {
+    if (v == null || v === '') continue;
+    if (typeof v === 'object') {
+      rows.push(_kvRow(k, JSON.stringify(v).slice(0, 200), { mono: true }));
+    } else {
+      rows.push(_kvRow(k, v));
+    }
+  }
+  return rows.join('');
+}
+
 function _showRagDetail(jsonStr) {
-  document.getElementById('codeModalTitle').textContent = 'RAG Record Detail';
-  document.getElementById('codeModalBody').innerHTML = '<pre class="code-viewer" id="codeModalContent"></pre>';
-  let display = jsonStr;
-  try { display = JSON.stringify(_sanitizeRecordPaths(JSON.parse(jsonStr)), null, 2); } catch {}
-  document.getElementById('codeModalContent').textContent = display;
+  let rec;
+  try { rec = JSON.parse(jsonStr); }
+  catch { rec = { id: '?', type: '?', data: {} }; }
+  // 절대경로 마스킹 (기존 _sanitizeRecordPaths 활용)
+  try { rec = _sanitizeRecordPaths(rec); } catch {}
+  const d = rec.data || {};
+  const renderer = _RAG_DETAIL_RENDER[rec.type];
+  const body = renderer ? renderer(d) : _ragDetailFallback(d);
+  const tags = (rec.tags || []).filter(Boolean);
+  const tagsHtml = tags.length === 0 ? '' :
+    `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+       ${tags.map(tag => `<span style="font-size:9px;padding:2px 7px;background:var(--surface2);color:var(--text3);border-radius:3px;font-family:var(--font-mono)">${escHtml(tag)}</span>`).join('')}
+     </div>`;
+
+  document.getElementById('codeModalTitle').textContent =
+    d.circuit_name || d.file_name || (rec.type || '').replace(/_/g, ' ') || 'RAG Record';
+
+  document.getElementById('codeModalBody').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:6px;padding:4px 0">
+      ${_ragDetailHeader(rec)}
+      <div style="background:var(--surface2);border-radius:8px;padding:8px 14px">
+        ${body || '<div style="font-size:11px;color:var(--text3);padding:10px 0">(no fields)</div>'}
+      </div>
+      ${tagsHtml}
+      <details style="margin-top:14px">
+        <summary style="font-size:10px;color:var(--text3);cursor:pointer">📋 Raw JSON</summary>
+        <pre class="code-viewer" style="margin-top:6px;font-size:10px;max-height:300px;overflow:auto">${escHtml(JSON.stringify(rec, null, 2))}</pre>
+      </details>
+    </div>`;
   document.getElementById('codeModal').classList.add('open');
 }
 

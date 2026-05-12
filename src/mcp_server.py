@@ -1849,7 +1849,12 @@ _KB_SYS_PROMPT = (
     "Multiple citations OK: [id1][id2]. "
     "If the records don't contain the answer, say so plainly — do not invent. "
     "Answer in the language of the question (Korean or English). "
-    "Be concise: 1~5 sentences plus a brief bullet list if helpful."
+    "Be concise: 1~5 sentences plus a brief bullet list if helpful. "
+    # algorithm_file 인용 강제 — 사용자가 검색 결과를 원본 코드로 추적할 수 있도록
+    "Whenever you mention a circuit or algorithm by name, you MUST also include the "
+    "algorithm_file (basename only, in parentheses) if it is present in the record's data, "
+    "e.g. 'qft_8q (qft.py)' or 'grover_circuit (grover_search.py)'. "
+    "If algorithm_file is missing, just use the circuit_name."
 )
 
 
@@ -1970,7 +1975,10 @@ _KB_EXPLAIN_SYS_PROMPT = (
     "the result is good/bad/notable and why. Be concise: 3~6 sentences. "
     "Answer in the user's preferred language (Korean if 'ko', English if 'en'); "
     "if 'auto', detect from any text content; default Korean. Use markdown bullets "
-    "if multiple metrics to explain. DO NOT invent fields not present in the record."
+    "if multiple metrics to explain. DO NOT invent fields not present in the record. "
+    # algorithm_file 인용 강제
+    "Whenever you mention a circuit or algorithm by name, also include the "
+    "algorithm_file (basename, in parentheses) if present, e.g. 'qft_8q (qft.py)'."
 )
 
 

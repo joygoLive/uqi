@@ -620,7 +620,11 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         ext = UQIExtractor(algorithm_file)
         framework = ext.detect_framework()
     except Exception as e:
-        return _json.dumps({"error": f"framework 감지 실패: {e}"})
+        return _json.dumps({
+            "error_key":    "backend.framework_detect_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"framework 감지 실패: {e}",  # legacy fallback
+        })
 
     # qpu_name 으로 framework 강제 routing — 알고리즘이 braket.ahs + pulser
     # 둘 다 정의해도 사용자가 선택한 QPU 에 맞는 executor 사용
@@ -681,12 +685,27 @@ def _qpu_submit_ahs(algorithm_file: str, qpu_name: str, shots: int,
         elif framework == "Pulser":
             sub = _pasqal_submit_with_fallback(name, algorithm_file, qpu_name, shots)
         else:
-            return _json.dumps({"error": f"AHS 가 아닌 framework: {framework}"})
+            return _json.dumps({
+                "error_key":    "backend.ahs.not_ahs_framework",
+                "error_params": {"framework": framework},
+                "error":        f"AHS 가 아닌 framework: {framework}",
+            })
     except Exception as e:
-        return _json.dumps({"error": f"AHS submit 실패: {e}"})
+        return _json.dumps({
+            "error_key":    "backend.ahs.submit_failed",
+            "error_params": {"detail": str(e)},
+            "error":        f"AHS submit 실패: {e}",
+        })
 
     if not sub.get("ok"):
-        return _json.dumps({"error": sub.get("error", "submit 실패")})
+        # PCS / Azure executor 가 반환한 raw error 메시지가 우선 (CB1107 등
+        # 클라우드 원문 보존이 진단에 유리). error_key 없을 가능성 — 추후
+        # executor 측에도 키 도입 시점에 확장.
+        return _json.dumps({
+            "error_key":    "backend.ahs.submit_no_ok",
+            "error_params": {"detail": sub.get("error") or "submit failed"},
+            "error":        sub.get("error", "submit 실패"),
+        })
 
     # save_job — catalog 자동 매핑 (qpu_vendor / qpu_model / runtime / qpu_modality)
     # 실패 시 사용자 응답에 경고 포함 — 클라우드에는 이미 job 이 떠있는데
@@ -1978,16 +1997,22 @@ async def uqi_kb_ask(
             client = _get_anthropic_client()
             if client is None:
                 return _json.dumps({
-                    "error": "ANTHROPIC_API_KEY missing — set in .env and restart uqi-mcp",
+                    "error_key": "backend.kb.api_key_missing",
+                    "error":     "ANTHROPIC_API_KEY missing — set in .env and restart uqi-mcp",
                 }, ensure_ascii=False)
 
             q = (question or "").strip()
             if len(q) < 2:
-                return _json.dumps({"error": "question must be at least 2 characters"},
-                                   ensure_ascii=False)
+                return _json.dumps({
+                    "error_key": "backend.kb.question_too_short",
+                    "error":     "question must be at least 2 characters",
+                }, ensure_ascii=False)
             if len(q) > 5000:
-                return _json.dumps({"error": "question too long (max 5000 chars)"},
-                                   ensure_ascii=False)
+                return _json.dumps({
+                    "error_key":    "backend.kb.question_too_long",
+                    "error_params": {"max": 5000},
+                    "error":        "question too long (max 5000 chars)",
+                }, ensure_ascii=False)
 
             n = max(1, min(20, int(limit or 8)))
             records = _rag.search_semantic(q, limit=n,
@@ -2534,6 +2559,165 @@ def _detect_framework_quick(p: Path) -> "str | None":
     return fw
 
 
+# ─────────────────────────────────────────────────────────
+# 알고리즘 파일 메타 미리보기 (셀렉터 인라인 박스용)
+# ─────────────────────────────────────────────────────────
+# 가벼운 정규식 기반 — UQIExtractor.extract_circuits() 의 무거운 subprocess
+# 우회. 정확성보다는 사용자가 파일 선택 시 즉시 보여줄 hint 가 목적.
+# 정확한 메타는 Pipeline 의 Analyze 단계에서 별도로 산출됨.
+
+_DOCSTRING_RE = _re_fw.compile(r'^\s*(?:"""|\'\'\')(.*?)(?:"""|\'\'\')', _re_fw.DOTALL)
+
+def _resolve_qubit_var(src: str, ctor_regex: str) -> "int | None":
+    """`QuantumCircuit(n)` 처럼 변수로 인자 전달된 경우, 단순 변수 추적.
+
+    1) 변수 = 정수 리터럴 패턴 모두 수집
+    2) ctor 호출 인자가 변수면 그 변수의 값을 매핑
+    3) 인자가 직접 숫자 리터럴이면 그대로 반환
+    Returns int 또는 None.
+    """
+    # 1) 변수 → 정수 매핑 수집 (마지막 할당이 이김)
+    var_vals: dict = {}
+    for m in _re_fw.finditer(r'^\s*([A-Za-z_]\w*)\s*=\s*(\d+)\b', src, _re_fw.MULTILINE):
+        var_vals[m.group(1)] = int(m.group(2))
+    # 2) ctor 호출 인자 매칭
+    cm = _re_fw.search(ctor_regex, src)
+    if not cm:
+        return None
+    arg = cm.group(1).strip()
+    if arg.isdigit():
+        return int(arg)
+    if arg in var_vals:
+        return var_vals[arg]
+    return None
+
+
+def _extract_lite_meta(src: str, fw: "str | None", algorithm_file: "str | None" = None) -> dict:
+    """파일 소스 + framework hint → 가벼운 메타 dict.
+
+    framework 별 분기:
+      - AHS (Pulser / Braket-AHS): _analyze_ahs 헬퍼로 정확한 atom_count /
+        duration_ns / register_dimension 추출 (가벼움).
+      - Gate-based: 변수 추적 휴리스틱 — qubit_count + gate_count.
+      - Perceval: regex 기반 mode_count.
+
+    실패해도 framework / docstring 은 채워짐 (가능한 경우).
+    """
+    meta: dict = {"approx": True}
+
+    # 첫 모듈 docstring (있으면) — 한 줄만, 120 자 제한
+    m = _DOCSTRING_RE.match(src.lstrip("\n"))
+    if m:
+        doc = m.group(1).strip().splitlines()[0][:120]
+        if doc:
+            meta["docstring"] = doc
+
+    # AHS: 정확 추출 (executor 의 lightweight extractor 활용)
+    if fw in ("Pulser", "Braket-AHS") and algorithm_file:
+        try:
+            res = _analyze_ahs(algorithm_file, "ibm_fez", fw)
+            ahs = (res.get("circuits", {}).get("ahs_main", {}) or {}).get("ahs", {}) or {}
+            if ahs.get("atom_count") is not None:
+                meta["atom_count"] = ahs["atom_count"]
+                meta["approx"] = False  # AHS 는 정확 추출
+            if ahs.get("total_duration_ns") is not None:
+                meta["duration_ns"] = ahs["total_duration_ns"]
+            if ahs.get("register_dimension"):
+                meta["register_dimension"] = ahs["register_dimension"]
+        except Exception:
+            pass
+        # Pulser fallback — atom_count 못 잡으면 regex
+        if "atom_count" not in meta and fw == "Pulser":
+            rm = _re_fw.search(r"Register\s*\(\s*\{(?P<body>[^{}]+)\}", src, _re_fw.DOTALL)
+            if rm:
+                ac = len(_re_fw.findall(r":\s*\(", rm.group("body")))
+                if ac:
+                    meta["atom_count"] = ac
+        return meta
+
+    # Gate-based / photonic — 변수 추적 휴리스틱
+    if fw == "Qiskit":
+        q = _resolve_qubit_var(src, r"QuantumCircuit\s*\(\s*([A-Za-z_0-9]+)")
+        if q is None:
+            q = _resolve_qubit_var(src, r"QuantumRegister\s*\(\s*([A-Za-z_0-9]+)")
+        if q is not None:
+            meta["qubit_count"] = q
+        gc = len(_re_fw.findall(
+            r"\.(?:h|x|y|z|s|t|cx|cz|cy|swap|rx|ry|rz|u3?|p|sx|ccx|toffoli|measure)\s*\(",
+            src,
+        ))
+        if gc:
+            meta["gate_count"] = gc
+    elif fw == "PennyLane":
+        # wires=range(N) / n_wires=N / num_wires=N — 변수 추적
+        for pat in (r"wires\s*=\s*range\s*\(\s*([A-Za-z_0-9]+)",
+                    r"n_wires\s*=\s*([A-Za-z_0-9]+)",
+                    r"num_wires\s*=\s*([A-Za-z_0-9]+)"):
+            q = _resolve_qubit_var(src, pat)
+            if q is not None:
+                meta["qubit_count"] = q
+                break
+        gc = len(_re_fw.findall(r"\bqml\.\w+\s*\(", src))
+        if gc:
+            meta["gate_count"] = gc
+    elif fw == "CUDAQ":
+        q = _resolve_qubit_var(src, r"qvector\s*\(\s*([A-Za-z_0-9]+)")
+        if q is not None:
+            meta["qubit_count"] = q
+    elif fw == "Qrisp":
+        q = _resolve_qubit_var(src, r"QuantumVariable\s*\(\s*([A-Za-z_0-9]+)")
+        if q is not None:
+            meta["qubit_count"] = q
+    elif fw == "Perceval":
+        m1 = _re_fw.search(r"(?:Generic|Circuit)\s*\(\s*(\d+)", src)
+        if m1:
+            meta["mode_count"] = int(m1.group(1))
+
+    return meta
+
+
+_file_meta_cache: dict[str, tuple[float, dict]] = {}
+
+@mcp.tool()
+async def uqi_file_meta(algorithm_file: str) -> str:
+    """알고리즘 파일의 가벼운 메타 정보 (셀렉터 인라인 미리보기용).
+
+    UQIExtractor.extract_circuits() 의 무거운 subprocess 를 피하기 위해
+    정규식 기반 휴리스틱 추출. mtime 기반 캐시.
+
+    Returns:
+      { name, path, size_kb, framework, line_count, docstring?,
+        atom_count?, qubit_count?, gate_count?, pulse_count?, mode_count?,
+        approx: True }
+    """
+    def _run():
+        try:
+            p = Path(algorithm_file)
+            if not p.exists():
+                return json.dumps({"error": mcp_file_not_found(algorithm_file)})
+            if p.suffix != ".py":
+                return json.dumps({"error": MCP_FILE_ONLY_PY})
+            mtime = p.stat().st_mtime
+            cached = _file_meta_cache.get(str(p))
+            if cached and cached[0] == mtime:
+                return _safe_json(cached[1])
+
+            src = p.read_text(encoding="utf-8", errors="ignore")
+            fw = _detect_framework_quick(p)
+            meta = _extract_lite_meta(src, fw, algorithm_file=str(p))
+            meta.update({
+                "name":      p.name,
+                "path":      str(p),
+                "framework": fw,
+            })
+            _file_meta_cache[str(p)] = (mtime, meta)
+            return _safe_json(meta)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    return await asyncio.to_thread(_run)
+
+
 @mcp.tool()
 async def uqi_list_files() -> str:
     """DGX alg-files 디렉토리의 알고리즘 파일 목록 반환.
@@ -2626,11 +2810,16 @@ def _check_cost_safeguard(qpu_name: str, shots: int,
     except Exception as e:
         # estimate_cost 자체 실패 → 보수적으로 차단
         return {
-            "error":      "🛡️ 제출 차단됨 — 비용 안전장치 검사 오류",
-            "blocked_by": "cost_safeguard_error",
-            "detail":     str(e),
-            "qpu":        qpu_name,
-            "shots":      shots,
+            "error_key":     "backend.cost_safeguard.estimate_error",
+            "error_params":  {"detail": str(e)},
+            "message_key":   "backend.cost_safeguard.estimate_error_msg",
+            "message_params": {"detail": str(e)},
+            # legacy fallback
+            "error":         "🛡️ 제출 차단됨 — 비용 안전장치 검사 오류",
+            "blocked_by":    "cost_safeguard_error",
+            "detail":        str(e),
+            "qpu":           qpu_name,
+            "shots":         shots,
             "message": (
                 "🛡️ 비용 안전장치 검사 중 오류 발생.\n"
                 "안전을 위해 제출이 차단되었습니다.\n"
@@ -2639,19 +2828,35 @@ def _check_cost_safeguard(qpu_name: str, shots: int,
         }
 
     threshold = COST_SAFEGUARD_THRESHOLD_USD
-    blocked_reason = None
+    blocked_reason_key = None
+    blocked_reason_params: dict = {}
     est_usd = cost.get("estimated_usd")
     confidence = cost.get("confidence")
 
     if est_usd is not None and est_usd >= threshold:
+        blocked_reason_key = "backend.cost_safeguard.reason_over_threshold"
+        blocked_reason_params = {"usd": f"{est_usd:.2f}", "threshold": f"{threshold:.0f}"}
         blocked_reason = f"예상 비용 ${est_usd:.2f} ≥ 임계값 ${threshold:.0f}"
     elif confidence in ("verify_required", "unknown"):
+        blocked_reason_key = "backend.cost_safeguard.reason_no_estimate"
+        blocked_reason_params = {"confidence": confidence}
         blocked_reason = f"비용 추정 불가 (confidence={confidence})"
-
-    if not blocked_reason:
+    else:
         return None
 
     return {
+        "error_key":      "backend.cost_safeguard.blocked",
+        "error_params":   {},
+        "message_key":    "backend.cost_safeguard.blocked_msg",
+        "message_params": {
+            "qpu":      qpu_name,
+            "shots":    shots,
+            "cost":     cost.get("details", "-"),
+            "reason":   blocked_reason,         # 한 줄 라벨, locale 별 prefix 는 키에서 처리
+        },
+        "reason_key":    blocked_reason_key,
+        "reason_params": blocked_reason_params,
+        # legacy fallback
         "error":         "🛡️ 제출 차단됨 — 비용 안전장치",
         "blocked_by":    "cost_safeguard",
         "reason":        blocked_reason,

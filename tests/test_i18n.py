@@ -138,6 +138,8 @@ class TestKeyNamingConventions:
         "nav", "header", "status", "lock", "footer",
         "qpu", "pipeline", "job", "step", "btn", "cache", "alert",
         "knowledge", "rag", "hint", "kb",
+        "msg",      # 동적 alert / confirm / timeout / error 메시지
+        "backend",  # backend 응답의 error_key / message_key 트리
     }
 
     def test_all_keys_have_namespace(self, en):

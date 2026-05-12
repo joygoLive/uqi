@@ -27,6 +27,25 @@ _DATA_DIR   = Path(__file__).parent.parent / "data"
 RAG_FILE    = os.environ.get("UQI_RAG_FILE",    str(_DATA_DIR / "uqi_rag.db"))
 CACHE_FILE  = os.environ.get("UQI_CACHE_FILE",  str(_DATA_DIR / "uqi_cache.db"))
 
+# Hybrid 검색 weighted RRF — 쿼리 의도별 dense/sparse 가중치.
+# (dense, sparse) 튜플. env 로 override 가능.
+def _parse_weight_pair(env: str, default: tuple[float, float]) -> tuple[float, float]:
+    raw = os.environ.get(env, "").strip()
+    if not raw or "," not in raw:
+        return default
+    try:
+        a, b = raw.split(",", 1)
+        return (float(a.strip()), float(b.strip()))
+    except Exception:
+        return default
+
+_HYBRID_WEIGHTS = {
+    "concept": _parse_weight_pair("UQI_HYBRID_W_CONCEPT", (0.7, 0.3)),
+    "direct":  _parse_weight_pair("UQI_HYBRID_W_DIRECT",  (0.3, 0.7)),
+    "mixed":   _parse_weight_pair("UQI_HYBRID_W_MIXED",   (0.5, 0.5)),
+}
+
+
 # RAG 백엔드 (sqlite-vec + 외부 임베딩/리랭커 서버).
 EMBED_URL    = os.environ.get("UQI_EMBED_URL",    "http://127.0.0.1:7997")
 EMBED_MODEL  = os.environ.get("UQI_EMBED_MODEL",  "BAAI/bge-m3")
@@ -769,18 +788,52 @@ class UQIRAG:
         return results
 
     @staticmethod
-    def _rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
-        """Reciprocal Rank Fusion — 각 검색기의 rank 기반 결합.
+    def _rrf_fuse(rankings: list[list[str]], k: int = 60,
+                  weights: Optional[list[float]] = None) -> list[tuple[str, float]]:
+        """Weighted Reciprocal Rank Fusion — 각 검색기의 rank 기반 결합.
 
-        score(d) = sum_i 1 / (k + rank_i(d))   (rank_i 1부터)
-        k=60 은 RRF 논문 기본값. document 가 여러 검색기에 모두 등장할수록 점수↑.
+        score(d) = sum_i w_i / (k + rank_i(d))   (rank_i 1부터)
+        weights 가 None 이면 균등 1.0 (기존 동작 호환). 길이가 rankings 와 다르면
+        부족분 1.0 fallback. k=60 은 RRF 논문 기본값.
         반환: [(record_id, score), ...] score 내림차순.
         """
+        if weights is None:
+            weights = [1.0] * len(rankings)
+        # 길이 불일치 시 부족분 1.0 보강 (defensive).
+        while len(weights) < len(rankings):
+            weights.append(1.0)
         scores: dict[str, float] = {}
-        for ids in rankings:
+        for w, ids in zip(weights, rankings):
             for rank_minus_1, rid in enumerate(ids):
-                scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank_minus_1 + 1)
+                scores[rid] = scores.get(rid, 0.0) + float(w) / (k + rank_minus_1 + 1)
         return sorted(scores.items(), key=lambda kv: -kv[1])
+
+    # ─────────────────────────────────────────────────────
+    # 쿼리 intent 분류 (hybrid weight 결정용)
+    # ─────────────────────────────────────────────────────
+    # concept (자연어 추상) → dense 가중 ↑ — 임베딩 의미 검색 강점
+    # direct  (키워드/식별자)  → BM25 가중 ↑ — 어휘 정확 매칭 강점
+    # mixed                  → 균등
+    @staticmethod
+    def _classify_query_intent(query: str) -> str:
+        q = (query or "").strip()
+        if not q:
+            return "mixed"
+        # 한글 비율
+        hangul = sum(1 for c in q if "가" <= c <= "힣")
+        nonspace = sum(1 for c in q if not c.isspace())
+        hangul_ratio = (hangul / nonspace) if nonspace else 0.0
+        words = q.split()
+        # 질문 키워드 — concept 강한 signal
+        question_kw = ("어떻게", "왜", "무엇", "어디", "언제", "누구",
+                       "what", "why", "how", "where", "when", "who")
+        has_question = "?" in q or any(kw in q.lower() for kw in question_kw)
+
+        if has_question or len(words) >= 4 or hangul_ratio > 0.5:
+            return "concept"
+        if len(words) <= 3 and hangul_ratio < 0.2:
+            return "direct"
+        return "mixed"
 
     def _search_hybrid(self,
                        query:       str,
@@ -806,12 +859,19 @@ class UQIRAG:
         if not dense and not sparse:
             return []
 
-        fused = self._rrf_fuse([
-            [r["id"] for r in dense],
-            [r["id"] for r in sparse],
-        ])
+        # 쿼리 의도 분류 → dense/sparse weight 적용 (weighted RRF).
+        intent = self._classify_query_intent(query)
+        w_dense, w_sparse = _HYBRID_WEIGHTS.get(intent, _HYBRID_WEIGHTS["mixed"])
 
-        # 원본 record 데이터 join + RRF score 부착
+        fused = self._rrf_fuse(
+            [
+                [r["id"] for r in dense],
+                [r["id"] for r in sparse],
+            ],
+            weights=[w_dense, w_sparse],
+        )
+
+        # 원본 record 데이터 join + RRF score + intent 부착 (디버깅/평가용)
         record_map: dict[str, dict] = {}
         for r in dense + sparse:
             record_map.setdefault(r["id"], r)
@@ -821,7 +881,8 @@ class UQIRAG:
             if rid not in record_map:
                 continue
             rec = dict(record_map[rid])
-            rec["rrf_score"] = round(score, 6)
+            rec["rrf_score"]   = round(score, 6)
+            rec["rrf_intent"]  = intent
             out.append(rec)
             if len(out) >= over:
                 break

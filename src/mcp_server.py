@@ -2475,9 +2475,52 @@ async def uqi_invalidate_cache(
 
     return await asyncio.to_thread(_run)
 
+# 가벼운 framework 감지 — UI 표시 (셀렉트박스 뱃지) 용도.
+# UQIExtractor.detect_framework 의 regex 만 추출. 정확한 감지는 사용 시점에
+# UQIExtractor 가 별도로 수행. mtime 기반 캐시로 list_files 반복 호출 비용 최소화.
+import re as _re_fw
+_FRAMEWORK_QUICK_PATTERNS = [
+    ('Braket-AHS', [r'\bfrom\s+braket\.ahs\b', r'\bimport\s+braket\.ahs\b']),
+    ('Pulser',     [r'\bimport\s+pulser\b',   r'\bfrom\s+pulser\b']),
+    ('CUDAQ',      [r'\bimport\s+cudaq\b',    r'\bfrom\s+cudaq\b']),
+    ('Perceval',   [r'\bimport\s+perceval\b', r'\bfrom\s+perceval\b']),
+    ('PennyLane',  [r'\bimport\s+pennylane\b', r'\bimport\s+qml\b',
+                    r'\bfrom\s+pennylane\b']),
+    ('Qrisp',      [r'\bimport\s+qrisp\b',    r'\bfrom\s+qrisp\b']),
+    ('Qiskit',     [r'\bimport\s+qiskit\b',   r'\bfrom\s+qiskit\b']),
+]
+_framework_quick_cache: dict[str, tuple[float, "str | None"]] = {}
+
+def _detect_framework_quick(p: Path) -> "str | None":
+    """파일 경로 → framework 이름 (또는 None). mtime 캐시."""
+    try:
+        mtime = p.stat().st_mtime
+    except OSError:
+        return None
+    key = str(p)
+    cached = _framework_quick_cache.get(key)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    fw = None
+    try:
+        src = p.read_text(encoding="utf-8", errors="ignore")
+        for name, patterns in _FRAMEWORK_QUICK_PATTERNS:
+            if any(_re_fw.search(pat, src) for pat in patterns):
+                fw = name
+                break
+    except Exception:
+        fw = None
+    _framework_quick_cache[key] = (mtime, fw)
+    return fw
+
+
 @mcp.tool()
 async def uqi_list_files() -> str:
-    """DGX alg-files 디렉토리의 알고리즘 파일 목록 반환"""
+    """DGX alg-files 디렉토리의 알고리즘 파일 목록 반환.
+
+    각 파일에 framework 필드 포함 — 셀렉트박스 뱃지 표시 용도.
+    mtime 기반 캐시라 반복 호출 시 비용 ~0.
+    """
     def _run():
         alg_dir = ALG_FILES_DIR
         if not alg_dir.exists():
@@ -2486,7 +2529,12 @@ async def uqi_list_files() -> str:
         for p in sorted(alg_dir.glob("*.py")):
             if p.name.startswith("_") or p.name.startswith("test_block_"):
                 continue
-            files.append({"name": p.name, "path": str(p), "size_kb": round(p.stat().st_size / 1024, 1)})
+            files.append({
+                "name":      p.name,
+                "path":      str(p),
+                "size_kb":   round(p.stat().st_size / 1024, 1),
+                "framework": _detect_framework_quick(p),   # str | None
+            })
         return _safe_json({"files": files, "count": len(files)})
 
     return await asyncio.to_thread(_run)
@@ -2540,6 +2588,17 @@ def _check_cost_safeguard(qpu_name: str, shots: int,
     """
     if admin_override:
         return None
+
+    # Emulator / simulator 는 안전장치 대상에서 제외.
+    # 실 QPU 와 달리 비용이 발생하지 않거나 매우 저렴하고, 사용자가 명시적으로
+    # dry-run / 검증 용도로 선택. 단가 confidence 가 'unknown' 이어도 통과.
+    try:
+        from uqi_pricing import parse_qpu_full
+        _fam = parse_qpu_full(qpu_name).get("family") or ""
+        if _fam in ("Emulator", "sim", "Syntax Checker"):
+            return None
+    except Exception:
+        pass  # parse 실패 시 보수적으로 정상 검사 흐름 진행
 
     try:
         from uqi_pricing import estimate_cost

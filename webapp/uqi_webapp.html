@@ -1725,9 +1725,12 @@ const _QPU_CATALOG_JS = {
   "rigetti_cepheus":     {vendor: "Rigetti",    model: "Cepheus-1-108Q", runtime: "AWS Braket",    modality: "superconducting"},
   "rigetti_ankaa3":      {vendor: "Rigetti",    model: "Ankaa-3",        family: "retired",  runtime: "AWS Braket",    modality: "superconducting"},
   "quera_aquila":        {vendor: "QuEra",      model: "Aquila",         runtime: "AWS Braket",    modality: "neutral-atom"},
-  // Azure Quantum 경유
+  // Azure Quantum 경유 (실 QPU)
   "pasqal_fresnel":      {vendor: "Pasqal",     model: "Fresnel",        runtime: "Azure Quantum", modality: "neutral-atom"},
   "pasqal_fresnel_can1": {vendor: "Pasqal",     model: "Fresnel-CAN1",   runtime: "Azure Quantum", modality: "neutral-atom"},
+  // PCS 직제출 emulator (neutral-atom 시뮬레이션 — 실 Fresnel 과 동일 modality 그룹)
+  "pasqal_emu_fresnel":  {vendor: "Pasqal",     model: "EMU-Fresnel",    family: "Emulator", runtime: "Pasqal Cloud", modality: "neutral-atom"},
+  "pasqal_emu_free":     {vendor: "Pasqal",     model: "EMU-Free",       family: "Emulator", runtime: "Pasqal Cloud", modality: "neutral-atom"},
   "quantinuum_h2_1":     {vendor: "Quantinuum", model: "H2-1",           runtime: "Azure Quantum", modality: "ion-trap"},
   "quantinuum_h2_2":     {vendor: "Quantinuum", model: "H2-2",           runtime: "Azure Quantum", modality: "ion-trap"},
   "quantinuum_h1_1":     {vendor: "Quantinuum", model: "H1-1",           runtime: "Azure Quantum", modality: "ion-trap"},
@@ -3660,7 +3663,12 @@ async function loadDGXFiles() {
     if (d.files) {
       _dgxFiles = d.files;
       const sel = document.getElementById('dgx-select');
-      sel.innerHTML = _dgxFiles.map(f=>`<option value="${f.path}">${f.name} (${f.size_kb}KB)</option>`).join('');
+      // 셀렉트박스 옵션 — framework 뱃지를 [...] 로 prepend.
+      // 미감지 (None) 인 경우는 뱃지 생략.
+      sel.innerHTML = _dgxFiles.map(f => {
+        const fw = f.framework ? `[${f.framework}] ` : '';
+        return `<option value="${escHtml(f.path)}">${fw}${escHtml(f.name)} (${f.size_kb}KB)</option>`;
+      }).join('');
       _onFileSelected();
     }
   } catch(e) {}

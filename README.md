@@ -483,12 +483,33 @@ nohup env UQI_RERANK_DEVICE=cpu python deploy/rerank_server.py > /tmp/rerank.log
 nohup python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse > /tmp/mcp.log 2>&1 &
 ```
 
-#### Step 5. (선택) 외부 접근 — ngrok
+#### Step 5. (선택) 외부 접근 — ngrok (기존 reserved URL 그대로 사용)
 
 ```bash
 ngrok config add-authtoken <YOUR_TOKEN>
-ngrok http 8765   # 임시 URL, 또는 reserved domain 지정
+
+# 기존 reserved URL 그대로 — Linux 의 ngrok-8765.service 와 동일 URL
+# (deploy/systemd/ngrok-8765.service 의 --url 값 참조)
+ngrok http --url=superelegant-terrence-grittiest.ngrok-free.dev 8765
+
+# 또는 백그라운드:
+nohup ngrok http --url=superelegant-terrence-grittiest.ngrok-free.dev 8765 \
+  > /tmp/ngrok.log 2>&1 &
 ```
+
+> ⚠️ **동시에 두 장비에서 같은 reserved URL 사용 X** (ngrok free plan 제약).
+> Mac 에서 띄우려면 먼저 DGX 측 ngrok 중지:
+> ```bash
+> # DGX 에서
+> sudo systemctl stop ngrok-8765
+> ```
+> 테스트 끝나고 DGX 로 복귀:
+> ```bash
+> # Mac
+> pkill -f "ngrok http"
+> # DGX
+> sudo systemctl start ngrok-8765
+> ```
 
 #### Step 6. 헬스체크 + webapp
 

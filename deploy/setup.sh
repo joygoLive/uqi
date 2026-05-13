@@ -103,23 +103,23 @@ if [ "$SKIP_CLONE" -eq 0 ]; then
   mkdir -p "$TARGET_DIR"
 
   # 1-a. uqi (의무)
-  [ -d "$UQI_DIR/.git" ] || git clone git@github.com:joygoLive/uqi.git "$UQI_DIR"
+  [ -d "$UQI_DIR/.git" ] || git clone https://github.com/joygoLive/uqi.git "$UQI_DIR"
 
   # 1-b. qiskit-aer Jetson fork — aarch64+NVIDIA 일 때만 자동 clone (외부 경로)
   if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ]; then
     mkdir -p "$(dirname "$AER_DIR")"
-    [ -d "$AER_DIR/.git" ] || git clone -b jetson-patch git@github.com:joygoLive/qiskit-aer.git "$AER_DIR"
+    [ -d "$AER_DIR/.git" ] || git clone -b jetson-patch https://github.com/joygoLive/qiskit-aer.git "$AER_DIR"
   fi
 
   # 1-c. (선택) notion-backup 스택 — quartz fork + 콘텐츠 vault + symlink
   if [ "$SKIP_NOTION" -eq 0 ] && confirm "notion-backup 스택 (quartz fork + obsidian-vault) 도 clone 하시겠습니까?"; then
     # quartz fork (커스터마이징 포함) — upstream 은 'upstream' remote 로 추가
     if [ ! -d "$QUARTZ_DIR/.git" ]; then
-      git clone git@github.com:joygoLive/quartz-site.git "$QUARTZ_DIR"
+      git clone https://github.com/joygoLive/quartz-site.git "$QUARTZ_DIR"
       git -C "$QUARTZ_DIR" remote add upstream https://github.com/jackyzha0/quartz.git 2>/dev/null || true
     fi
     # obsidian-vault (Notion markdown 백업)
-    [ -d "$OBSIDIAN_DIR/.git" ] || git clone git@github.com:joygoLive/orientom-notion-backup.git "$OBSIDIAN_DIR"
+    [ -d "$OBSIDIAN_DIR/.git" ] || git clone https://github.com/joygoLive/orientom-notion-backup.git "$OBSIDIAN_DIR"
     # quartz-site/content → ../obsidian-vault 심볼릭
     if [ ! -L "$QUARTZ_DIR/content" ]; then
       rm -rf "$QUARTZ_DIR/content"
@@ -127,7 +127,7 @@ if [ "$SKIP_CLONE" -eq 0 ]; then
     fi
     # (선택의 선택) notion sync 자동화 스크립트 + 자체 venv (17 MB)
     if confirm "  → orientom-notion-pipeline (주기적 sync 스크립트) 도 clone + venv?"; then
-      [ -d "$NOTION_PIPELINE_DIR/.git" ] || git clone git@github.com:joygoLive/orientom-notion-pipeline.git "$NOTION_PIPELINE_DIR"
+      [ -d "$NOTION_PIPELINE_DIR/.git" ] || git clone https://github.com/joygoLive/orientom-notion-pipeline.git "$NOTION_PIPELINE_DIR"
       # 자체 venv (의도적으로 uqi venv 와 분리 — orientom 부모 폐기 가능하게)
       if [ ! -d "$NOTION_PIPELINE_DIR/.venv" ]; then
         log "  notion-pipeline 자체 venv 생성 (requests + python-dotenv, 17 MB)"

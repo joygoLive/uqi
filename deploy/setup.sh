@@ -262,8 +262,27 @@ if [ "$SKIP_SYSTEMD" -eq 0 ] && [ "$HAVE_SYSTEMD" -eq 1 ]; then
   sudo systemctl enable uqi-embed uqi-rerank uqi-mcp
   ok "systemd 유닛 enable (uqi-embed/rerank/mcp) — start 는 .env 채운 후 수동"
   warn "  ngrok-8765 는 enable 안 함 → ngrok config add-authtoken 후 'sudo systemctl enable --now ngrok-8765'"
+elif [ "$OS" = "Darwin" ] && [ "$SKIP_SYSTEMD" -eq 0 ]; then
+  log "6) launchd 에이전트 설치 (macOS) → ~/Library/LaunchAgents/"
+  LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
+  NGROK_BIN="$(command -v ngrok || echo /usr/local/bin/ngrok)"
+  mkdir -p "$LAUNCH_AGENTS" "$UQI_DIR/logs"
+  for plist in com.uqi.embed com.uqi.rerank com.uqi.mcp com.uqi.ngrok; do
+    sed \
+      -e "s|__UQI_DIR__|$UQI_DIR|g" \
+      -e "s|__VENV__|$VENV|g" \
+      -e "s|/usr/local/bin/ngrok|$NGROK_BIN|g" \
+      "$UQI_DIR/deploy/launchd/$plist.plist" > "$LAUNCH_AGENTS/$plist.plist"
+  done
+  # embed/rerank/mcp load (ngrok 은 authtoken 확인 후 수동)
+  for svc in com.uqi.embed com.uqi.rerank com.uqi.mcp; do
+    launchctl unload "$LAUNCH_AGENTS/$svc.plist" 2>/dev/null || true
+    launchctl load "$LAUNCH_AGENTS/$svc.plist"
+  done
+  ok "launchd 에이전트 등록 (embed/rerank/mcp) — .env 채운 후 자동 시작"
+  warn "  ngrok: authtoken 설정 후 'launchctl load ~/Library/LaunchAgents/com.uqi.ngrok.plist'"
 else
-  warn "6) systemd 설치 skip — macOS 는 launchd 로 별도 구성 또는 'python mcp_server.py' 수동 실행"
+  warn "6) systemd/launchd 설치 skip"
 fi
 
 # ─── 7. (선택) notion-backup 빌드 + symlink ─────────

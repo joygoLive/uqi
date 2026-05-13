@@ -95,7 +95,7 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
   ```
 - **SQLite** with extension-load support (sqlite-vec)
 - **snap** (for ngrok — public webapp URL 노출 시)
-- **Node.js / npm** (notion-backup 정적 사이트 빌드 시 — `sudo apt install nodejs npm` 또는 brew/nodesource)
+- **Node.js / npm** (husky pre-commit hook 활성화 + notion-backup 정적 사이트 빌드 — `sudo apt install nodejs npm` / `brew install node`)
 
 ### Sibling 프로젝트 (self-contained — uqi 만 의무)
 
@@ -454,11 +454,8 @@ cd ~/q-basis-one/uqi
 source .venv_transpile/bin/activate
 ```
 
-> 💡 git commit 도 할 예정이면 husky pre-commit hook 활성화:
-> ```bash
-> cd ~/q-basis-one/uqi && npm install   # husky → commitlint 검사 활성화 (~12 MB)
-> ```
-> commit 안 할 거면 생략.
+git commit/push 도 가능 — `setup.sh` 가 `npm install` 자동 실행하여 husky
+pre-commit hook (commitlint 검사) 활성화 완료.
 
 #### Step 4. 서비스 수동 실행 (Mac 은 systemd 없으므로)
 

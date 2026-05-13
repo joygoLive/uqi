@@ -196,6 +196,18 @@ if [ "$USE_AER_FORK" -eq 1 ] && [ -d "$AER_DIR/dist" ]; then
   fi
 fi
 
+# ─── 4-c. husky git hook 활성화 (commit 시 commitlint 검사) ───
+if command -v npm >/dev/null 2>&1; then
+  log "4-c) husky hook 활성화 (npm install in $UQI_DIR)"
+  pushd "$UQI_DIR" >/dev/null
+    npm install --silent 2>&1 | tail -3
+  popd >/dev/null
+  ok "husky pre-commit hook 활성화 (commit 시 commitlint 검사)"
+else
+  warn "4-c) npm 미설치 — husky hook 활성화 skip (commit 시 검사 X)"
+  warn "   설치: macOS 'brew install node' / Ubuntu 'sudo apt install nodejs npm'"
+fi
+
 # ─── 5. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───
 if [ "$SKIP_DOCKER" -eq 0 ] && [ "$HAVE_DOCKER" -eq 1 ] && [ "$HAVE_NVIDIA" -eq 1 ]; then
   # nvidia-container-toolkit 체크 — 빌드 자체는 가능하나 컨테이너 실행 시 필요

@@ -174,7 +174,8 @@ if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ] && [ -d "$AER_DIR" ]
   log "4) qiskit-aer fork 빌드 ($AER_DIR, CUDA backend)"
   pip install -q pybind11 scikit-build cmake
   pushd "$AER_DIR" >/dev/null
-    python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
+    # AER_PYTHON_CUDA_ROOT: cuquantum/cutensor 헤더 탐색 경로 — 현재 venv 지정
+    AER_PYTHON_CUDA_ROOT="$VENV" python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
     wheel=$(ls dist/qiskit_aer-*linux_aarch64.whl 2>/dev/null | head -1)
     [ -n "$wheel" ] && pip install --no-deps --force-reinstall "$wheel"
   popd >/dev/null

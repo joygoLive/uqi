@@ -154,21 +154,8 @@ fi
 source "$VENV/bin/activate"
 pip install --upgrade pip -q
 
-# ─── 3. qiskit-aer GPU 빌드 (aarch64+NVIDIA 자동) ───
-if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ] && [ -d "$AER_DIR" ]; then
-  log "3) qiskit-aer fork 빌드 ($AER_DIR, CUDA backend)"
-  pip install -q pybind11 scikit-build cmake
-  pushd "$AER_DIR" >/dev/null
-    python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
-    pip install dist/qiskit_aer-*linux_*.whl --force-reinstall
-  popd >/dev/null
-  ok "qiskit-aer GPU wheel 설치"
-else
-  warn "3) qiskit-aer GPU 빌드 skip — PyPI stock 사용 (CPU)"
-fi
-
-# ─── 4. UQI 의존성 설치 ─────────────────────────────
-log "4) UQI requirements 설치"
+# ─── 3. UQI 의존성 설치 ─────────────────────────────
+log "3) UQI requirements 설치"
 if [ "$HAVE_NVIDIA" -eq 1 ]; then
   # cuquantum 등 source-only 패키지가 빌드 시 setuptools 의 pkg_resources 필요 →
   # setuptools<70 사전 설치 + --no-build-isolation 으로 venv 의 setuptools 사용.
@@ -183,33 +170,38 @@ else
 fi
 ok "pip install 완료"
 
-# ─── 4-b. qiskit-aer GPU wheel (Jetson fork 빌드된 wheel 덮어쓰기) ───
-if [ "$USE_AER_FORK" -eq 1 ] && [ -d "$AER_DIR/dist" ]; then
-  wheel=$(ls "$AER_DIR/dist/"qiskit_aer-*linux_aarch64.whl 2>/dev/null | head -1)
-  if [ -n "$wheel" ]; then
-    log "4-b) qiskit-aer GPU wheel 덮어쓰기 ($wheel)"
-    pip install --no-deps --force-reinstall "$wheel"
-    ok "qiskit-aer GPU wheel 활성화"
-  fi
+# ─── 4. qiskit-aer GPU 빌드 (aarch64+NVIDIA 자동, requirements 설치 후) ───
+# custatevec.h 등 cuquantum 헤더가 필요 — requirements 설치 이후에 빌드해야 함
+if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ] && [ -d "$AER_DIR" ]; then
+  log "4) qiskit-aer fork 빌드 ($AER_DIR, CUDA backend)"
+  pip install -q pybind11 scikit-build cmake
+  pushd "$AER_DIR" >/dev/null
+    python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
+    wheel=$(ls dist/qiskit_aer-*linux_aarch64.whl 2>/dev/null | head -1)
+    [ -n "$wheel" ] && pip install --no-deps --force-reinstall "$wheel"
+  popd >/dev/null
+  ok "qiskit-aer GPU wheel 설치"
+else
+  warn "4) qiskit-aer GPU 빌드 skip — PyPI stock 사용 (CPU)"
 fi
 
-# ─── 4-c. husky git hook 활성화 (commit 시 commitlint 검사) ───
+# ─── 5. husky git hook 활성화 (commit 시 commitlint 검사) ───
 if command -v npm >/dev/null 2>&1; then
-  log "4-c) husky hook 활성화 (npm install in $UQI_DIR)"
+  log "5) husky hook 활성화 (npm install in $UQI_DIR)"
   pushd "$UQI_DIR" >/dev/null
     npm install --silent 2>&1 | tail -3
   popd >/dev/null
   ok "husky pre-commit hook 활성화 (commit 시 commitlint 검사)"
 else
-  warn "4-c) npm 미설치 — husky hook 활성화 skip (commit 시 검사 X)"
+  warn "5) npm 미설치 — husky hook 활성화 skip (commit 시 검사 X)"
   warn "   설치: macOS 'brew install node' / Ubuntu 'sudo apt install nodejs npm'"
 fi
 
-# ─── 5. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───
+# ─── 6. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───
 if [ "$SKIP_DOCKER" -eq 0 ] && [ "$HAVE_DOCKER" -eq 1 ] && [ "$HAVE_NVIDIA" -eq 1 ]; then
   # nvidia-container-toolkit 체크 — 빌드 자체는 가능하나 컨테이너 실행 시 필요
   if ! docker info 2>/dev/null | grep -q "Runtimes:.*nvidia"; then
-    warn "5) nvidia-container-toolkit 미설정 — 빌드는 진행하나 GPU 컨테이너 실행 시 fail"
+    warn "6) nvidia-container-toolkit 미설정 — 빌드는 진행하나 GPU 컨테이너 실행 시 fail"
     warn "   설치/설정 명령:"
     warn "     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
     warn "     curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list"
@@ -219,17 +211,17 @@ if [ "$SKIP_DOCKER" -eq 0 ] && [ "$HAVE_DOCKER" -eq 1 ] && [ "$HAVE_NVIDIA" -eq 
   if docker image inspect uqi-rag:0.1 >/dev/null 2>&1; then
     ok "5) uqi-rag:0.1 이미 존재 — 재빌드 skip (강제 재빌드는 'docker build -t uqi-rag:0.1 deploy/')"
   else
-    log "5) embed/rerank Docker 이미지 빌드 (uqi-rag:0.1, 약 24GB, 5~15분)"
+    log "6) embed/rerank Docker 이미지 빌드 (uqi-rag:0.1, 약 24GB, 5~15분)"
     docker build -t uqi-rag:0.1 "$UQI_DIR/deploy"
     ok "docker 이미지 빌드 완료"
   fi
 else
-  warn "5) docker GPU 이미지 빌드 skip — embed/rerank 는 호스트에서 직접 실행 필요 (macOS / non-NVIDIA)"
+  warn "6) docker GPU 이미지 빌드 skip — embed/rerank 는 호스트에서 직접 실행 필요 (macOS / non-NVIDIA)"
 fi
 
-# ─── 6. systemd unit 설치 (Linux+systemd 자동) ──────
+# ─── 7. systemd unit 설치 (Linux+systemd 자동) ──────
 if [ "$SKIP_SYSTEMD" -eq 0 ] && [ "$HAVE_SYSTEMD" -eq 1 ]; then
-  log "6) systemd 유닛 설치 (/etc/systemd/system/, sudo 필요)"
+  log "7) systemd 유닛 설치 (/etc/systemd/system/, sudo 필요)"
   for unit in uqi-mcp.service uqi-embed.service uqi-rerank.service ngrok-8765.service; do
     sudo cp "$UQI_DIR/deploy/systemd/$unit" "/etc/systemd/system/"
   done
@@ -263,7 +255,7 @@ if [ "$SKIP_SYSTEMD" -eq 0 ] && [ "$HAVE_SYSTEMD" -eq 1 ]; then
   ok "systemd 유닛 enable (uqi-embed/rerank/mcp) — start 는 .env 채운 후 수동"
   warn "  ngrok-8765 는 enable 안 함 → ngrok config add-authtoken 후 'sudo systemctl enable --now ngrok-8765'"
 elif [ "$OS" = "Darwin" ] && [ "$SKIP_SYSTEMD" -eq 0 ]; then
-  log "6) launchd 에이전트 설치 (macOS) → ~/Library/LaunchAgents/"
+  log "7) launchd 에이전트 설치 (macOS) → ~/Library/LaunchAgents/"
   LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
   NGROK_BIN="$(command -v ngrok || echo /usr/local/bin/ngrok)"
   mkdir -p "$LAUNCH_AGENTS" "$UQI_DIR/logs"
@@ -282,18 +274,18 @@ elif [ "$OS" = "Darwin" ] && [ "$SKIP_SYSTEMD" -eq 0 ]; then
   ok "launchd 에이전트 등록 (embed/rerank/mcp) — .env 채운 후 자동 시작"
   warn "  ngrok: authtoken 설정 후 'launchctl load ~/Library/LaunchAgents/com.uqi.ngrok.plist'"
 else
-  warn "6) systemd/launchd 설치 skip"
+  warn "7) systemd/launchd 설치 skip"
 fi
 
-# ─── 7. (선택) notion-backup 빌드 + symlink ─────────
+# ─── 8. (선택) notion-backup 빌드 + symlink ─────────
 # 1-e 에서 clone 된 경우만 진행. uqi 와는 분리된 프로젝트지만 1-command UX
 # 위해 같이 오케스트레이션.
 if [ "$SKIP_NOTION" -eq 0 ] && [ -d "$QUARTZ_DIR" ]; then
   # content/ symlink 검증 — 없거나 깨졌으면 step 1-e 가 안 돌았다는 신호
   if [ ! -L "$QUARTZ_DIR/content" ] || [ ! -d "$QUARTZ_DIR/content" ]; then
-    warn "7) quartz-site/content symlink 없음 (obsidian-vault clone 안 됐을 가능성). build 스킵."
+    warn "8) quartz-site/content symlink 없음 (obsidian-vault clone 안 됐을 가능성). build 스킵."
   elif confirm "notion-backup quartz 빌드 + uqi/webapp symlink 도 진행하시겠습니까?"; then
-    log "7) notion-backup 빌드 ($QUARTZ_DIR)"
+    log "8) notion-backup 빌드 ($QUARTZ_DIR)"
     if ! command -v npm >/dev/null 2>&1; then
       warn "npm 미설치 — quartz 빌드 스킵. 'sudo apt install nodejs npm' 후 재실행"
     else
@@ -313,25 +305,25 @@ if [ "$SKIP_NOTION" -eq 0 ] && [ -d "$QUARTZ_DIR" ]; then
     fi
   fi
 else
-  warn "7) notion-backup skip (--skip-notion 또는 step 1-e 미진행)"
+  warn "8) notion-backup skip (--skip-notion 또는 step 1-e 미진행)"
 fi
 
-# ─── 8. .env 백업본 복구 ──────────────────────────────
+# ─── 9. .env 백업본 복구 ──────────────────────────────
 # 우선순위:
 #   1. ENV_GPG_PATH 환경변수 (사용자 지정 — 최우선)
 #   2. $UQI_DIR/.env.gpg (repo 안 — clone 시 자동 따라옴, --yes 모드도 동작)
 #   3. 인터랙티브: 흔한 외부 경로 검색 → 수동 입력
 ENV_TARGET="$UQI_DIR/.env"
 if [ -f "$ENV_TARGET" ]; then
-  warn "8) .env 이미 존재 — 복구 skip"
+  warn "9) .env 이미 존재 — 복구 skip"
 else
   ENV_SRC=""
   if [ -n "${ENV_GPG_PATH:-}" ] && [ -f "$ENV_GPG_PATH" ]; then
     ENV_SRC="$ENV_GPG_PATH"
-    log "8) .env 복구 — ENV_GPG_PATH 사용: $ENV_SRC"
+    log "9) .env 복구 — ENV_GPG_PATH 사용: $ENV_SRC"
   elif [ -f "$UQI_DIR/.env.gpg" ]; then
     ENV_SRC="$UQI_DIR/.env.gpg"
-    log "8) .env 복구 — repo 안 .env.gpg 사용: $ENV_SRC"
+    log "9) .env 복구 — repo 안 .env.gpg 사용: $ENV_SRC"
   elif [ "$ASSUME_YES" -eq 0 ]; then
     # 흔한 경로 자동 검색 (인터랙티브 모드만)
     for cand in \
@@ -343,10 +335,10 @@ else
       [ -f "$cand" ] && { ENV_SRC="$cand"; break; }
     done
     if [ -n "$ENV_SRC" ]; then
-      log "8) .env.gpg 자동 발견: $ENV_SRC"
+      log "9) .env.gpg 자동 발견: $ENV_SRC"
       confirm "  → 이 파일로 .env 복구하시겠습니까?" || ENV_SRC=""
     else
-      log "8) .env.gpg 자동 검색 실패"
+      log "9) .env.gpg 자동 검색 실패"
       read -r -p "  .env.gpg 경로 직접 입력 (Enter 건너뛰기): " gpath
       [ -n "$gpath" ] && [ -f "$gpath" ] && ENV_SRC="$gpath"
     fi
@@ -360,7 +352,7 @@ else
       err ".env 복구 실패 (passphrase 오류 가능). 수동: gpg -d -o $ENV_TARGET <path>"
     fi
   else
-    warn "8) .env 복구 skip — README 'Environment setup' 보고 수동 작성 (또는 ENV_GPG_PATH=... 로 재실행)"
+    warn "9) .env 복구 skip — README 'Environment setup' 보고 수동 작성 (또는 ENV_GPG_PATH=... 로 재실행)"
   fi
 fi
 

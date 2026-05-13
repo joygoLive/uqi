@@ -1,10 +1,12 @@
 # QPU 비교 (UQI 통합 vendor 종합)
 
-> **마지막 업데이트**: 2026-04-28
-> **출처**: 본 세션 직접 검증 + 공식 pricing 페이지 + UQI 통합 코드 (`uqi_pricing.py`, `uqi_calibration.py`)
+> **마지막 업데이트**: 2026-05-12
+> **출처**: 직접 검증 + 공식 pricing 페이지 + UQI 통합 코드
+> (`uqi_pricing.py`, `uqi_calibration.py`, `uqi_executor_pasqal.py`)
 
 기준 회로: **Bell state (H + CX, 100 shots)** — 단순 2-qubit gate 회로 기준.
 > 더 깊은 회로는 비용/시간 모두 증가. Pasqal은 회로 길이가 비용에 직접 영향, IonQ/Rigetti는 shot 수만 영향.
+> Pasqal Fresnel(_can1)은 2026-05-12 이후 **PCS 직제출이 primary**, Azure Quantum 은 fallback. Emulator (EMU_FRESNEL / EMU_FREE) 는 PCS 전용.
 
 ---
 
@@ -19,8 +21,10 @@
 | **Rigetti Cepheus-1-108Q** ⭐ | 108 | **99.1%** | **$0.34** | ~5분 (큐 비어있을 때, 가용 윈도우 내) | $0.07/min | AWS Braket | Live |
 | **QuEra Aquila** | 256 | analog | $1.30 | 수 분 (요일별 가용 시간 다름) | (analog) | AWS Braket | Live |
 | **IonQ Forte-1** | 36 | **97% 실측** (이론 ~99%) | **$8.30** | **357초 (5분 57초)** ✅ 실측 | **$1.39/min** | AWS Braket | Live |
-| **Pasqal Fresnel (West US)** | 100 | analog | **$54+** (60s 가정), **$540** (10min) | 수십 초 ~ 수 분 (Degraded 상태) | $54/min ⚠️⚠️ | Azure Quantum | Live |
-| **Pasqal Fresnel-CAN1** | 100 | analog | $54+ | **큐 대기 ~46시간** ⚠️ | 동일 | Azure Quantum | Live |
+| **Pasqal Fresnel (West US)** | 100 | analog | **$54+** (60s 가정), **$540** (10min) | 수십 초 ~ 수 분 (Degraded 상태) | $54/min ⚠️⚠️ | **PCS 직제출** / Azure (fallback) | Live |
+| **Pasqal Fresnel-CAN1** | 100 | analog | $54+ | **큐 대기 ~46시간** ⚠️ | 동일 | **PCS 직제출** / Azure (fallback) | Live |
+| **Pasqal EMU-Fresnel** (emulator) | 100 | analog (noise on) | 단가 미확정 (본사 확인 대기) | 큐 X — 즉시 실행 | (emu) | Pasqal Cloud | 권한 활성 대기 |
+| **Pasqal EMU-Free** (emulator) | ~10 | analog (free emu) | **무료** | ~수십 초 | 무료 | Pasqal Cloud | Live (검증 완료 2026-05-12) |
 | **Quandela qpu:ascella/belenos** | photonic | (다른 의미) | **$0** (월 200 credits 무료) | 수 초 ~ 수십 초 | 무료 | 자사 | Live |
 | **Quantinuum H2-2** | 56 | **99.92%** | (HQC, Nexus 보류) | (별도) | 별도 | Nexus 보류 | 정적 (1년 경과) |
 | **Quantinuum H2-1** | 56 | 99.9% | (HQC, Nexus 보류) | (별도) | 별도 | Nexus 보류 | 정적 (1년 경과) |
@@ -179,14 +183,20 @@ Target:   quantinuum.sim.h2-1sc (syntax checker)
 
 ---
 
-## 📌 본 세션에서 통합 완료된 vendor
+## 📌 통합 현황 (2026-05-12 기준)
 
 ```
-✅ AWS Braket    : IonQ Forte-1, Rigetti Cepheus-1-108Q, QuEra Aquila
-✅ Azure Quantum : Pasqal Fresnel (West US + CAN1)
-✅ 자사 클라우드  : IBM Open Plan, IQM Resonance, Quandela Hub
-⏸  보류         : Quantinuum (Nexus 유료계약 불가)
-⏸  보류         : Analog QPU 워크플로우 (QuEra+Pasqal Pulser 알고리즘 통합)
+✅ AWS Braket          : IonQ Forte-1, Rigetti Cepheus-1-108Q, QuEra Aquila
+✅ Azure Quantum       : Pasqal Fresnel (West US + CAN1) — fallback path
+✅ Pasqal Cloud (PCS)  : Pasqal Fresnel(_can1) 직제출 primary + EMU_FRESNEL /
+                         EMU_FREE emulator. UQI_PASQAL_BACKEND env 로 라우팅
+                         (auto / pcs / azure)
+✅ 자사 클라우드        : IBM Open Plan, IQM Resonance, Quandela Hub
+✅ Analog 워크플로우    : Pulser (Pasqal) + Braket-AHS (QuEra Aquila)
+                         end-to-end submit + monitor + result 통합
+⏸  보류 — 본사 권한 대기 : Pasqal EMU_FRESNEL / 실 Fresnel 디바이스 권한
+                         (이우준 박사 컨택, CB1107 미활성 상태)
+⏸  보류 — Quantinuum    : Nexus 유료계약 불가
 ```
 
 ---

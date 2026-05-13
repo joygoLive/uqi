@@ -1,0 +1,22 @@
+[Unit]
+Description=UQI bge-m3 embedding server (loopback :7997)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+ExecStartPre=-/usr/bin/docker rm -f uqi-embed
+ExecStart=/usr/bin/docker run --rm --name uqi-embed \
+    --gpus all --runtime=nvidia \
+    --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+    -p 127.0.0.1:7997:7997 \
+    -v /home/sean/models:/models \
+    -e HF_HOME=/models/hf \
+    -e UQI_EMBED_MODEL=BAAI/bge-m3 \
+    uqi-rag:0.1 python /app/embed_server.py
+ExecStop=/usr/bin/docker stop -t 30 uqi-embed
+
+[Install]
+WantedBy=multi-user.target

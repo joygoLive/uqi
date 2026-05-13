@@ -1,0 +1,22 @@
+[Unit]
+Description=UQI bge-reranker-v2-m3 cross-encoder server (loopback :7998)
+Requires=docker.service
+After=docker.service
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+ExecStartPre=-/usr/bin/docker rm -f uqi-rerank
+ExecStart=/usr/bin/docker run --rm --name uqi-rerank \
+    --gpus all --runtime=nvidia \
+    --ipc=host --ulimit memlock=-1 --ulimit stack=67108864 \
+    -p 127.0.0.1:7998:7998 \
+    -v /home/sean/models:/models \
+    -e HF_HOME=/models/hf \
+    -e UQI_RERANK_MODEL=BAAI/bge-reranker-v2-m3 \
+    uqi-rag:0.1 python /app/rerank_server.py
+ExecStop=/usr/bin/docker stop -t 30 uqi-rerank
+
+[Install]
+WantedBy=multi-user.target

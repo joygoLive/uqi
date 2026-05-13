@@ -36,10 +36,15 @@ git pull origin dev
 
 **3. 작업 후 push**
 ```bash
-git add .
-git commit -m "feat: 작업내용"   # 또는 fix: / chore: / wip:
+# git add . / git add -A 금지 — 파일을 명시적으로 지정
+git add path/to/changed_file ...
+git diff --staged       # 커밋 전 staged 변경 확인 필수
+git commit -m "feat: 작업내용"   # type: feat / fix / chore / docs / refactor / wip
 git push origin dev
 ```
+
+> 정책: `git push --force` 금지 (force-with-lease 도 명시적 허가 필요).
+> `git reset --hard`, `git clean -f` 등 파괴적 명령어 금지.
 
 ---
 

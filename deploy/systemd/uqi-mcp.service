@@ -1,0 +1,17 @@
+[Unit]
+Description=UQI MCP Server
+After=network.target uqi-embed.service uqi-rerank.service
+Wants=uqi-embed.service uqi-rerank.service
+
+[Service]
+User=sean
+WorkingDirectory=/home/sean/work/orientom/uqi/src
+ExecStart=/home/sean/work/orientom/QUWA/.venv_transpile/bin/python mcp_server.py --host 0.0.0.0 --port 8765 --transport sse
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=uqi-mcp
+
+[Install]
+WantedBy=multi-user.target

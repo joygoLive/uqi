@@ -101,18 +101,22 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
 
 uqi 는 self-contained 입니다 — venv 가 `uqi/.venv_transpile` 안에 있고 모든
 Python 의존성은 PyPI 에서 받습니다 (`quizx` 포함). 다른 프로젝트들은 부가
-기능 (GPU 가속 / notion-backup 서빙) 에만 필요.
+기능 (GPU 가속 / notion-backup 서빙) 에만 필요하며, 각각 **자체 venv** 를
+사용 — 옛 `orientom` 부모 working tree 의존 완전 제거.
 
-| 프로젝트 | repo | 의무? | 용도 |
-|---|---|---|---|
-| **uqi** | `joygoLive/uqi` | ✅ | 본 프로젝트. venv 와 모든 deps 가 이 안에 |
-| **qiskit-aer fork** | `joygoLive/qiskit-aer` (`jetson-patch`) | ⚠️ aarch64+NVIDIA GPU 가속 시만 | Jetson 패치된 qiskit-aer GPU wheel 빌드 |
-| **quartz-site** | `joygoLive/quartz-site` | ⚪ notion-backup 서빙 시 | Quartz fork + Orientom 커스터마이징 |
-| **obsidian-vault** | `joygoLive/orientom-notion-backup` | ⚪ notion-backup 서빙 시 | Notion 원본 markdown |
-| **orientom-notion-pipeline** | `joygoLive/orientom-notion-pipeline` | ⚪ Notion sync 자동화 시 | weekly_notion_sync.sh 등 |
+| 프로젝트 | repo | 의무? | 용도 | venv |
+|---|---|---|---|---|
+| **uqi** | `joygoLive/uqi` | ✅ | 본 프로젝트 | `uqi/.venv_transpile` (11 GB) |
+| **qiskit-aer fork** | `joygoLive/qiskit-aer` (`jetson-patch`) | ⚠️ aarch64+NVIDIA GPU 가속 시만 | Jetson GPU wheel | — (uqi venv 에 직접 설치) |
+| **quartz-site** | `joygoLive/quartz-site` | ⚪ notion-backup 서빙 시 | Quartz fork | Node `node_modules/` |
+| **obsidian-vault** | `joygoLive/orientom-notion-backup` | ⚪ notion-backup 서빙 시 | Notion 원본 markdown | — |
+| **orientom-notion-pipeline** | `joygoLive/orientom-notion-pipeline` | ⚪ Notion sync 자동화 시 | `weekly_notion_sync.sh` 등 | `orientom-notion-pipeline/.venv` (17 MB) |
 
-`deploy/setup.sh` 가 위 항목 자동으로 clone + 빌드 (기본 `$HOME/q-basis-one/`,
-`TARGET_DIR` 환경변수로 변경 가능).
+`deploy/setup.sh` 가 위 항목 자동으로 clone + venv + 빌드 (기본
+`$HOME/q-basis-one/`, `TARGET_DIR` 환경변수로 변경 가능).
+
+> 옛 `~/work/orientom/` 부모 디렉토리 (QUWA / alg-files 등 포함) 는 **uqi
+> 운영에 더 이상 불필요** — notion sync 도 자체 venv 사용. 폐기/보존은 자유.
 
 ### Core Python packages
 

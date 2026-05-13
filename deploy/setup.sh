@@ -125,9 +125,16 @@ if [ "$SKIP_CLONE" -eq 0 ]; then
       rm -rf "$QUARTZ_DIR/content"
       ln -s ../obsidian-vault "$QUARTZ_DIR/content"
     fi
-    # (선택의 선택) notion sync 자동화 스크립트
-    if confirm "  → orientom-notion-pipeline (주기적 sync 스크립트) 도 clone?"; then
+    # (선택의 선택) notion sync 자동화 스크립트 + 자체 venv (17 MB)
+    if confirm "  → orientom-notion-pipeline (주기적 sync 스크립트) 도 clone + venv?"; then
       [ -d "$NOTION_PIPELINE_DIR/.git" ] || git clone git@github.com:joygoLive/orientom-notion-pipeline.git "$NOTION_PIPELINE_DIR"
+      # 자체 venv (의도적으로 uqi venv 와 분리 — orientom 부모 폐기 가능하게)
+      if [ ! -d "$NOTION_PIPELINE_DIR/.venv" ]; then
+        log "  notion-pipeline 자체 venv 생성 (requests + python-dotenv, 17 MB)"
+        $PYTHON_BIN -m venv "$NOTION_PIPELINE_DIR/.venv"
+        "$NOTION_PIPELINE_DIR/.venv/bin/pip" install --upgrade pip -q
+        "$NOTION_PIPELINE_DIR/.venv/bin/pip" install -r "$NOTION_PIPELINE_DIR/requirements.txt"
+      fi
     fi
   fi
   ok "clone 단계 완료"

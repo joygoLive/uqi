@@ -171,7 +171,8 @@ if [ "$HAVE_NVIDIA" -eq 1 ]; then
   pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
 else
   filtered="$(mktemp)"
-  grep -vE "^(cudaq|cuda-(quantum|bindings|core|pathfinder)|cupy-cuda|jax-cuda12-|nvidia-)" \
+  # 비-NVIDIA: CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
+  grep -vE "^(cudaq|cuda-(quantum|bindings|core|pathfinder)|cuquantum|cupy-cuda|jax-cuda12-|nvidia-)" \
     "$UQI_DIR/requirements.txt" > "$filtered"
   pip install --no-build-isolation -r "$filtered"
   rm -f "$filtered"

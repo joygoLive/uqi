@@ -4,7 +4,7 @@ force_sync_calibration.py
 특정 QPU 캘리브레이션을 강제 동기화하여 DB에 저장하는 일회성 스크립트.
 
 사용법:
-  cd /home/sean/work/orientom/uqi
+  cd <TARGET_DIR>/uqi
   .venv_transpile/bin/python src/force_sync_calibration.py
 
 - .env 파일에서 API 토큰 자동 로드 (uqi/.env)

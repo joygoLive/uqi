@@ -83,7 +83,7 @@ docker build → systemd install + enable. 자세한 옵션은 `setup.sh --help`
 #### 1. Docker 이미지 빌드
 
 ```bash
-cd /home/sean/work/orientom/uqi/deploy
+cd <TARGET_DIR>/uqi/deploy
 docker build -t uqi-rag:0.1 .
 ```
 

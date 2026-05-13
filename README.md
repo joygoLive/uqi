@@ -134,8 +134,68 @@ reconstruction removed it (2026-05-12). The vector backend is sqlite-vec.
 
 ## 🚀 Installation
 
-> 빠른 길: `deploy/setup.sh` 가 아래 1~5 단계를 자동화합니다.
-> 수동으로 따라가려면 아래 순서대로.
+### ⚡ Quick Start (1-click)
+
+새 머신에 처음 셋업하는 경우 — 아래 두 줄로 끝:
+
+```bash
+git clone git@github.com:joygoLive/uqi.git /tmp/uqi-bootstrap
+ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
+```
+
+자동 진행: clone → venv → pip install → docker build → systemd 등록 →
+(선택) notion-backup 빌드 → `.env.gpg` 복호화. 환경 감지 (OS / ARCH / NVIDIA /
+systemd / docker) 로 적용 가능한 단계만 실행.
+
+**환경변수**:
+- `TARGET_DIR` — 셋업 부모 디렉토리 (default: `$HOME/q-basis-one`)
+- `PYTHON_BIN` — Python 실행파일 (default: `python3.12`)
+- `ENV_GPG_PATH` — 암호화된 `.env.gpg` 백업 경로 (지정 시 자동 복호화)
+
+**옵션 플래그**:
+- `--skip-clone` / `--skip-aer-build` / `--skip-docker` / `--skip-systemd` /
+  `--skip-notion`
+
+완료 후 남은 수동 단계:
+1. `.env` 검토 (또는 작성 — ENV_GPG_PATH 미지정 시)
+2. `sudo systemctl start uqi-embed uqi-rerank uqi-mcp`
+3. (선택) ngrok authtoken 등록 + reserved URL 교체 → `sudo systemctl enable --now ngrok-8765`
+4. 헬스체크: `curl http://127.0.0.1:7997/health` 등
+
+**최종 폴더 구조** (`TARGET_DIR=$HOME/q-basis-one` 기준):
+
+```
+$HOME/q-basis-one/
+├── uqi/                              ← joygoLive/uqi (의무)
+│   ├── src/, deploy/, webapp/, data/
+│   ├── .env (mode 600), .env.gpg
+│   ├── .venv_transpile/              ← self-contained, ~11 GB
+│   └── webapp/notion-backup → ../../quartz-site/public  (notion 옵션)
+├── quartz-site/                      ← (notion 옵션, joygoLive/quartz-site)
+│   ├── content → ../obsidian-vault
+│   └── public/                       ← Quartz build 결과
+├── obsidian-vault/                   ← (notion 옵션, orientom-notion-backup)
+└── orientom-notion-pipeline/         ← (notion 옵션의 옵션)
+
++ $HOME/work/qiskit/qiskit-aer/       (aarch64+NVIDIA 만, jetson-patch fork)
++ $HOME/models/hf/                    (첫 기동 시 자동 ~8.6 GB)
++ /etc/systemd/system/uqi-{mcp,embed,rerank,ngrok-8765}.service  (Linux+systemd)
+```
+
+**등록되는 서비스**:
+
+| Service | Port | 자동 enable? | 비고 |
+|---|---|---|---|
+| `uqi-mcp` | 8765 | ✅ | MCP SSE + webapp 정적 + notion-backup mount |
+| `uqi-embed` | 7997 (loopback) | ✅ | Docker GPU bge-m3 |
+| `uqi-rerank` | 7998 (loopback) | ✅ | Docker GPU bge-reranker-v2-m3 |
+| `ngrok-8765` | (외부 URL) | ⚠️ 수동 | authtoken 등록 + reserved URL 교체 후 enable |
+
+---
+
+### 수동 절차
+
+위 1-click 으로 안 가고 단계별로 진행하고 싶을 때:
 
 ### 1. UQI clone (의무) + 선택 sibling
 

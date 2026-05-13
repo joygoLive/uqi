@@ -179,7 +179,7 @@ if [ "$HAVE_NVIDIA" -eq 1 ]; then
 else
   filtered="$(mktemp)"
   # 비-NVIDIA: CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
-  grep -vE "^(cudaq|cuda-(quantum|bindings|core|pathfinder)|cuquantum|cupy-cuda|jax-cuda12-|nvidia-)" \
+  grep -vE "^(cudaq|cuda-|cuda_|cuquantum|cupy-cuda|cu(densitymat|pauliprop|stabilizer|statevec|tensor|tensornet)-cu[0-9]+|jax-cuda|nvidia-)" \
     "$UQI_DIR/requirements.txt" > "$filtered"
   pip install --no-build-isolation -r "$filtered"
   rm -f "$filtered"

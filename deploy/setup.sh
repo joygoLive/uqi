@@ -300,10 +300,11 @@ else
   warn "7) notion-backup skip (--skip-notion 또는 step 1-e 미진행)"
 fi
 
-# ─── 8. (선택) .env 백업본 복구 ─────────────────────
-# - ENV_GPG_PATH 지정 시 자동 (--yes 모드와 호환)
-# - 미지정 + 인터랙티브: 흔한 경로 자동 검색 → 없으면 수동 입력
-# - --yes + ENV_GPG_PATH 없으면 skip (수동 작성 필요)
+# ─── 8. .env 백업본 복구 ──────────────────────────────
+# 우선순위:
+#   1. ENV_GPG_PATH 환경변수 (사용자 지정 — 최우선)
+#   2. $UQI_DIR/.env.gpg (repo 안 — clone 시 자동 따라옴, --yes 모드도 동작)
+#   3. 인터랙티브: 흔한 외부 경로 검색 → 수동 입력
 ENV_TARGET="$UQI_DIR/.env"
 if [ -f "$ENV_TARGET" ]; then
   warn "8) .env 이미 존재 — 복구 skip"
@@ -312,6 +313,9 @@ else
   if [ -n "${ENV_GPG_PATH:-}" ] && [ -f "$ENV_GPG_PATH" ]; then
     ENV_SRC="$ENV_GPG_PATH"
     log "8) .env 복구 — ENV_GPG_PATH 사용: $ENV_SRC"
+  elif [ -f "$UQI_DIR/.env.gpg" ]; then
+    ENV_SRC="$UQI_DIR/.env.gpg"
+    log "8) .env 복구 — repo 안 .env.gpg 사용: $ENV_SRC"
   elif [ "$ASSUME_YES" -eq 0 ]; then
     # 흔한 경로 자동 검색 (인터랙티브 모드만)
     for cand in \
@@ -326,7 +330,7 @@ else
       log "8) .env.gpg 자동 발견: $ENV_SRC"
       confirm "  → 이 파일로 .env 복구하시겠습니까?" || ENV_SRC=""
     else
-      log "8) .env.gpg 자동 검색 실패 (Google Drive sync 폴더 등 확인)"
+      log "8) .env.gpg 자동 검색 실패"
       read -r -p "  .env.gpg 경로 직접 입력 (Enter 건너뛰기): " gpath
       [ -n "$gpath" ] && [ -f "$gpath" ] && ENV_SRC="$gpath"
     fi

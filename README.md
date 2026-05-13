@@ -144,12 +144,18 @@ reconstruction removed it (2026-05-12). The vector backend is sqlite-vec.
 
 ```bash
 git clone git@github.com:joygoLive/uqi.git /tmp/uqi-bootstrap
-ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
+bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
 ```
 
 자동 진행: clone → venv → pip install → docker build → systemd 등록 →
 (선택) notion-backup 빌드 → `.env.gpg` 복호화. 환경 감지 (OS / ARCH / NVIDIA /
 systemd / docker) 로 적용 가능한 단계만 실행.
+
+> `.env.gpg` 백업본은 **repo 안에 추적**되어 있어 clone 시 자동 따라옴.
+> 별도 외부 경로 (Google Drive 등) 에 따로 보관한 경우 `ENV_GPG_PATH=<경로>` 로 override:
+> ```bash
+> ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
+> ```
 
 **환경변수**:
 - `TARGET_DIR` — 셋업 부모 디렉토리 (default: `$HOME/q-basis-one`)
@@ -416,17 +422,14 @@ brew install --cask docker
 brew install ngrok/ngrok/ngrok
 ```
 
-#### Step 2. `.env.gpg` 백업본 가져오기
-
-암호화된 `.env.gpg` 백업본 (Google Drive 등 보관 위치) 을 Mac 으로 다운로드.
-예: `~/Downloads/.env.gpg`
-
-#### Step 3. 1-click 셋업
+#### Step 2. 1-click 셋업
 
 ```bash
 git clone git@github.com:joygoLive/uqi.git /tmp/uqi-bootstrap
-ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
+bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
 ```
+
+`.env.gpg` 는 repo 안에 추적되어 있어 clone 시 자동 따라옴.
 
 자동 진행:
 - ✓ clone (`~/q-basis-one/uqi/`)
@@ -457,7 +460,7 @@ source .venv_transpile/bin/activate
 git commit/push 도 가능 — `setup.sh` 가 `npm install` 자동 실행하여 husky
 pre-commit hook (commitlint 검사) 활성화 완료.
 
-#### Step 4. 서비스 수동 실행 (Mac 은 systemd 없으므로)
+#### Step 3. 서비스 수동 실행 (Mac 은 systemd 없으므로)
 
 3개 터미널 또는 백그라운드:
 
@@ -483,7 +486,7 @@ nohup env UQI_RERANK_DEVICE=cpu python deploy/rerank_server.py > /tmp/rerank.log
 nohup python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse > /tmp/mcp.log 2>&1 &
 ```
 
-#### Step 5. (선택) 외부 접근 — ngrok (기존 reserved URL 그대로 사용)
+#### Step 4. (선택) 외부 접근 — ngrok (기존 reserved URL 그대로 사용)
 
 ```bash
 ngrok config add-authtoken <YOUR_TOKEN>
@@ -511,7 +514,7 @@ nohup ngrok http --url=superelegant-terrence-grittiest.ngrok-free.dev 8765 \
 > sudo systemctl start ngrok-8765
 > ```
 
-#### Step 6. 헬스체크 + webapp
+#### Step 5. 헬스체크 + webapp
 
 ```bash
 curl -s http://127.0.0.1:7997/health    # bge-m3

@@ -190,6 +190,15 @@ fi
 
 # ─── 5. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───
 if [ "$SKIP_DOCKER" -eq 0 ] && [ "$HAVE_DOCKER" -eq 1 ] && [ "$HAVE_NVIDIA" -eq 1 ]; then
+  # nvidia-container-toolkit 체크 — 빌드 자체는 가능하나 컨테이너 실행 시 필요
+  if ! docker info 2>/dev/null | grep -q "Runtimes:.*nvidia"; then
+    warn "5) nvidia-container-toolkit 미설정 — 빌드는 진행하나 GPU 컨테이너 실행 시 fail"
+    warn "   설치/설정 명령:"
+    warn "     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"
+    warn "     curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list"
+    warn "     sudo apt update && sudo apt install -y nvidia-container-toolkit"
+    warn "     sudo nvidia-ctk runtime configure --runtime=docker && sudo systemctl restart docker"
+  fi
   if docker image inspect uqi-rag:0.1 >/dev/null 2>&1; then
     ok "5) uqi-rag:0.1 이미 존재 — 재빌드 skip (강제 재빌드는 'docker build -t uqi-rag:0.1 deploy/')"
   else
@@ -207,16 +216,35 @@ if [ "$SKIP_SYSTEMD" -eq 0 ] && [ "$HAVE_SYSTEMD" -eq 1 ]; then
   for unit in uqi-mcp.service uqi-embed.service uqi-rerank.service ngrok-8765.service; do
     sudo cp "$UQI_DIR/deploy/systemd/$unit" "/etc/systemd/system/"
   done
-  # 사용자명이 'sean' 이 아니면 경로 보정
-  if [ "$USER" != "sean" ]; then
-    warn "현재 사용자 ($USER) ≠ unit 파일의 hardcoded 'sean' — 경로 일괄 치환"
-    sudo sed -i "s|/home/sean/|/home/$USER/|g; s|User=sean|User=$USER|g" \
-      /etc/systemd/system/uqi-mcp.service \
-      /etc/systemd/system/ngrok-8765.service
+  # hardcoded path 일괄 보정 (4개 unit 모두 + 모든 경로 후보)
+  # 옛 venv path (QUWA/.venv_transpile) 도 함께 — fac23da 이전 unit 호환
+  log "  unit 의 hardcoded path → 현재 환경 보정 (UQI_DIR=$UQI_DIR, USER=$USER)"
+  for unit in uqi-mcp.service uqi-embed.service uqi-rerank.service ngrok-8765.service; do
+    sudo sed -i \
+      -e "s|/home/sean/work/orientom/uqi|$UQI_DIR|g" \
+      -e "s|/home/sean/work/orientom/QUWA/.venv_transpile|$VENV|g" \
+      -e "s|/home/sean/models|$HOME/models|g" \
+      -e "s|/home/sean/|/home/$USER/|g" \
+      -e "s|User=sean|User=$USER|g" \
+      "/etc/systemd/system/$unit"
+  done
+
+  # ngrok binary 자동 설치 시도 (snap 있을 때만)
+  if ! command -v ngrok >/dev/null 2>&1; then
+    if command -v snap >/dev/null 2>&1; then
+      log "  ngrok 미설치 → snap install 시도"
+      sudo snap install ngrok 2>&1 | tail -3 || warn "  ngrok snap 설치 실패 — 수동 설치 필요"
+    else
+      warn "  ngrok 미설치 + snap 없음 — 수동 설치 필요 (https://ngrok.com/download)"
+    fi
   fi
+
   sudo systemctl daemon-reload
-  sudo systemctl enable uqi-embed uqi-rerank uqi-mcp ngrok-8765
-  ok "systemd 유닛 enable (start 는 .env 채운 후 수동)"
+  # uqi-* 만 enable. ngrok-8765 는 authtoken/reserved URL 필요해 수동 (Restart=always 인데
+  # authtoken 없으면 retry loop)
+  sudo systemctl enable uqi-embed uqi-rerank uqi-mcp
+  ok "systemd 유닛 enable (uqi-embed/rerank/mcp) — start 는 .env 채운 후 수동"
+  warn "  ngrok-8765 는 enable 안 함 → ngrok config add-authtoken 후 'sudo systemctl enable --now ngrok-8765'"
 else
   warn "6) systemd 설치 skip — macOS 는 launchd 로 별도 구성 또는 'python mcp_server.py' 수동 실행"
 fi
@@ -313,20 +341,23 @@ echo ""
 
 if [ "$HAVE_SYSTEMD" -eq 1 ]; then
   cat <<EOF
-2. ngrok authtoken (외부 접근 시)
-   sudo snap install ngrok    # 미설치 시
-   ngrok config add-authtoken <YOUR_TOKEN>
-   # reserved domain 쓰려면 ngrok-8765.service 의 --url= 교체 후
-   sudo systemctl daemon-reload
+2. uqi 서비스 시작
+   sudo systemctl start uqi-embed uqi-rerank uqi-mcp
+   sudo systemctl is-active uqi-embed uqi-rerank uqi-mcp
 
-3. 서비스 시작
-   sudo systemctl start uqi-embed uqi-rerank uqi-mcp ngrok-8765
-   sudo systemctl is-active uqi-embed uqi-rerank uqi-mcp ngrok-8765
+3. (선택) ngrok 외부 접근 — uqi-mcp 가 안정 동작 후
+   ngrok config add-authtoken <YOUR_TOKEN>
+   # reserved domain 쓰려면 ngrok-8765.service 의 --url= 본인 도메인으로:
+   sudo sed -i 's|superelegant-terrence-grittiest.ngrok-free.dev|<YOUR_DOMAIN>|' \\
+     /etc/systemd/system/ngrok-8765.service
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now ngrok-8765
 
 4. 헬스체크
-   curl -s http://127.0.0.1:7997/health
-   curl -s http://127.0.0.1:7998/health
-   ss -ltn 'sport = :8765'
+   curl -s http://127.0.0.1:7997/health   # bge-m3
+   curl -s http://127.0.0.1:7998/health   # bge-reranker
+   ss -ltn 'sport = :8765'                 # uqi-mcp SSE
+   curl -s http://127.0.0.1:4040/api/tunnels | jq '.tunnels[].public_url'  # ngrok
 EOF
 else
   cat <<EOF

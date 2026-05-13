@@ -4756,19 +4756,26 @@ if __name__ == "__main__":
                 self.app = app
             async def __call__(self, scope, receive, send):
                 if scope["type"] == "http":
+                    response_started = False
+                    async def tracked_send(message):
+                        nonlocal response_started
+                        if message["type"] == "http.response.start":
+                            response_started = True
+                        await send(message)
                     try:
-                        await self.app(scope, receive, send)
+                        await self.app(scope, receive, tracked_send)
                     except AnyIOClosedResourceError:
-                        # 세션 만료 — 클라이언트에 410 반환하여 재연결 유도
-                        await send({
-                            "type": "http.response.start",
-                            "status": 410,
-                            "headers": [[b"content-type", b"application/json"]],
-                        })
-                        await send({
-                            "type": "http.response.body",
-                            "body": b'{"error":"session_expired","message":"SSE session closed, please reconnect"}',
-                        })
+                        if not response_started:
+                            # 세션 만료 — 응답 미시작 시만 410 반환
+                            await send({
+                                "type": "http.response.start",
+                                "status": 410,
+                                "headers": [[b"content-type", b"application/json"]],
+                            })
+                            await send({
+                                "type": "http.response.body",
+                                "body": b'{"error":"session_expired","message":"SSE session closed, please reconnect"}',
+                            })
                 else:
                     await self.app(scope, receive, send)
 

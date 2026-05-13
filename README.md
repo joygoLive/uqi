@@ -394,22 +394,95 @@ QUANDELA_TOKEN=...
 환경을 자동 감지해서 적용 가능한 단계만 진행 — 사용자가 수동 처리할 부분만
 아래에 정리합니다.
 
-### macOS (M-series / Intel)
+### macOS (M-series / Intel) — 처음부터 끝까지 따라하기
 
-setup.sh 가 자동으로:
-- clone (uqi 의무 + 선택: quartz / obsidian-vault) ✓
-- venv + pip install (CUDA 패키지 자동 제외) ✓
-- quartz build + symlinks ✓
+#### Step 1. 사전 준비 (Mac 1회만)
 
-자동 skip 되는 단계 + 수동 대응:
+```bash
+# Python 3.12 (uqi 가 요구)
+brew install python@3.12
 
-| 항목 | 수동 대응 |
+# (선택) Node.js — notion-backup 정적 사이트 빌드 시
+brew install node
+
+# (선택) Docker Desktop — embed/rerank 컨테이너 빌드는 가능하나 GPU 가속 X
+brew install --cask docker
+
+# (선택) ngrok — 외부 접근 시
+brew install ngrok/ngrok/ngrok
+```
+
+#### Step 2. `.env.gpg` 백업본 가져오기
+
+암호화된 `.env.gpg` 백업본 (Google Drive 등 보관 위치) 을 Mac 으로 다운로드.
+예: `~/Downloads/.env.gpg`
+
+#### Step 3. 1-click 셋업
+
+```bash
+git clone git@github.com:joygoLive/uqi.git /tmp/uqi-bootstrap
+ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
+```
+
+자동 진행:
+- ✓ clone (`~/q-basis-one/uqi/`)
+- ✓ venv (`uqi/.venv_transpile`)
+- ✓ pip install (CUDA 패키지 `cudaq`/`cuquantum*`/`cupy-cuda*`/`nvidia-*`/`jax-cuda12-*` 자동 제외)
+- ✓ `.env.gpg` → `.env` 복호화 (passphrase 입력)
+- 🔵 자동 skip: qiskit-aer GPU 빌드 / docker GPU 컨테이너 / systemd 등록 (Mac 미지원)
+
+#### Step 4. 서비스 수동 실행 (Mac 은 systemd 없으므로)
+
+3개 터미널 또는 백그라운드:
+
+```bash
+cd ~/q-basis-one/uqi
+source .venv_transpile/bin/activate
+
+# Terminal A — bge-m3 embedding (CPU 모드, 느림)
+UQI_EMBED_DEVICE=cpu  python deploy/embed_server.py
+
+# Terminal B — bge-reranker (CPU 모드)
+UQI_RERANK_DEVICE=cpu python deploy/rerank_server.py
+
+# Terminal C — uqi-mcp (webapp + SSE 메인 서버)
+python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse
+```
+
+또는 `nohup` 으로 한 줄씩 백그라운드:
+
+```bash
+nohup env UQI_EMBED_DEVICE=cpu  python deploy/embed_server.py  > /tmp/embed.log  2>&1 &
+nohup env UQI_RERANK_DEVICE=cpu python deploy/rerank_server.py > /tmp/rerank.log 2>&1 &
+nohup python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse > /tmp/mcp.log 2>&1 &
+```
+
+#### Step 5. (선택) 외부 접근 — ngrok
+
+```bash
+ngrok config add-authtoken <YOUR_TOKEN>
+ngrok http 8765   # 임시 URL, 또는 reserved domain 지정
+```
+
+#### Step 6. 헬스체크 + webapp
+
+```bash
+curl -s http://127.0.0.1:7997/health    # bge-m3
+curl -s http://127.0.0.1:7998/health    # bge-reranker
+curl -s http://127.0.0.1:8765/ | head   # webapp HTML
+open http://localhost:8765              # 브라우저로 webapp 열기
+```
+
+#### macOS 특이사항 요약
+
+| 항목 | 동작 |
 |---|---|
-| `uqi-mcp` 실행 | systemd 없음 → 직접 실행 `python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse` (또는 launchd plist 작성) |
-| `uqi-embed` / `uqi-rerank` | docker GPU 컨테이너 빌드 skip. **CPU 모드로 호스트 직접 실행**: `UQI_EMBED_DEVICE=cpu python deploy/embed_server.py` (매우 느림) |
-| `qiskit-aer` GPU | fork 빌드 skip → PyPI stock (CPU) 자동 사용 |
-| Node.js / npm | notion-backup 빌드 시 `brew install node` |
-| ngrok | `brew install ngrok/ngrok/ngrok` (snap 대체) |
+| CUDA quantum sim (cudaq / cuquantum*) | 자동 제외 — Mac 미지원 |
+| qiskit-aer | PyPI stock (CPU). GPU fork 빌드 skip |
+| embed / rerank | docker 미사용. 호스트에서 CPU 모드 직접 실행 (M-series MPS 가속 안 됨, 매우 느림) |
+| systemd | 없음 → 직접 실행 또는 launchd plist 작성 |
+| ngrok | snap 대신 `brew install ngrok/ngrok/ngrok` |
+| HuggingFace 모델 (8.6 GB) | embed/rerank 첫 실행 시 자동 다운로드 (`~/.cache/huggingface/` 또는 `HF_HOME` env) |
 
 ### x86_64 Linux + NVIDIA (예: H100)
 

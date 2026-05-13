@@ -95,6 +95,7 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
   ```
 - **SQLite** with extension-load support (sqlite-vec)
 - **snap** (for ngrok — public webapp URL 노출 시)
+- **Node.js / npm** (notion-backup 정적 사이트 빌드 시 — `sudo apt install nodejs npm` 또는 brew/nodesource)
 
 ### Sibling 프로젝트 (1개 의무 + 1개 선택)
 
@@ -319,6 +320,41 @@ BRAKET_SV1_ARN=arn:aws:braket:...
 # ── Quandela Cloud (photonic) ────────────────────────────────────
 QUANDELA_TOKEN=...
 ```
+
+---
+
+## 🍎 기타 OS 안내
+
+`deploy/setup.sh --yes` 한 줄로 **현재 OS 환경 (aarch64 Linux + NVIDIA, DGX Spark
+기준)** 에서는 풀 셋업이 끝납니다. 그 외 가정하는 환경 2가지에서는 setup.sh 가
+환경을 자동 감지해서 적용 가능한 단계만 진행 — 사용자가 수동 처리할 부분만
+아래에 정리합니다.
+
+### macOS (M-series / Intel)
+
+setup.sh 가 자동으로:
+- clone (UQI / QUWA / quartz / obsidian-vault) ✓
+- venv + pip install (CUDA 패키지 자동 제외) ✓
+- quartz build + symlinks ✓
+
+자동 skip 되는 단계 + 수동 대응:
+
+| 항목 | 수동 대응 |
+|---|---|
+| `uqi-mcp` 실행 | systemd 없음 → 직접 실행 `python src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse` (또는 launchd plist 작성) |
+| `uqi-embed` / `uqi-rerank` | docker GPU 컨테이너 빌드 skip. **CPU 모드로 호스트 직접 실행**: `UQI_EMBED_DEVICE=cpu python deploy/embed_server.py` (매우 느림) |
+| `qiskit-aer` GPU | fork 빌드 skip → PyPI stock (CPU) 자동 사용 |
+| Node.js / npm | notion-backup 빌드 시 `brew install node` |
+| ngrok | `brew install ngrok/ngrok/ngrok` (snap 대체) |
+
+### x86_64 Linux + NVIDIA (예: H100)
+
+setup.sh 가 자동으로:
+- 동일환경과 사실상 동일하게 풀 셋업 — clone / venv / pip / docker / systemd 모두 진행 ✓
+
+**유일한 차이**: `qiskit-aer` Jetson-patch fork 는 aarch64 전용 (Jetson/GH200 GPU
+patch) → setup.sh 가 fork clone/빌드 자동 skip, PyPI stock 사용. H100 GPU 가속 원하면
+별도로 upstream `Qiskit/qiskit-aer` 에서 CUDA 빌드 진행 필요.
 
 ---
 

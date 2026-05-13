@@ -9,6 +9,8 @@ logs/
 
 # 환경변수
 .env
+# 주의: .env.gpg (암호화 백업본) 은 repo 에 추적 — passphrase 가 유일 방어선이라
+# 강한 passphrase 필수. private repo 가정.
 
 # Python
 **/__pycache__/

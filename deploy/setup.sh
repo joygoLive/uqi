@@ -168,20 +168,22 @@ else
 fi
 
 # ─── 4. UQI 의존성 설치 ─────────────────────────────
-# cuquantum 등 source-only 패키지가 빌드 시 setuptools 의 pkg_resources 필요 →
-# setuptools<70 사전 설치 + --no-build-isolation 으로 venv 의 setuptools 사용.
-# (setuptools 82+ 부터 pkg_resources 제거됨 — 새 pip 의 default 격리 환경과 충돌)
-log "4) UQI requirements 설치 — build helpers 사전 설치 → --no-build-isolation"
-# 옛 pip + 옛 setuptools 가 cuquantum 등의 setup.py 호환성 보장 (pkg_resources)
-pip install -q 'pip==24.0' 'setuptools<70' wheel
+log "4) UQI requirements 설치"
 if [ "$HAVE_NVIDIA" -eq 1 ]; then
+  # cuquantum 등 source-only 패키지가 빌드 시 setuptools 의 pkg_resources 필요 →
+  # setuptools<70 사전 설치 + --no-build-isolation 으로 venv 의 setuptools 사용.
+  # (setuptools 82+ 부터 pkg_resources 제거됨 — 새 pip 의 default 격리 환경과 충돌)
+  pip install -q 'pip==24.0' 'setuptools<70' wheel
   pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
 else
+  # 비-NVIDIA (macOS 등): setuptools 버전 제약 없이 일반 설치
+  # cuquantum 계열이 없으므로 pkg_resources 호환 불필요
+  pip install -q --upgrade pip wheel
   filtered="$(mktemp)"
-  # 비-NVIDIA: CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
+  # CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
   grep -vE "^(cudaq|cuda-|cuda_|cuquantum|cupy-cuda|cu(densitymat|pauliprop|stabilizer|statevec|tensor|tensornet)-cu[0-9]+|jax-cuda|nvidia-|nvmath-|pennylane.*(gpu|cuda|kokkos))" \
     "$UQI_DIR/requirements.txt" > "$filtered"
-  pip install --no-build-isolation -r "$filtered"
+  pip install -r "$filtered"
   rm -f "$filtered"
 fi
 ok "pip install 완료"

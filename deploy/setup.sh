@@ -160,8 +160,12 @@ if [ "$HAVE_NVIDIA" -eq 1 ]; then
   # cuquantum 등 source-only 패키지가 빌드 시 setuptools 의 pkg_resources 필요 →
   # setuptools<70 사전 설치 + --no-build-isolation 으로 venv 의 setuptools 사용.
   # (setuptools 82+ 부터 pkg_resources 제거됨 — 새 pip 의 default 격리 환경과 충돌)
+  # setuptools 핀은 amazon-braket(81.0.0) 과 충돌 — requirements 에서 제외 후 pip 자율 해소
   pip install -q 'pip==24.0' 'setuptools<70' wheel
-  pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
+  _filtered="$(mktemp)"
+  grep -v "^setuptools==" "$UQI_DIR/requirements.txt" > "$_filtered"
+  pip install --no-build-isolation -r "$_filtered"
+  rm -f "$_filtered"
 else
   # 비-NVIDIA (macOS 등): requirements-macos.txt 사용 (CUDA/GPU 패키지 제외 전용 lockfile)
   # --no-deps: 완전한 lockfile 이므로 의존성 재해소 불필요 — 버전 충돌 오류 방지

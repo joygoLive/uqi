@@ -431,6 +431,25 @@ ENV_GPG_PATH=~/Downloads/.env.gpg bash /tmp/uqi-bootstrap/deploy/setup.sh --yes
 - ✓ `.env.gpg` → `.env` 복호화 (passphrase 입력)
 - 🔵 자동 skip: qiskit-aer GPU 빌드 / docker GPU 컨테이너 / systemd 등록 (Mac 미지원)
 
+**셋업 완료 후 작업 위치**
+
+| 경로 | 역할 |
+|---|---|
+| `~/q-basis-one/uqi/` | **메인 작업 디렉토리** — git working tree. 코드 수정 / 커밋 / 서비스 실행 전부 여기서 |
+| `~/q-basis-one/uqi/.venv_transpile/` | Python venv (11 GB). 모든 명령은 이걸 activate 후 실행 |
+| `~/q-basis-one/uqi/.env` | API 키 (mode 600) — 수정 후 `gpg -c --yes .env` 로 `.env.gpg` 재암호화 |
+| `~/q-basis-one/uqi/.env.gpg` | repo 추적되는 암호화 백업 |
+| `/tmp/uqi-bootstrap/` | 셋업용 임시 — **삭제 가능** (`rm -rf /tmp/uqi-bootstrap`) |
+| `~/q-basis-one/quartz-site/` | (notion 옵션) 정적 사이트 |
+| `~/q-basis-one/obsidian-vault/` | (notion 옵션) 원본 markdown |
+
+이후 모든 작업은 메인 디렉토리에서:
+
+```bash
+cd ~/q-basis-one/uqi
+source .venv_transpile/bin/activate
+```
+
 #### Step 4. 서비스 수동 실행 (Mac 은 systemd 없으므로)
 
 3개 터미널 또는 백그라운드:

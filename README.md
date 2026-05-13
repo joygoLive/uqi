@@ -94,19 +94,29 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
   sudo systemctl restart docker
   ```
 - **SQLite** with extension-load support (sqlite-vec)
+- **Rust toolchain** (rustc/cargo) — `quizx` ZX-calculus optimizer 의 maturin 빌드용
+  ```bash
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+  ```
 - **snap** (for ngrok — public webapp URL 노출 시)
 - **Node.js / npm** (notion-backup 정적 사이트 빌드 시 — `sudo apt install nodejs npm` 또는 brew/nodesource)
 
-### Sibling 프로젝트 (1개 의무 + 1개 선택)
+### Sibling 프로젝트 (DGX 전체 layout 재현 시 모두 필요)
 
-| 프로젝트 | 의무? | 용도 |
-|---|---|---|
-| **QUWA** (`joygoLive/orientom`) | ✅ 의무 | venv 공유 — `QUWA/.venv_transpile/` 가 UQI 의 Python 환경 |
-| **qiskit-aer fork** (`joygoLive/qiskit-aer`, `jetson-patch` branch) | ⚠️ Jetson/GH200 GPU 가속 원하면 의무, 아니면 PyPI stock OK | Jetson 패치된 qiskit-aer-GPU 빌드 |
+`$HOME/work/orientom/` 가 `joygoLive/orientom` working tree 가 되고, 그 안에
+nested 별도 repo 들이 sibling 으로 들어갑니다 (현재 DGX 와 동일 구조).
 
-> webapp 의 `/notion-backup/` 경로 정적 서빙은 별도 프로젝트 (`quartz-site`)
-> 에서 빌드한 정적 사이트를 `webapp/notion-backup` symlink 로 연결하는 방식.
-> 해당 프로젝트의 README 를 따로 참조하세요. UQI 자체 동작에는 무관.
+| 프로젝트 | repo | 의무? | 용도 |
+|---|---|---|---|
+| **orientom** (부모 working tree) | `joygoLive/orientom` | ✅ | QUWA/alg-files/azure 등 subfolder + venv 위치 |
+| **uqi** (nested) | `joygoLive/uqi` | ✅ | 본 프로젝트 |
+| **quizx** (nested) | `zxcalc/quizx` (upstream) | ✅ | `uqi_optimizer.py` 가 import 하는 ZX-calculus (Rust+Python bindings, maturin 빌드) |
+| **qiskit-aer fork** | `joygoLive/qiskit-aer` (`jetson-patch`) | ⚠️ aarch64+NVIDIA 만 | Jetson 패치된 qiskit-aer GPU 빌드 |
+| **quartz-site** (nested) | `joygoLive/quartz-site` | ⚪ notion-backup 서빙 시 | Quartz fork + Orientom 커스터마이징 |
+| **obsidian-vault** (nested) | `joygoLive/orientom-notion-backup` | ⚪ notion-backup 서빙 시 | Notion 원본 markdown |
+| **orientom-notion-pipeline** (nested) | `joygoLive/orientom-notion-pipeline` | ⚪ Notion sync 자동화 시 | weekly_notion_sync.sh 등 |
+
+`deploy/setup.sh` 가 위 layout 전체를 자동으로 clone + 빌드합니다.
 
 ### Core Python packages
 

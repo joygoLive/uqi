@@ -50,6 +50,7 @@ QUWA_DIR="$ORIENTOM_DIR/QUWA"                       # orientom 의 subfolder
 QUARTZ_DIR="$ORIENTOM_DIR/quartz-site"
 OBSIDIAN_DIR="$ORIENTOM_DIR/obsidian-vault"
 NOTION_PIPELINE_DIR="$ORIENTOM_DIR/orientom-notion-pipeline"
+QUIZX_DIR="$ORIENTOM_DIR/quizx"                     # ZX-calculus optimizer (Rust+Python)
 AER_DIR="$HOME/work/qiskit/qiskit-aer"
 VENV="$QUWA_DIR/.venv_transpile"                    # = $ORIENTOM_DIR/QUWA/.venv_transpile
 
@@ -118,14 +119,18 @@ if [ "$SKIP_CLONE" -eq 0 ]; then
   # 1-b. uqi (nested 별도 repo, $ORIENTOM_DIR 안에)
   [ -d "$UQI_DIR/.git" ] || git clone git@github.com:joygoLive/uqi.git "$UQI_DIR"
 
-  # 1-c. qiskit-aer Jetson fork — aarch64+NVIDIA 일 때만 자동 clone
+  # 1-c. quizx (nested 별도 repo) — uqi_optimizer.py 가 import 하는 ZX-calculus.
+  #      Rust+maturin 빌드 → step 4 뒤에 install.
+  [ -d "$QUIZX_DIR/.git" ] || git clone https://github.com/zxcalc/quizx.git "$QUIZX_DIR"
+
+  # 1-d. qiskit-aer Jetson fork — aarch64+NVIDIA 일 때만 자동 clone
   #      ($ORIENTOM_DIR 밖, $HOME/work/qiskit/ 아래)
   if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ]; then
     mkdir -p "$(dirname "$AER_DIR")"
     [ -d "$AER_DIR/.git" ] || git clone -b jetson-patch git@github.com:joygoLive/qiskit-aer.git "$AER_DIR"
   fi
 
-  # 1-d. (선택) notion-backup 스택 — quartz fork + 콘텐츠 vault + symlink
+  # 1-e. (선택) notion-backup 스택 — quartz fork + 콘텐츠 vault + symlink
   if [ "$SKIP_NOTION" -eq 0 ] && confirm "notion-backup 스택 (quartz fork + obsidian-vault) 도 clone 하시겠습니까?"; then
     # quartz fork (커스터마이징 포함) — upstream 은 'upstream' remote 로 추가
     if [ ! -d "$QUARTZ_DIR/.git" ]; then
@@ -189,6 +194,24 @@ else
 fi
 ok "pip install 완료"
 
+# ─── 4-b. quizx pybindings (Rust + maturin) editable install ─────
+# uqi/src/uqi_optimizer.py 가 import. PyPI 0.3.0 도 있지만 source 빌드 유지
+# (현재 DGX 가 source 빌드 사용 중 — pin 된 commit 동작 보장).
+if [ -d "$QUIZX_DIR/pybindings" ]; then
+  if ! command -v cargo >/dev/null 2>&1; then
+    warn "4-b) Rust toolchain 미설치 — quizx 빌드 스킵."
+    warn "   설치: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+    warn "   또는 fallback: pip install quizx==0.3.0  (PyPI stock)"
+  else
+    log "4-b) quizx pybindings 빌드/install (maturin → Rust 컴파일, 1~3분)"
+    pip install -q maturin
+    pip install -e "$QUIZX_DIR/pybindings"
+    ok "quizx editable install 완료"
+  fi
+else
+  warn "4-b) quizx 미 clone — step 1-c 가 안 돌았거나 디렉토리 깨짐"
+fi
+
 # ─── 5. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───
 if [ "$SKIP_DOCKER" -eq 0 ] && [ "$HAVE_DOCKER" -eq 1 ] && [ "$HAVE_NVIDIA" -eq 1 ]; then
   if docker image inspect uqi-rag:0.1 >/dev/null 2>&1; then
@@ -223,10 +246,10 @@ else
 fi
 
 # ─── 7. (선택) notion-backup 빌드 + symlink ─────────
-# 1-d 에서 clone 된 경우만 진행. uqi 와는 분리된 프로젝트지만 1-command UX
+# 1-e 에서 clone 된 경우만 진행. uqi 와는 분리된 프로젝트지만 1-command UX
 # 위해 같이 오케스트레이션.
 if [ "$SKIP_NOTION" -eq 0 ] && [ -d "$QUARTZ_DIR" ]; then
-  # content/ symlink 검증 — 없거나 깨졌으면 step 1-d 가 안 돌았다는 신호
+  # content/ symlink 검증 — 없거나 깨졌으면 step 1-e 가 안 돌았다는 신호
   if [ ! -L "$QUARTZ_DIR/content" ] || [ ! -d "$QUARTZ_DIR/content" ]; then
     warn "7) quartz-site/content symlink 없음 (obsidian-vault clone 안 됐을 가능성). build 스킵."
   elif confirm "notion-backup quartz 빌드 + uqi/webapp symlink 도 진행하시겠습니까?"; then
@@ -250,7 +273,7 @@ if [ "$SKIP_NOTION" -eq 0 ] && [ -d "$QUARTZ_DIR" ]; then
     fi
   fi
 else
-  warn "7) notion-backup skip (--skip-notion 또는 step 1-d 미진행)"
+  warn "7) notion-backup skip (--skip-notion 또는 step 1-e 미진행)"
 fi
 
 # ─── 8. (선택) .env 백업본 복구 ─────────────────────

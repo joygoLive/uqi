@@ -176,15 +176,9 @@ if [ "$HAVE_NVIDIA" -eq 1 ]; then
   pip install -q 'pip==24.0' 'setuptools<70' wheel
   pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
 else
-  # 비-NVIDIA (macOS 등): setuptools 버전 제약 없이 일반 설치
-  # cuquantum 계열이 없으므로 pkg_resources 호환 불필요
+  # 비-NVIDIA (macOS 등): requirements-macos.txt 사용 (CUDA/GPU 패키지 제외 전용 lockfile)
   pip install -q --upgrade pip wheel
-  filtered="$(mktemp)"
-  # CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
-  grep -vE "^(cudaq|cuda-|cuda_|cuquantum|cupy-cuda|cu(densitymat|pauliprop|stabilizer|statevec|tensor|tensornet)-cu[0-9]+|jax-cuda|nvidia-|nvmath-|pennylane.*(gpu|cuda|kokkos)|setuptools==|conan==)" \
-    "$UQI_DIR/requirements.txt" > "$filtered"
-  pip install -r "$filtered"
-  rm -f "$filtered"
+  pip install -r "$UQI_DIR/requirements-macos.txt"
 fi
 ok "pip install 완료"
 

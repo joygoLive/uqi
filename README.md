@@ -454,6 +454,12 @@ cd ~/q-basis-one/uqi
 source .venv_transpile/bin/activate
 ```
 
+> 💡 git commit 도 할 예정이면 husky pre-commit hook 활성화:
+> ```bash
+> cd ~/q-basis-one/uqi && npm install   # husky → commitlint 검사 활성화 (~12 MB)
+> ```
+> commit 안 할 거면 생략.
+
 #### Step 4. 서비스 수동 실행 (Mac 은 systemd 없으므로)
 
 3개 터미널 또는 백그라운드:

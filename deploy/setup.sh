@@ -177,8 +177,9 @@ if [ "$HAVE_NVIDIA" -eq 1 ]; then
   pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
 else
   # 비-NVIDIA (macOS 등): requirements-macos.txt 사용 (CUDA/GPU 패키지 제외 전용 lockfile)
+  # --no-deps: 완전한 lockfile 이므로 의존성 재해소 불필요 — 버전 충돌 오류 방지
   pip install -q --upgrade pip wheel
-  pip install -r "$UQI_DIR/requirements-macos.txt"
+  pip install --no-deps -r "$UQI_DIR/requirements-macos.txt"
 fi
 ok "pip install 완료"
 

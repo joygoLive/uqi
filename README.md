@@ -75,14 +75,41 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
 
 ## ⚙️ Prerequisites
 
-- **Linux** (arm64 or x86_64). DGX Spark (Blackwell SM12.1, 121 GB unified
-  memory) is the reference host; any CUDA-capable Linux box also works.
-- **Python 3.10+**, virtualenv
-- **Docker + nvidia-container-toolkit** (for embed/rerank GPU services)
-- **SQLite** with extension-load support (sqlite-vec)
-- Optional: ngrok for remote webapp access
+### 호스트 OS / 하드웨어
 
-Core Python packages (see `requirements.txt` for the full pin set):
+- **Linux** (arm64 권장 — DGX Spark 가 reference). x86_64 도 동작.
+- **NVIDIA GPU** + 드라이버 (embed/rerank GPU 컨테이너 + 선택적 qiskit-aer-GPU /
+  cudaq 가속)
+- **Python 3.12** (가상환경, DGX 와 동일 버전 권장)
+- **Docker + nvidia-container-toolkit**
+  ```bash
+  # NVIDIA container toolkit 설치 (Ubuntu/Debian)
+  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+    | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+  curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+    | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+    | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+  sudo apt update && sudo apt install -y nvidia-container-toolkit
+  sudo nvidia-ctk runtime configure --runtime=docker
+  sudo systemctl restart docker
+  ```
+- **SQLite** with extension-load support (sqlite-vec)
+- **snap** (for ngrok — public webapp URL 노출 시)
+
+### Sibling 프로젝트 (1개 의무 + 1개 선택)
+
+| 프로젝트 | 의무? | 용도 |
+|---|---|---|
+| **QUWA** (`joygoLive/orientom`) | ✅ 의무 | venv 공유 — `QUWA/.venv_transpile/` 가 UQI 의 Python 환경 |
+| **qiskit-aer fork** (`joygoLive/qiskit-aer`, `jetson-patch` branch) | ⚠️ Jetson/GH200 GPU 가속 원하면 의무, 아니면 PyPI stock OK | Jetson 패치된 qiskit-aer-GPU 빌드 |
+
+> webapp 의 `/notion-backup/` 경로 정적 서빙은 별도 프로젝트 (`quartz-site`)
+> 에서 빌드한 정적 사이트를 `webapp/notion-backup` symlink 로 연결하는 방식.
+> 해당 프로젝트의 README 를 따로 참조하세요. UQI 자체 동작에는 무관.
+
+### Core Python packages
+
+(see `requirements.txt` for the full pin set):
 
 ```
 fastmcp                      anthropic >= 0.100
@@ -100,25 +127,137 @@ reconstruction removed it (2026-05-12). The vector backend is sqlite-vec.
 
 ## 🚀 Installation
 
+> 빠른 길: `deploy/setup.sh` 가 아래 1~5 단계를 자동화합니다.
+> 수동으로 따라가려면 아래 순서대로.
+
+### 1. UQI + sibling 프로젝트 clone
+
 ```bash
-git clone https://github.com/joygoLive/uqi.git
-cd uqi
+mkdir -p ~/work/orientom && cd ~/work/orientom
 
-python -m venv .venv_transpile
+# UQI
+git clone git@github.com:joygoLive/uqi.git
+
+# QUWA (venv 공유 — UQI 와 같은 부모 디렉토리에 sibling 으로 둠)
+git clone git@github.com:joygoLive/orientom.git QUWA
+
+# (선택) Jetson/GH200 GPU 가속 qiskit-aer fork
+git clone -b jetson-patch git@github.com:joygoLive/qiskit-aer.git ~/work/qiskit/qiskit-aer
+
+# (선택) notion-backup 정적 사이트 (Quartz 기반)
+git clone https://github.com/jackyzha0/quartz.git quartz-site
+```
+
+### 2. 공유 venv 생성 (QUWA/.venv_transpile)
+
+UQI 의 `uqi-mcp.service` 는 **QUWA 의 venv 를 직접 가리킵니다**
+(`/home/$USER/work/orientom/QUWA/.venv_transpile/bin/python`). 이는 두
+프로젝트가 동일한 quantum SDK 스택을 공유하는 디자인 결정입니다.
+
+```bash
+cd ~/work/orientom/QUWA
+python3.12 -m venv .venv_transpile
 source .venv_transpile/bin/activate
+pip install --upgrade pip
+```
 
+### 3. (선택) qiskit-aer GPU fork 빌드 — Jetson/GH200 만
+
+PyPI stock `qiskit-aer` 로도 동작하지만, Jetson/GH200 에서 GPU 가속을
+쓰려면 fork 의 빌드 절차를 따릅니다:
+
+```bash
+cd ~/work/qiskit/qiskit-aer
+# (venv 활성화 상태에서)
+# fork README 의 build 절차 참조. 일반적으로:
+pip install pybind11 scikit-build cmake
+python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
+pip install dist/qiskit_aer-*-linux_aarch64.whl --force-reinstall
+```
+
+> 이 단계를 건너뛰면 다음 `pip install -r requirements.txt` 가 PyPI stock
+> `qiskit-aer==0.17.2` 를 설치합니다 (CPU only).
+
+### 4. UQI 의존성 설치
+
+```bash
+cd ~/work/orientom/uqi
+# venv 는 이미 활성화 상태 (QUWA/.venv_transpile)
 pip install -r requirements.txt
 ```
 
-### Build the embed/rerank container
+> ⚠️ Note: `requirements.txt` 의 `cudaq`, `cupy-cuda13x`, `nvidia-*`,
+> `jax-cuda12-*` 패키지들은 **CUDA 환경 전용**입니다. macOS / 비-NVIDIA Linux
+> 에서는 해당 라인을 제거하거나 fallback 처리 필요.
+
+### 5. embed/rerank Docker 이미지 빌드
 
 ```bash
-cd /etc/uqi
+cd ~/work/orientom/uqi/deploy
 docker build -t uqi-rag:0.1 .
 ```
 
 (Image is based on `nvcr.io/nvidia/pytorch:25.06-py3` and bundles
-sentence-transformers + FastAPI / uvicorn for OpenAI-compatible endpoints.)
+sentence-transformers + FastAPI / uvicorn for OpenAI-compatible endpoints.
+약 24GB, 첫 빌드 5~15분.)
+
+### 6. systemd 유닛 설치 + 활성화
+
+```bash
+# 4 개 unit 일괄 설치
+sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-mcp.service     /etc/systemd/system/
+sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-embed.service   /etc/systemd/system/
+sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-rerank.service  /etc/systemd/system/
+sudo cp ~/work/orientom/uqi/deploy/systemd/ngrok-8765.service  /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# enable (부팅 시 자동 시작) — 시작은 .env 채운 뒤 8단계에서
+sudo systemctl enable uqi-embed uqi-rerank uqi-mcp ngrok-8765
+```
+
+> Unit 파일 안의 경로 (`/home/sean/work/orientom/...`) 가 실제 사용자명과
+> 다르면 `sudo sed -i 's|/home/sean/|/home/$USER/|g' /etc/systemd/system/uqi-*.service`
+> 같은 식으로 보정.
+
+### 7. ngrok 셋업 (외부에서 webapp 접근 시)
+
+```bash
+# snap 으로 ngrok 설치
+sudo snap install ngrok
+
+# authtoken 등록 — https://dashboard.ngrok.com/ 에서 발급
+ngrok config add-authtoken <YOUR_AUTHTOKEN>
+
+# (선택) 고정 URL 사용 시 https://dashboard.ngrok.com/cloud-edge/domains 에서
+# reserved domain 발급 후 ngrok-8765.service 의 --url 인자 교체
+sudo sed -i 's|--url=superelegant-terrence-grittiest.ngrok-free.dev|--url=<YOUR_DOMAIN>|' \
+  /etc/systemd/system/ngrok-8765.service
+sudo systemctl daemon-reload
+```
+
+`deploy/systemd/ngrok-8765.service` 의 기본 URL 은 원작자 reserved domain 이므로
+새 환경에서는 본인 ngrok 계정의 reserved domain (또는 random URL) 으로 교체 필수.
+
+### 8. 모델 가중치 (선택 — 첫 기동 시 자동 다운로드)
+
+기본 동작은 컨테이너 첫 기동 시 HuggingFace 에서 자동 다운로드
+(`/home/$USER/models/hf/` 에 캐시, 약 8.6GB). offline 환경이거나 미리 받아두려면:
+
+```bash
+mkdir -p ~/models/hf
+HF_HOME=~/models/hf huggingface-cli download BAAI/bge-m3
+HF_HOME=~/models/hf huggingface-cli download BAAI/bge-reranker-v2-m3
+```
+
+### 9. (선택) notion-backup 정적 사이트 연동
+
+`webapp/notion-backup` 은 별도 프로젝트 (`quartz-site`) 가 빌드한 정적
+사이트로의 symlink 입니다. UQI 와는 분리된 repo 이므로 해당 프로젝트의
+README 를 따로 참조하세요. `deploy/setup.sh` 를 쓰면 sibling clone + 빌드 +
+symlink 까지 한 번에 처리합니다 (인터랙티브 prompt 에서 yes 선택 시).
+
+이 단계를 건너뛰어도 메인 webapp (`/sse` + `/`) 는 정상 동작 —
+`/notion-backup/` 경로만 404.
 
 ### Environment setup
 
@@ -188,22 +327,45 @@ QUANDELA_TOKEN=...
 ### Start services (systemd)
 
 ```bash
-sudo systemctl start uqi-embed uqi-rerank uqi-mcp
-sudo systemctl is-active uqi-embed uqi-rerank uqi-mcp
-# All three should report "active"
+# embed → rerank → mcp → ngrok 순서 (uqi-mcp.service 의 After= 가 의존 보장)
+sudo systemctl start uqi-embed uqi-rerank uqi-mcp ngrok-8765
+sudo systemctl is-active uqi-embed uqi-rerank uqi-mcp ngrok-8765
+# 4 개 모두 "active" 보고해야 정상
 ```
+
+서비스별 역할:
+- `uqi-embed` (Docker, :7997): bge-m3 임베딩 (loopback only)
+- `uqi-rerank` (Docker, :7998): bge-reranker-v2-m3 (loopback only)
+- `uqi-mcp` (host venv, :8765): MCP SSE + webapp 정적 서빙 + notion-backup mount
+- `ngrok-8765` (snap): :8765 를 public URL 로 터널링 (외부 접속 시만 필요)
 
 To restart MCP after `.env` or code changes:
 
 ```bash
 sudo systemctl restart uqi-mcp
+# 초기화 1~2 분 (embed/rerank 모델 로딩 + RAG DB open)
 ```
 
 ### Open the webapp
 
-Open `webapp/uqi_webapp.html` in your browser. The webapp talks to the MCP
-server over SSE; configure the endpoint in the header connection dialog
-(local `http://localhost:8765/sse` or remote ngrok URL).
+webapp 은 MCP 서버 (`uqi-mcp.service`, :8765) 가 정적으로 서빙합니다 —
+별도 web server 불필요.
+
+- **로컬 접근**: `http://localhost:8765/` → webapp 자동 로드,
+  `http://localhost:8765/sse` 가 MCP SSE 엔드포인트
+- **외부 접근** (ngrok 활성 시): `https://<your-reserved-domain>.ngrok-free.dev/`
+  ngrok dashboard 의 reserved domain 또는 `ngrok-8765.service` 의 `--url` 값 확인
+- **헤더의 connection dialog** 에서 SSE endpoint 를 명시적으로 설정 가능
+  (local: `http://localhost:8765/sse`, remote: ngrok URL + `/sse`)
+
+### Health check
+
+```bash
+curl -s http://127.0.0.1:7997/health   # embed: {"status":"ok","model":"BAAI/bge-m3",...}
+curl -s http://127.0.0.1:7998/health   # rerank: {"status":"ok","model":"BAAI/bge-reranker-v2-m3",...}
+ss -ltn 'sport = :8765'                # uqi-mcp SSE listener
+curl -s http://127.0.0.1:4040/api/tunnels | jq '.tunnels[].public_url'  # ngrok local API
+```
 
 ### Claude Desktop integration
 

@@ -298,7 +298,7 @@ PyYAML==6.0.3
 pyzmq==27.1.0
 pyzx==0.9.0
 qiskit==2.3.1
-qiskit-aer @ file:///home/sean/work/qiskit/qiskit-aer/dist/qiskit_aer-0.17.2-cp312-cp312-linux_aarch64.whl#sha256=99e969236d04cc6e4886ba64b9ce30d37ee24c9f5252e678ecf3b3a2dc1ac576
+qiskit-aer==0.17.2  # Jetson/GH200 GPU 빌드는 README 의 "qiskit-aer fork build" 절차 참조 (별도 빌드 후 pip 가 satisfied 처리)
 qiskit-algorithms==0.4.0
 qiskit-braket-provider>=0.13.0,<0.14
 qiskit-experiments==0.13.0
@@ -373,7 +373,6 @@ uncertainties==3.2.3
 urllib3==2.6.3
 uvicorn==0.42.0
 uvloop==0.22.1
-vqls_prototype @ file:///home/sean/work/orientom/vqls-prototype
 waitress==3.0.2
 watchfiles==1.1.1
 wcwidth==0.3.1

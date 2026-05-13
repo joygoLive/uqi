@@ -9,33 +9,47 @@ deploy/
 ├── Dockerfile           # uqi-rag 컨테이너 이미지 (bge-m3 + reranker 추론 환경)
 ├── embed_server.py      # 임베딩 서버 (FastAPI, OpenAI-compatible /embeddings)
 ├── rerank_server.py     # 크로스인코더 reranker 서버 (FastAPI /rerank)
+├── setup.sh             # 전체 셋업 자동화 (clone → venv → pip → docker → systemd)
 └── systemd/
-    ├── uqi-mcp.service     # MCP 메인 서버 (호스트 venv 직접 실행, :8765 SSE)
+    ├── uqi-mcp.service     # MCP 메인 서버 (호스트 venv 직접 실행, :8765 SSE + webapp)
     ├── uqi-embed.service   # bge-m3 컨테이너 (loopback :7997)
-    └── uqi-rerank.service  # bge-reranker-v2-m3 컨테이너 (loopback :7998)
+    ├── uqi-rerank.service  # bge-reranker-v2-m3 컨테이너 (loopback :7998)
+    └── ngrok-8765.service  # ngrok 터널 (:8765 → public reserved URL)
 ```
 
 ## 아키텍처
 
 ```
-   Claude Desktop / 외부 클라이언트
-              │ SSE :8765
-              ▼
-      uqi-mcp.service ──► sqlite-vec (RAG storage)
-        (host venv)
-              │
-        ┌─────┴──────┐
-        ▼            ▼
-  uqi-embed     uqi-rerank
-   :7997 (Docker, GPU)
-              :7998 (Docker, GPU)
-              │
-        bge-m3 / reranker
-        (/home/sean/models/hf)
+   브라우저 (외부)                     Claude Desktop / 클라이언트
+        │                                  │
+        │ HTTPS                            │ SSE
+        ▼                                  │
+   ngrok-8765.service                      │
+   (public URL → :8765)                    │
+        │                                  │
+        └──────────► :8765 ◄───────────────┘
+                       │
+              uqi-mcp.service (host venv, QUWA/.venv_transpile)
+                       │   • /            → webapp/uqi_webapp.html
+                       │   • /sse         → MCP SSE endpoint
+                       │   • /notion-backup → quartz-site/public (symlink)
+                       │
+                       ├──► sqlite-vec (RAG storage)
+                       │
+                ┌──────┴──────┐
+                ▼             ▼
+         uqi-embed       uqi-rerank
+         :7997 (Docker)  :7998 (Docker)
+         GPU            GPU
+                │
+          bge-m3 / reranker
+          (~/models/hf)
 ```
 
-- **uqi-mcp** 는 호스트 venv 에서 실행 (CUDA quantum sim, qiskit-aer 등 무거운 의존성 때문)
+- **uqi-mcp** 는 호스트 venv 에서 실행 (CUDA quantum sim, qiskit-aer 등 무거운 의존성).
+  webapp 정적 서빙 + notion-backup mount 모두 같은 :8765 포트에서 처리.
 - **uqi-embed / uqi-rerank** 는 격리된 컨테이너 (PyTorch + sentence-transformers 만 필요)
+- **ngrok-8765** 는 :8765 를 reserved public URL 로 노출 (외부 접근 시 필요)
 - MCP → embed/rerank 는 로컬 HTTP loopback (외부 노출 X)
 
 ## 사전 요건
@@ -50,7 +64,23 @@ deploy/
 
 ## 설치 절차
 
-### 1. Docker 이미지 빌드
+### 빠른 길 — `setup.sh` 자동화
+
+```bash
+bash deploy/setup.sh           # 인터랙티브 (각 단계 확인)
+bash deploy/setup.sh --yes     # 모든 prompt 'yes'
+```
+
+자동화 범위: clone (UQI/QUWA/quartz/qiskit-aer fork) → venv → pip install →
+docker build → systemd install + enable. 자세한 옵션은 `setup.sh --help`.
+
+> .env 채우기, ngrok authtoken 등록, 서비스 start 는 자동화 후 수동 단계로 남음.
+
+---
+
+### 수동 절차 (참고)
+
+#### 1. Docker 이미지 빌드
 
 ```bash
 cd /home/sean/work/orientom/uqi/deploy
@@ -59,31 +89,47 @@ docker build -t uqi-rag:0.1 .
 
 이미지는 NGC PyTorch 25.06 (arm64, CUDA 13) 기반이라 첫 빌드 시 시간이 걸린다 (대략 24 GB). NVIDIA GPU 가 있는 호스트에서만 빌드/실행 가능.
 
-### 2. systemd 유닛 설치
+#### 2. systemd 유닛 설치
 
 ```bash
 sudo cp deploy/systemd/uqi-embed.service   /etc/systemd/system/
 sudo cp deploy/systemd/uqi-rerank.service  /etc/systemd/system/
 sudo cp deploy/systemd/uqi-mcp.service     /etc/systemd/system/
+sudo cp deploy/systemd/ngrok-8765.service  /etc/systemd/system/
 sudo systemctl daemon-reload
 ```
 
-### 3. 서비스 enable + 기동
+> Unit 파일에 hardcoded 된 `/home/sean/...` 경로를 본인 환경에 맞게 보정 (또는 setup.sh 사용).
 
-순서가 중요하다. embed/rerank 를 먼저 띄우고 그 위에 mcp 를 띄운다 (`uqi-mcp.service` 의 `After=` 가 이미 보장하지만, 처음 한 번은 명시적으로):
+#### 3. ngrok authtoken (외부 접근 시)
+
+```bash
+sudo snap install ngrok          # 미설치 시
+ngrok config add-authtoken <YOUR_TOKEN>
+# reserved domain 쓰려면 ngrok-8765.service 의 --url= 교체
+sudo sed -i 's|superelegant-terrence-grittiest.ngrok-free.dev|<YOUR_DOMAIN>|' \
+  /etc/systemd/system/ngrok-8765.service
+sudo systemctl daemon-reload
+```
+
+#### 4. 서비스 enable + 기동
+
+`After=` 가 의존성 보장하지만 처음 한 번은 명시적으로:
 
 ```bash
 sudo systemctl enable --now uqi-embed.service
 sudo systemctl enable --now uqi-rerank.service
 sudo systemctl enable --now uqi-mcp.service
+sudo systemctl enable --now ngrok-8765.service     # 외부 접근 시
 ```
 
-### 4. 헬스체크
+#### 5. 헬스체크
 
 ```bash
 curl -s http://127.0.0.1:7997/health  # → {"status":"ok","model":"BAAI/bge-m3",...}
 curl -s http://127.0.0.1:7998/health  # → {"status":"ok","model":"BAAI/bge-reranker-v2-m3",...}
 ss -ltn 'sport = :8765'               # uqi-mcp SSE listener
+curl -s http://127.0.0.1:4040/api/tunnels | jq '.tunnels[].public_url'  # ngrok local API
 ```
 
 ## 운영 메모

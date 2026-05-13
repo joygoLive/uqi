@@ -1,0 +1,16 @@
+[Unit]
+Description=ngrok tunnel for port 8765
+After=network.target
+
+[Service]
+Type=simple
+User=sean
+WorkingDirectory=/home/sean
+ExecStart=/snap/bin/ngrok http --url=superelegant-terrence-grittiest.ngrok-free.dev 8765
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/sean/ngrok.log
+StandardError=append:/home/sean/ngrok.log
+
+[Install]
+WantedBy=multi-user.target

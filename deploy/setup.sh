@@ -181,7 +181,7 @@ else
   pip install -q --upgrade pip wheel
   filtered="$(mktemp)"
   # CUDA 전용 패키지 제거 (Mac / non-NVIDIA Linux 에서 빌드 실패 방지)
-  grep -vE "^(cudaq|cuda-|cuda_|cuquantum|cupy-cuda|cu(densitymat|pauliprop|stabilizer|statevec|tensor|tensornet)-cu[0-9]+|jax-cuda|nvidia-|nvmath-|pennylane.*(gpu|cuda|kokkos))" \
+  grep -vE "^(cudaq|cuda-|cuda_|cuquantum|cupy-cuda|cu(densitymat|pauliprop|stabilizer|statevec|tensor|tensornet)-cu[0-9]+|jax-cuda|nvidia-|nvmath-|pennylane.*(gpu|cuda|kokkos)|setuptools==)" \
     "$UQI_DIR/requirements.txt" > "$filtered"
   pip install -r "$filtered"
   rm -f "$filtered"

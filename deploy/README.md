@@ -29,7 +29,7 @@ deploy/
         │                                  │
         └──────────► :8765 ◄───────────────┘
                        │
-              uqi-mcp.service (host venv, QUWA/.venv_transpile)
+              uqi-mcp.service (host venv, uqi/.venv_transpile)
                        │   • /            → webapp/uqi_webapp.html
                        │   • /sse         → MCP SSE endpoint
                        │   • /notion-backup → quartz-site/public (symlink)
@@ -57,7 +57,7 @@ deploy/
 - Linux (aarch64 검증, x86_64 도 가능)
 - NVIDIA GPU + 드라이버 + `nvidia-container-toolkit`
 - Docker (`docker.service` enabled)
-- Python 3.12 venv: `/home/sean/work/orientom/QUWA/.venv_transpile`
+- Python 3.12 venv: `<TARGET_DIR>/uqi/.venv_transpile` (self-contained)
   - `requirements.txt` 기준 의존성 설치 완료
 - 모델 가중치: `/home/sean/models/hf/` (bge-m3 + bge-reranker-v2-m3, 약 8.6 GB)
   - 미리 받지 않아도 첫 기동 시 HuggingFace 에서 자동 다운로드
@@ -71,7 +71,7 @@ bash deploy/setup.sh           # 인터랙티브 (각 단계 확인)
 bash deploy/setup.sh --yes     # 모든 prompt 'yes'
 ```
 
-자동화 범위: clone (UQI/QUWA/quartz/qiskit-aer fork) → venv → pip install →
+자동화 범위: clone (uqi 의무 + 선택 quartz/aer-fork) → venv → pip install →
 docker build → systemd install + enable. 자세한 옵션은 `setup.sh --help`.
 
 > .env 채우기, ngrok authtoken 등록, 서비스 start 는 자동화 후 수동 단계로 남음.

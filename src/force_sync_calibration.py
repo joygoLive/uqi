@@ -5,7 +5,7 @@ force_sync_calibration.py
 
 사용법:
   cd /home/sean/work/orientom/uqi
-  /home/sean/work/orientom/QUWA/.venv_transpile/bin/python src/force_sync_calibration.py
+  .venv_transpile/bin/python src/force_sync_calibration.py
 
 - .env 파일에서 API 토큰 자동 로드 (uqi/.env)
 - 대상 QPU: ibm_fez, rigetti_cepheus (데이터 없는 장비)

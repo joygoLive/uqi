@@ -11,7 +11,7 @@
 #   bash deploy/setup.sh --skip-notion      # notion-backup (quartz-site) 건너뛰기
 #
 # 환경:
-#   ORIENTOM_DIR    부모 디렉토리 (default: $HOME/work/orientom)
+#   TARGET_DIR      부모 디렉토리 (default: $HOME/q-basis-one)
 #   PYTHON_BIN      Python 실행파일 (default: python3.12)
 #   ENV_GPG_PATH    .env.gpg 백업본 경로 (지정 시 자동 복구. --yes 와 함께 권장)
 
@@ -39,20 +39,16 @@ for arg in "$@"; do
   esac
 done
 
-ORIENTOM_DIR="${ORIENTOM_DIR:-$HOME/work/orientom}"
+TARGET_DIR="${TARGET_DIR:-$HOME/q-basis-one}"        # 부모 디렉토리 (평범한 디렉토리, .git 없음)
 PYTHON_BIN="${PYTHON_BIN:-python3.12}"
-# 부모 ORIENTOM_DIR 자체가 joygoLive/orientom 의 working tree 가 된다.
-# 그 안에 QUWA/, alg-files/, azure/ 등 orientom 의 subfolder 가 자동 생성.
-# uqi/, quartz-site/, obsidian-vault/, orientom-notion-pipeline/ 은
-# orientom 안에 nested 된 **별도 GitHub repo** 들.
-UQI_DIR="$ORIENTOM_DIR/uqi"
-QUWA_DIR="$ORIENTOM_DIR/QUWA"                       # orientom 의 subfolder
-QUARTZ_DIR="$ORIENTOM_DIR/quartz-site"
-OBSIDIAN_DIR="$ORIENTOM_DIR/obsidian-vault"
-NOTION_PIPELINE_DIR="$ORIENTOM_DIR/orientom-notion-pipeline"
-QUIZX_DIR="$ORIENTOM_DIR/quizx"                     # ZX-calculus optimizer (Rust+Python)
-AER_DIR="$HOME/work/qiskit/qiskit-aer"
-VENV="$QUWA_DIR/.venv_transpile"                    # = $ORIENTOM_DIR/QUWA/.venv_transpile
+# uqi 가 self-contained — venv 가 uqi 안에 있고, quizx 도 PyPI 로 받음.
+# orientom 부모 / QUWA 의존성 없음.
+UQI_DIR="$TARGET_DIR/uqi"
+QUARTZ_DIR="$TARGET_DIR/quartz-site"
+OBSIDIAN_DIR="$TARGET_DIR/obsidian-vault"
+NOTION_PIPELINE_DIR="$TARGET_DIR/orientom-notion-pipeline"
+AER_DIR="$HOME/work/qiskit/qiskit-aer"                # 외부 (aarch64+NVIDIA GPU 가속 시만)
+VENV="$UQI_DIR/.venv_transpile"                       # = uqi/.venv_transpile
 
 # 본 스크립트는 Ubuntu/Debian Linux + NVIDIA GPU + Docker + Python 3.12
 # 환경 (DGX Spark 기준) 에 맞춰 작성. 다른 환경에서의 조정 포인트는
@@ -103,34 +99,19 @@ ok "필수 환경 OK (git / $PYTHON_BIN)"
 
 # ─── 1. clone ───────────────────────────────────────
 if [ "$SKIP_CLONE" -eq 0 ]; then
-  log "1) 프로젝트 clone (부모 $ORIENTOM_DIR = joygoLive/orientom working tree)"
+  log "1) 프로젝트 clone ($TARGET_DIR 아래)"
+  mkdir -p "$TARGET_DIR"
 
-  # 1-a. 부모 orientom repo — $ORIENTOM_DIR 자체가 working tree
-  #      (QUWA/, alg-files/, azure/ ... 가 subfolder 로 자동 생성)
-  if [ -d "$ORIENTOM_DIR/.git" ]; then
-    ok "  orientom 이미 clone 됨 ($ORIENTOM_DIR)"
-  elif [ -e "$ORIENTOM_DIR" ] && [ -n "$(ls -A "$ORIENTOM_DIR" 2>/dev/null)" ]; then
-    err "  $ORIENTOM_DIR 이미 존재하고 비어있지 않음 — 정리 후 재실행 필요"
-    exit 1
-  else
-    git clone git@github.com:joygoLive/orientom.git "$ORIENTOM_DIR"
-  fi
-
-  # 1-b. uqi (nested 별도 repo, $ORIENTOM_DIR 안에)
+  # 1-a. uqi (의무)
   [ -d "$UQI_DIR/.git" ] || git clone git@github.com:joygoLive/uqi.git "$UQI_DIR"
 
-  # 1-c. quizx (nested 별도 repo) — uqi_optimizer.py 가 import 하는 ZX-calculus.
-  #      Rust+maturin 빌드 → step 4 뒤에 install.
-  [ -d "$QUIZX_DIR/.git" ] || git clone https://github.com/zxcalc/quizx.git "$QUIZX_DIR"
-
-  # 1-d. qiskit-aer Jetson fork — aarch64+NVIDIA 일 때만 자동 clone
-  #      ($ORIENTOM_DIR 밖, $HOME/work/qiskit/ 아래)
+  # 1-b. qiskit-aer Jetson fork — aarch64+NVIDIA 일 때만 자동 clone (외부 경로)
   if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ]; then
     mkdir -p "$(dirname "$AER_DIR")"
     [ -d "$AER_DIR/.git" ] || git clone -b jetson-patch git@github.com:joygoLive/qiskit-aer.git "$AER_DIR"
   fi
 
-  # 1-e. (선택) notion-backup 스택 — quartz fork + 콘텐츠 vault + symlink
+  # 1-c. (선택) notion-backup 스택 — quartz fork + 콘텐츠 vault + symlink
   if [ "$SKIP_NOTION" -eq 0 ] && confirm "notion-backup 스택 (quartz fork + obsidian-vault) 도 clone 하시겠습니까?"; then
     # quartz fork (커스터마이징 포함) — upstream 은 'upstream' remote 로 추가
     if [ ! -d "$QUARTZ_DIR/.git" ]; then
@@ -141,7 +122,6 @@ if [ "$SKIP_CLONE" -eq 0 ]; then
     [ -d "$OBSIDIAN_DIR/.git" ] || git clone git@github.com:joygoLive/orientom-notion-backup.git "$OBSIDIAN_DIR"
     # quartz-site/content → ../obsidian-vault 심볼릭
     if [ ! -L "$QUARTZ_DIR/content" ]; then
-      # upstream Quartz 의 빈 content/ (or .gitkeep) 가 있다면 비운다
       rm -rf "$QUARTZ_DIR/content"
       ln -s ../obsidian-vault "$QUARTZ_DIR/content"
     fi
@@ -181,35 +161,31 @@ else
 fi
 
 # ─── 4. UQI 의존성 설치 ─────────────────────────────
+# cuquantum 등 source-only 패키지가 빌드 시 setuptools 의 pkg_resources 필요 →
+# setuptools<70 사전 설치 + --no-build-isolation 으로 venv 의 setuptools 사용.
+# (setuptools 82+ 부터 pkg_resources 제거됨 — 새 pip 의 default 격리 환경과 충돌)
+log "4) UQI requirements 설치 — build helpers 사전 설치 → --no-build-isolation"
+# 옛 pip + 옛 setuptools 가 cuquantum 등의 setup.py 호환성 보장 (pkg_resources)
+pip install -q 'pip==24.0' 'setuptools<70' wheel
 if [ "$HAVE_NVIDIA" -eq 1 ]; then
-  log "4) UQI requirements 설치 (시간 소요 — quantum SDK 많음)"
-  pip install -r "$UQI_DIR/requirements.txt"
+  pip install --no-build-isolation -r "$UQI_DIR/requirements.txt"
 else
-  log "4) UQI requirements 설치 — CUDA 패키지 제외 (NVIDIA 없음)"
   filtered="$(mktemp)"
   grep -vE "^(cudaq|cuda-(quantum|bindings|core|pathfinder)|cupy-cuda|jax-cuda12-|nvidia-)" \
     "$UQI_DIR/requirements.txt" > "$filtered"
-  pip install -r "$filtered"
+  pip install --no-build-isolation -r "$filtered"
   rm -f "$filtered"
 fi
 ok "pip install 완료"
 
-# ─── 4-b. quizx pybindings (Rust + maturin) editable install ─────
-# uqi/src/uqi_optimizer.py 가 import. PyPI 0.3.0 도 있지만 source 빌드 유지
-# (현재 DGX 가 source 빌드 사용 중 — pin 된 commit 동작 보장).
-if [ -d "$QUIZX_DIR/pybindings" ]; then
-  if ! command -v cargo >/dev/null 2>&1; then
-    warn "4-b) Rust toolchain 미설치 — quizx 빌드 스킵."
-    warn "   설치: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-    warn "   또는 fallback: pip install quizx==0.3.0  (PyPI stock)"
-  else
-    log "4-b) quizx pybindings 빌드/install (maturin → Rust 컴파일, 1~3분)"
-    pip install -q maturin
-    pip install -e "$QUIZX_DIR/pybindings"
-    ok "quizx editable install 완료"
+# ─── 4-b. qiskit-aer GPU wheel (Jetson fork 빌드된 wheel 덮어쓰기) ───
+if [ "$USE_AER_FORK" -eq 1 ] && [ -d "$AER_DIR/dist" ]; then
+  wheel=$(ls "$AER_DIR/dist/"qiskit_aer-*linux_aarch64.whl 2>/dev/null | head -1)
+  if [ -n "$wheel" ]; then
+    log "4-b) qiskit-aer GPU wheel 덮어쓰기 ($wheel)"
+    pip install --no-deps --force-reinstall "$wheel"
+    ok "qiskit-aer GPU wheel 활성화"
   fi
-else
-  warn "4-b) quizx 미 clone — step 1-c 가 안 돌았거나 디렉토리 깨짐"
 fi
 
 # ─── 5. embed/rerank Docker 이미지 (NVIDIA + docker 필요) ───

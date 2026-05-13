@@ -245,7 +245,6 @@ pathable==0.5.0
 peewee==3.19.0
 pennylane==0.44.0
 PennyLane-qiskit==0.44.1
--e git+ssh://git@github.com/joygoLive/orientom.git@22827f1075a1735479bb2db7387ec8ec604250d0#egg=pennylane_transforms_rust&subdirectory=pennylane_transforms_rust
 pennylane_catalyst==0.14.0
 pennylane_lightning==0.44.0
 pennylane_lightning_gpu==0.44.0
@@ -311,7 +310,7 @@ qiskit-optimization==0.7.0
 qiskit-qir==0.5.0
 qrisp==0.7.19
 quimb==1.12.1
--e git+https://github.com/zxcalc/quizx.git@d75f041ebb73ec896909922b2c3b549958af1686#egg=quizx_pybindings
+quizx==0.3.0  # PyPI 등록된 ZX-calculus optimizer (이전: source editable install — self-contained 마이그레이션으로 PyPI 전환)
 qwasm==1.0.1
 referencing==0.37.0
 requests==2.32.3
@@ -389,3 +388,16 @@ xdsl-jax==0.1.1
 yarg==0.1.9
 yfinance==1.0
 zipp==3.23.0
+
+# === 추가 main 의존성 (self-contained 마이그레이션 시 누락 발견, 2026-05-13) ===
+# 옛 venv 에 transitive 로 들어가 있었지만 requirements 명시 안 됐던 것들.
+anthropic==0.100.0          # LLM synthesis (mcp_server.py 핵심)
+pasqal-cloud==0.22.0        # uqi_executor_pasqal.py (PCS 직제출)
+pulser-pasqal==0.22.0       # uqi_executor_pasqal.py (Pasqal Pulser→Cloud)
+py==1.11.0                  # uqi_qir_converter.py
+pytket-qir==1.0.0           # pytket → QIR
+pytket-quantinuum==0.58.0   # Quantinuum (보류 상태이나 코드 import 있음)
+qsharp==1.27.0              # Microsoft Q#
+qutip==5.2.3                # quantum simulation
+requests-mock==1.12.1       # test mocking
+sqlite-vec==0.1.9           # RAG vector backend (필수)

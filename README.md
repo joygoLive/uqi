@@ -94,29 +94,25 @@ detail (embed → BM25 → RRF → rerank → scrub → Claude synthesis).
   sudo systemctl restart docker
   ```
 - **SQLite** with extension-load support (sqlite-vec)
-- **Rust toolchain** (rustc/cargo) — `quizx` ZX-calculus optimizer 의 maturin 빌드용
-  ```bash
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-  ```
 - **snap** (for ngrok — public webapp URL 노출 시)
 - **Node.js / npm** (notion-backup 정적 사이트 빌드 시 — `sudo apt install nodejs npm` 또는 brew/nodesource)
 
-### Sibling 프로젝트 (DGX 전체 layout 재현 시 모두 필요)
+### Sibling 프로젝트 (self-contained — uqi 만 의무)
 
-`$HOME/work/orientom/` 가 `joygoLive/orientom` working tree 가 되고, 그 안에
-nested 별도 repo 들이 sibling 으로 들어갑니다 (현재 DGX 와 동일 구조).
+uqi 는 self-contained 입니다 — venv 가 `uqi/.venv_transpile` 안에 있고 모든
+Python 의존성은 PyPI 에서 받습니다 (`quizx` 포함). 다른 프로젝트들은 부가
+기능 (GPU 가속 / notion-backup 서빙) 에만 필요.
 
 | 프로젝트 | repo | 의무? | 용도 |
 |---|---|---|---|
-| **orientom** (부모 working tree) | `joygoLive/orientom` | ✅ | QUWA/alg-files/azure 등 subfolder + venv 위치 |
-| **uqi** (nested) | `joygoLive/uqi` | ✅ | 본 프로젝트 |
-| **quizx** (nested) | `zxcalc/quizx` (upstream) | ✅ | `uqi_optimizer.py` 가 import 하는 ZX-calculus (Rust+Python bindings, maturin 빌드) |
-| **qiskit-aer fork** | `joygoLive/qiskit-aer` (`jetson-patch`) | ⚠️ aarch64+NVIDIA 만 | Jetson 패치된 qiskit-aer GPU 빌드 |
-| **quartz-site** (nested) | `joygoLive/quartz-site` | ⚪ notion-backup 서빙 시 | Quartz fork + Orientom 커스터마이징 |
-| **obsidian-vault** (nested) | `joygoLive/orientom-notion-backup` | ⚪ notion-backup 서빙 시 | Notion 원본 markdown |
-| **orientom-notion-pipeline** (nested) | `joygoLive/orientom-notion-pipeline` | ⚪ Notion sync 자동화 시 | weekly_notion_sync.sh 등 |
+| **uqi** | `joygoLive/uqi` | ✅ | 본 프로젝트. venv 와 모든 deps 가 이 안에 |
+| **qiskit-aer fork** | `joygoLive/qiskit-aer` (`jetson-patch`) | ⚠️ aarch64+NVIDIA GPU 가속 시만 | Jetson 패치된 qiskit-aer GPU wheel 빌드 |
+| **quartz-site** | `joygoLive/quartz-site` | ⚪ notion-backup 서빙 시 | Quartz fork + Orientom 커스터마이징 |
+| **obsidian-vault** | `joygoLive/orientom-notion-backup` | ⚪ notion-backup 서빙 시 | Notion 원본 markdown |
+| **orientom-notion-pipeline** | `joygoLive/orientom-notion-pipeline` | ⚪ Notion sync 자동화 시 | weekly_notion_sync.sh 등 |
 
-`deploy/setup.sh` 가 위 layout 전체를 자동으로 clone + 빌드합니다.
+`deploy/setup.sh` 가 위 항목 자동으로 clone + 빌드 (기본 `$HOME/q-basis-one/`,
+`TARGET_DIR` 환경변수로 변경 가능).
 
 ### Core Python packages
 
@@ -141,70 +137,68 @@ reconstruction removed it (2026-05-12). The vector backend is sqlite-vec.
 > 빠른 길: `deploy/setup.sh` 가 아래 1~5 단계를 자동화합니다.
 > 수동으로 따라가려면 아래 순서대로.
 
-### 1. UQI + sibling 프로젝트 clone
+### 1. UQI clone (의무) + 선택 sibling
 
 ```bash
-mkdir -p ~/work/orientom && cd ~/work/orientom
+mkdir -p ~/q-basis-one && cd ~/q-basis-one
 
-# UQI
+# UQI (의무)
 git clone git@github.com:joygoLive/uqi.git
 
-# QUWA (venv 공유 — UQI 와 같은 부모 디렉토리에 sibling 으로 둠)
-git clone git@github.com:joygoLive/orientom.git QUWA
-
-# (선택) Jetson/GH200 GPU 가속 qiskit-aer fork
+# (선택) Jetson/GH200 GPU 가속 qiskit-aer fork — 외부 경로
 git clone -b jetson-patch git@github.com:joygoLive/qiskit-aer.git ~/work/qiskit/qiskit-aer
 
-# (선택) notion-backup 정적 사이트 (Quartz 기반)
-git clone https://github.com/jackyzha0/quartz.git quartz-site
+# (선택) notion-backup 서빙
+git clone git@github.com:joygoLive/quartz-site.git
+git clone git@github.com:joygoLive/orientom-notion-backup.git obsidian-vault
 ```
 
-### 2. 공유 venv 생성 (QUWA/.venv_transpile)
-
-UQI 의 `uqi-mcp.service` 는 **QUWA 의 venv 를 직접 가리킵니다**
-(`/home/$USER/work/orientom/QUWA/.venv_transpile/bin/python`). 이는 두
-프로젝트가 동일한 quantum SDK 스택을 공유하는 디자인 결정입니다.
+### 2. uqi self-contained venv 생성
 
 ```bash
-cd ~/work/orientom/QUWA
+cd ~/q-basis-one/uqi
 python3.12 -m venv .venv_transpile
 source .venv_transpile/bin/activate
-pip install --upgrade pip
+pip install --upgrade 'pip==24.0' 'setuptools<70' wheel
 ```
+
+> ⚠️ `pip==24.0` + `setuptools<70` 고정 이유: `cuquantum` 등 source-only
+> 패키지가 빌드 시 `pkg_resources` 사용 (setuptools 82+ 에서 제거됨).
+> 새 venv 에선 사전 설치 필수.
 
 ### 3. (선택) qiskit-aer GPU fork 빌드 — Jetson/GH200 만
 
-PyPI stock `qiskit-aer` 로도 동작하지만, Jetson/GH200 에서 GPU 가속을
-쓰려면 fork 의 빌드 절차를 따릅니다:
+PyPI stock `qiskit-aer==0.17.2` 로도 동작하지만, Jetson/GH200 에서 GPU
+가속을 쓰려면 fork 의 빌드 절차를 따릅니다:
 
 ```bash
 cd ~/work/qiskit/qiskit-aer
-# (venv 활성화 상태에서)
-# fork README 의 build 절차 참조. 일반적으로:
 pip install pybind11 scikit-build cmake
 python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA
-pip install dist/qiskit_aer-*-linux_aarch64.whl --force-reinstall
+pip install dist/qiskit_aer-*-linux_aarch64.whl --force-reinstall --no-deps
 ```
 
-> 이 단계를 건너뛰면 다음 `pip install -r requirements.txt` 가 PyPI stock
-> `qiskit-aer==0.17.2` 를 설치합니다 (CPU only).
+> 건너뛰면 step 4 의 `pip install -r requirements.txt` 가 PyPI stock 자동 설치.
 
 ### 4. UQI 의존성 설치
 
 ```bash
-cd ~/work/orientom/uqi
-# venv 는 이미 활성화 상태 (QUWA/.venv_transpile)
-pip install -r requirements.txt
+cd ~/q-basis-one/uqi
+# venv 는 이미 활성화 (uqi/.venv_transpile)
+pip install --no-build-isolation -r requirements.txt
 ```
 
+> `--no-build-isolation`: cuquantum 등이 빌드 시 venv 의 setuptools<70 사용
+> 하도록 격리 환경 X. 자세한 이유는 step 2 참조.
+
 > ⚠️ Note: `requirements.txt` 의 `cudaq`, `cupy-cuda13x`, `nvidia-*`,
-> `jax-cuda12-*` 패키지들은 **CUDA 환경 전용**입니다. macOS / 비-NVIDIA Linux
-> 에서는 해당 라인을 제거하거나 fallback 처리 필요.
+> `jax-cuda12-*` 패키지들은 **CUDA 환경 전용**. macOS / 비-NVIDIA Linux 에서는
+> 해당 라인을 제거하거나 `setup.sh` 가 자동 filter 처리.
 
 ### 5. embed/rerank Docker 이미지 빌드
 
 ```bash
-cd ~/work/orientom/uqi/deploy
+cd ~/q-basis-one/uqi/deploy
 docker build -t uqi-rag:0.1 .
 ```
 
@@ -216,19 +210,19 @@ sentence-transformers + FastAPI / uvicorn for OpenAI-compatible endpoints.
 
 ```bash
 # 4 개 unit 일괄 설치
-sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-mcp.service     /etc/systemd/system/
-sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-embed.service   /etc/systemd/system/
-sudo cp ~/work/orientom/uqi/deploy/systemd/uqi-rerank.service  /etc/systemd/system/
-sudo cp ~/work/orientom/uqi/deploy/systemd/ngrok-8765.service  /etc/systemd/system/
+sudo cp ~/q-basis-one/uqi/deploy/systemd/uqi-mcp.service     /etc/systemd/system/
+sudo cp ~/q-basis-one/uqi/deploy/systemd/uqi-embed.service   /etc/systemd/system/
+sudo cp ~/q-basis-one/uqi/deploy/systemd/uqi-rerank.service  /etc/systemd/system/
+sudo cp ~/q-basis-one/uqi/deploy/systemd/ngrok-8765.service  /etc/systemd/system/
 sudo systemctl daemon-reload
 
 # enable (부팅 시 자동 시작) — 시작은 .env 채운 뒤 8단계에서
 sudo systemctl enable uqi-embed uqi-rerank uqi-mcp ngrok-8765
 ```
 
-> Unit 파일 안의 경로 (`/home/sean/work/orientom/...`) 가 실제 사용자명과
-> 다르면 `sudo sed -i 's|/home/sean/|/home/$USER/|g' /etc/systemd/system/uqi-*.service`
-> 같은 식으로 보정.
+> Unit 파일 안의 경로 (`/home/sean/work/orientom/uqi/...`) 가 실제 사용자명/위치와
+> 다르면 `sudo sed -i 's|/home/sean/work/orientom/uqi|<your-path>|g' /etc/systemd/system/uqi-*.service`
+> 로 보정 (또는 `setup.sh` 사용 — 자동 처리).
 
 ### 7. ngrok 셋업 (외부에서 webapp 접근 시)
 
@@ -343,7 +337,7 @@ QUANDELA_TOKEN=...
 ### macOS (M-series / Intel)
 
 setup.sh 가 자동으로:
-- clone (UQI / QUWA / quartz / obsidian-vault) ✓
+- clone (uqi 의무 + 선택: quartz / obsidian-vault) ✓
 - venv + pip install (CUDA 패키지 자동 제외) ✓
 - quartz build + symlinks ✓
 

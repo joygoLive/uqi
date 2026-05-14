@@ -173,14 +173,25 @@ ok "pip install 완료"
 if [ "$USE_AER_FORK" -eq 1 ] && [ "$SKIP_AER_BUILD" -eq 0 ] && [ -d "$AER_DIR" ]; then
   log "4) qiskit-aer fork 빌드 ($AER_DIR, CUDA backend)"
   pip install -q pybind11 scikit-build cmake
+  # patchelf: 빌드 후 .so rpath 교정에 필요 (빌드 산출물 rpath 의 $ORIGIN 누락 문제 보정)
+  command -v patchelf >/dev/null 2>&1 || sudo apt-get install -y patchelf -qq
   pushd "$AER_DIR" >/dev/null
     # AER_PYTHON_CUDA_ROOT: cuquantum/cutensor 헤더 탐색 경로 — 현재 venv 지정
-    # CUDACXX: nvcc 가 PATH 에 없을 때 명시 (/usr/local/cuda/bin/nvcc)
+    # CUDACXX: nvcc 명시 (CUDA 13). CMakeLists 패치로 cusolver/cusparse 버전 자동 처리.
     AER_PYTHON_CUDA_ROOT="$VENV" CUDACXX=/usr/local/cuda/bin/nvcc \
       python setup.py bdist_wheel -- -DAER_THRUST_BACKEND=CUDA -DCMAKE_CXX_STANDARD=17
     wheel=$(ls dist/qiskit_aer-*linux_aarch64.whl 2>/dev/null | head -1)
     [ -n "$wheel" ] && pip install --no-deps --force-reinstall "$wheel"
   popd >/dev/null
+  # 빌드된 .so 의 rpath 에서 $ORIGIN 이 누락되는 CMake 버전 이슈 보정
+  AER_SO=$(find "$VENV/lib/python3.12/site-packages/qiskit_aer/backends" -name "controller_wrappers*.so" 2>/dev/null | head -1)
+  if [ -n "$AER_SO" ]; then
+    SP="$VENV/lib/python3.12/site-packages"
+    patchelf --set-rpath \
+      '$ORIGIN/../../nvidia/cu13/lib:$ORIGIN/../../nvidia/cusolver/lib:$ORIGIN/../../nvidia/cusparse/lib:$ORIGIN/../../nvidia/cuda_runtime/lib:$ORIGIN/../../cuquantum/lib:$ORIGIN/../../cutensor/lib:$ORIGIN/../../nvidia/cublas/lib' \
+      "$AER_SO"
+    ok "qiskit-aer rpath 교정 완료 (\$ORIGIN 기반)"
+  fi
   ok "qiskit-aer GPU wheel 설치"
 else
   warn "4) qiskit-aer GPU 빌드 skip — PyPI stock 사용 (CPU)"

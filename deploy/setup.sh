@@ -368,67 +368,51 @@ else
   fi
 fi
 
-# ─── 마무리 안내 ────────────────────────────────────
+# .env 가 없으면 수동 복사 대기 (tty 환경에서만)
+if [ ! -f "$ENV_TARGET" ] && [ -t 0 ]; then
+  echo ""
+  warn ".env 가 없습니다. 지금 복사 후 Enter 를 누르세요:"
+  warn "  cp <your-path>/.env $ENV_TARGET && chmod 600 $ENV_TARGET"
+  read -r -p "  .env 복사 완료 후 Enter: "
+fi
+
+# ─── 10. 서비스 자동 시작 ───────────────────────────
 echo ""
 echo "────────────────────────────────────────────────────────────"
-echo "✓ 셋업 완료 — 남은 수동 단계:"
-echo ""
 if [ -f "$ENV_TARGET" ]; then
-  echo "1. .env ✓ 존재 — 내용 검토만 ($ENV_TARGET)"
+  log "10) 서비스 자동 시작"
+  if [ "$HAVE_SYSTEMD" -eq 1 ] && [ "$SKIP_SYSTEMD" -eq 0 ]; then
+    bash "$UQI_DIR/deploy/dgx-start.sh"
+  elif [ "$OS" = "Darwin" ] && [ "$SKIP_SYSTEMD" -eq 0 ]; then
+    bash "$UQI_DIR/deploy/macos-start.sh"
+  fi
+  echo ""
+  echo "✓ 셋업 및 서비스 시작 완료"
+  echo "  webapp: http://localhost:8765/"
+  if [ "$HAVE_SYSTEMD" -eq 1 ]; then
+    echo "  ngrok:  위 출력의 URL 확인"
+    echo ""
+    echo "  관리 명령:"
+    echo "    bash $UQI_DIR/deploy/dgx-status.sh"
+    echo "    bash $UQI_DIR/deploy/dgx-stop.sh"
+    echo "    bash $UQI_DIR/deploy/dgx-start.sh"
+  else
+    echo "  ngrok:  위 출력의 URL 확인"
+    echo ""
+    echo "  관리 명령:"
+    echo "    bash $UQI_DIR/deploy/macos-status.sh"
+    echo "    bash $UQI_DIR/deploy/macos-stop.sh"
+    echo "    bash $UQI_DIR/deploy/macos-start.sh"
+  fi
 else
-  echo "1. .env 채우기 ($ENV_TARGET)"
-  echo "   README 'Environment setup' 섹션 참조 — Anthropic / Pasqal / Azure /"
-  echo "   IBM / IQM / Braket / Quandela API 키 등"
-  echo "   백업본 있으면: ENV_GPG_PATH=<path> bash deploy/setup.sh --yes  (재실행)"
+  warn "10) .env 없음 — 서비스 시작 skip"
+  echo ""
+  echo "  .env 복사 후 서비스 시작:"
+  echo "    cp <your-path>/.env $ENV_TARGET && chmod 600 $ENV_TARGET"
+  if [ "$HAVE_SYSTEMD" -eq 1 ]; then
+    echo "    bash $UQI_DIR/deploy/dgx-start.sh"
+  else
+    echo "    bash $UQI_DIR/deploy/macos-start.sh"
+  fi
 fi
-echo ""
-
-if [ "$HAVE_SYSTEMD" -eq 1 ]; then
-  cat <<EOF
-2. uqi 서비스 시작
-   sudo systemctl start uqi-embed uqi-rerank uqi-mcp
-   sudo systemctl is-active uqi-embed uqi-rerank uqi-mcp
-
-3. (선택) ngrok 외부 접근 — uqi-mcp 가 안정 동작 후
-   ngrok config add-authtoken <YOUR_TOKEN>
-   # reserved domain 쓰려면 ngrok-8765.service 의 --url= 본인 도메인으로:
-   sudo sed -i 's|superelegant-terrence-grittiest.ngrok-free.dev|<YOUR_DOMAIN>|' \\
-     /etc/systemd/system/ngrok-8765.service
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now ngrok-8765
-
-4. 헬스체크
-   curl -s http://127.0.0.1:7997/health   # bge-m3
-   curl -s http://127.0.0.1:7998/health   # bge-reranker
-   ss -ltn 'sport = :8765'                 # uqi-mcp SSE
-   curl -s http://127.0.0.1:4040/api/tunnels | jq '.tunnels[].public_url'  # ngrok
-EOF
-else
-  cat <<EOF
-2. embed / rerank 서버 직접 실행 (systemd 없음 — 별도 터미널 권장)
-   source $VENV/bin/activate
-   UQI_EMBED_DEVICE=cpu  python $UQI_DIR/deploy/embed_server.py   &
-   UQI_RERANK_DEVICE=cpu python $UQI_DIR/deploy/rerank_server.py  &
-   # macOS GPU 가속은 없음 — CPU 모드라 매우 느림
-
-3. uqi-mcp 직접 실행
-   source $VENV/bin/activate
-   python $UQI_DIR/src/mcp_server.py --host 0.0.0.0 --port 8765 --transport sse
-
-4. (선택) ngrok 외부 접근
-   brew install ngrok/ngrok/ngrok
-   ngrok config add-authtoken <YOUR_TOKEN>
-   ngrok http 8765
-
-5. 헬스체크
-   curl -s http://127.0.0.1:7997/health
-   curl -s http://127.0.0.1:7998/health
-   curl -s http://127.0.0.1:8765/   # webapp HTML
-EOF
-fi
-
-cat <<EOF
-
-webapp: http://localhost:8765/  (ngrok 시작 시 외부 URL 도 접근 가능)
-────────────────────────────────────────────────────────────
-EOF
+echo "────────────────────────────────────────────────────────────"

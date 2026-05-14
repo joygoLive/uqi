@@ -2,7 +2,7 @@
 # UQI DGX 서비스 전체 종료
 set -euo pipefail
 
-SERVICES=(uqi-mcp uqi-rerank uqi-embed)
+SERVICES=(ngrok-8765 uqi-mcp uqi-rerank uqi-embed)
 
 for svc in "${SERVICES[@]}"; do
   if systemctl is-active --quiet "$svc"; then
